@@ -196,6 +196,27 @@ export default function ServiceWorkflowBuilder() {
 
   const { toast } = useToast()
 
+  const [agentTypes, setAgentTypes] = useState<string[]>([]);
+  const [isLoadingAgentTypes, setIsLoadingAgentTypes] = useState(false);
+
+  useEffect(() => {
+    const fetchAgentTypes = async () => {
+      setIsLoadingAgentTypes(true);
+      try {
+        const res = await fetch("http://127.0.0.1:8000/api/v1/mini-services/types");
+        if (!res.ok) throw new Error("Failed to fetch agent types");
+        const types = await res.json();
+        setAgentTypes(types);
+      } catch (err) {
+        console.error("Error fetching agent types:", err);
+        setAgentTypes([]);
+      } finally {
+        setIsLoadingAgentTypes(false);
+      }
+    };
+    fetchAgentTypes();
+  }, []);
+
   // Fetch available agents and API keys on component mount
   useEffect(() => {
     fetchAgents()
@@ -280,7 +301,6 @@ export default function ServiceWorkflowBuilder() {
         const formattedKeys = data.map((key: any) => ({
           id: key.id.toString(),
           name: key.provider.charAt(0).toUpperCase() + key.provider.slice(1) + " Key",
-          key: key.api_key, // This is the actual key value
           provider: key.provider,
           lastUsed: key.last_used || "Never",
           status: "active", // assuming keys are active
@@ -702,27 +722,37 @@ export default function ServiceWorkflowBuilder() {
   }
 
   // Get API key based on form selection
-  const getApiKeyForService = () => {
-    if (serviceData.apiKeySource === "saved" && serviceData.savedApiKeyId) {
-      const selectedKey = savedApiKeys.find((key) => key.id === serviceData.savedApiKeyId);
-      // Return both the key ID and provider information
-      return {
-        api_key_id: selectedKey?.id,
-        provider: selectedKey?.provider
-      };
-    } else if (serviceData.apiKeySource === "custom" && serviceData.customApiKey) {
-      // For custom keys, just return the key itself
-      return {
-        api_key: serviceData.customApiKey
-      };
+  const getApiKeyForService = (): ApiKeyData => {
+    console.log("useCustomApiKey:", useCustomApiKey);
+    console.log("customApiKey:", customApiKey);
+    console.log("savedApiKeyId:", serviceData.savedApiKeyId);
+  
+    if (useCustomApiKey && customApiKey) {
+      console.log("Returning customApiKey");
+      return { api_key: customApiKey };
+    } else if (!useCustomApiKey && serviceData.savedApiKeyId) {
+      const key = savedApiKeys.find(k => k.id === serviceData.savedApiKeyId);
+      if (key) {
+        console.log("Returning saved key:", key);
+        return {
+          api_key_id: key.id,
+          provider: key.provider,
+        };
+      }
     }
-    return null;
-  }
+  
+    console.log("No valid API key found, returning {}");
+    return {};
+  };
+  
+
+
 
   // Enhanced handleSubmit with more detailed logging
 const handleSubmit = async () => {
+
   setIsLoading(true);
-  
+ 
   try {
     console.log("Current serviceData before formatting:", serviceData);
     const userId = Cookies.get("user_id") || "current-user";
@@ -730,24 +760,21 @@ const handleSubmit = async () => {
     console.log("After formatWorkflowForAPI call, serviceData:", serviceData);
     
     // Get API key information
-    let apiKeyData: ApiKeyData = {};
-    
-    // Check if we're using a saved API key
-    if (selectedApiKey) {
-      const selectedKeyData = savedApiKeys.find(key => key.id === selectedApiKey);
-      if (selectedKeyData) {
-        apiKeyData = {
-          api_key_id: selectedKeyData.id,
-          provider: selectedKeyData.provider
-        };
-      }
-    }
-    // Check if we're using a custom API key
-    else if (customApiKey) {
-      apiKeyData = {
-        api_key: customApiKey
-      };
-    }
+    const apiKeyData = getApiKeyForService();
+    if (!apiKeyData.api_key_id && !apiKeyData.api_key) {
+
+  setError("API anahtarı girilmedi. Lütfen bir key seçin ya da özel bir key girin.");
+  setIsLoading(false);
+  return;
+}
+ // Bu fonksiyon yukarıda tanımlı
+ const cleanObject = (obj: Record<string, any>) => {
+  return Object.fromEntries(
+    Object.entries(obj).filter(([_, v]) => v !== undefined)
+  );
+};
+
+   
     
     // Log what we're sending
     console.log("API Key Data:", {
@@ -756,7 +783,7 @@ const handleSubmit = async () => {
       apiKeyData
     });
     
-    const serviceDataToSend = {
+    const serviceDataToSend = cleanObject({
       name: serviceData.title,
       description: serviceData.description || "",
       input_type: serviceData.inputType,
@@ -770,8 +797,10 @@ const handleSubmit = async () => {
       is_public: serviceData.isPublic,
       api_key_id: apiKeyData.api_key_id,
       api_key: apiKeyData.api_key,
-      provider: apiKeyData.provider
-    };
+      provider: apiKeyData.provider,
+    });
+    
+    
     
     console.log("Final serviceDataToSend:", serviceDataToSend);
     
@@ -783,30 +812,31 @@ const handleSubmit = async () => {
       },
       body: JSON.stringify(serviceDataToSend),
     });
-    
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error("Service creation failed:", {
-        status: response.status,
-        error: errorData,
-        sentData: {
-          ...serviceDataToSend,
-          api_key: serviceDataToSend.api_key ? "present" : "not present",
-          api_key_id: serviceDataToSend.api_key_id
-        }
-      });
-      throw new Error(errorData.detail || "Failed to create service");
+
+    if (response.status === 204) {
+      // No content, but success
+      console.warn("Backend 204 No Content döndü. Service oluşturulmuş olabilir ama veri dönmedi.");
+      router.push("/apps");
+      return;
     }
-    
-    const createdService = await response.json();
-    console.log("Service created:", {
-      id: createdService.id,
-      api_key_id: createdService.api_key_id,
-      provider: createdService.provider,
-      icon: createdService.icon,
-      color: createdService.color
-    });
-    
+
+    // Try to parse JSON only if not 204
+    const responseBody = await response.text();
+    if (!response.ok) {
+      console.error("Raw response text:", responseBody);
+      alert("Service creation failed: " + responseBody);
+      throw new Error("Failed to create service");
+    }
+
+    // If response is ok and has content, parse as JSON
+    let createdService = {};
+    try {
+      createdService = JSON.parse(responseBody);
+    } catch (err) {
+      console.error("JSON parse hatası:", err);
+      // If you expect empty body, that's fine
+    }
+    console.log("Service created:", createdService);
     router.push("/apps");
   } catch (error) {
     console.error("Error in handleSubmit:", error);
@@ -884,7 +914,7 @@ const handleSubmit = async () => {
         ) : (
           <div className="space-y-2">
             <Label htmlFor="api-key-select">Select Saved API Key</Label>
-            <Select value={selectedApiKey} onValueChange={setSelectedApiKey}>
+            <Select value={serviceData.savedApiKeyId} onValueChange={(value) => handleChange("savedApiKeyId", value)}>
               <SelectTrigger className="bg-black/40 border-purple-900/30">
                 <SelectValue placeholder="Select an API key" />
               </SelectTrigger>
@@ -1073,7 +1103,7 @@ const handleSubmit = async () => {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="outputType" className="text-white flex items-center">
+                      <Label htmlFor="outputType" className="text-white">
                         Output Type
                       </Label>
                       <Select
@@ -1600,41 +1630,22 @@ const handleSubmit = async () => {
                             value={newAgentData.agentType}
                             onValueChange={(value) => setNewAgentData({ ...newAgentData, agentType: value })}
                           >
-                            <SelectTrigger 
-                              id="agentType" 
-                              className={cn(
-                                "bg-black/40 border-purple-900/30 text-white",
-                                !newAgentData.agentType && "border-red-500"
-                              )}
-                            >
+                            <SelectTrigger id="agentType" className="bg-black/40 border-purple-900/30 text-white">
                               <SelectValue placeholder="Select agent type" />
                             </SelectTrigger>
                             <SelectContent>
                               <div className="bg-black/90 border-purple-900/30 text-white">
-                                <SelectItem value="gemini">
-                                  <div className="flex flex-col">
-                                    <span>Gemini AI Agent</span>
-                                    <span className="text-xs text-gray-400">General purpose AI agent powered by Google Gemini</span>
-                                  </div>
-                                </SelectItem>
-                                <SelectItem value="text2speech">
-                                  <div className="flex flex-col">
-                                    <span>Text-to-Speech</span>
-                                    <span className="text-xs text-gray-400">Convert text to natural speech</span>
-                                  </div>
-                                </SelectItem>
-                                <SelectItem value="bark_tts">
-                                  <div className="flex flex-col">
-                                    <span>Bark TTS</span>
-                                    <span className="text-xs text-gray-400">Advanced text-to-speech using Bark</span>
-                                  </div>
-                                </SelectItem>
-                                <SelectItem value="transcribe">
-                                  <div className="flex flex-col">
-                                    <span>Transcriber</span>
-                                    <span className="text-xs text-gray-400">Transcribe audio to text</span>
-                                  </div>
-                                </SelectItem>
+                                {isLoadingAgentTypes ? (
+                                  <div className="p-2 text-center text-sm text-gray-400">Loading...</div>
+                                ) : agentTypes.length > 0 ? (
+                                  agentTypes.map((type) => (
+                                    <SelectItem key={type} value={type}>
+                                      {type}
+                                    </SelectItem>
+                                  ))
+                                ) : (
+                                  <div className="p-2 text-center text-sm text-gray-400">No agent types found</div>
+                                )}
                               </div>
                             </SelectContent>
                           </Select>

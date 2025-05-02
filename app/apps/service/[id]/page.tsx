@@ -415,43 +415,14 @@ export default function ServicePage() {
 
   // Extract audio URL from result
   const extractAudioUrl = (result: any): string | null => {
-    if (!result) return null
+    if (!result || !result.process_id) return null;
 
-    // Check all possible paths where the audio URL might be stored
-    let audioPath = null
+    const userId = Cookies.get("user_id");
+    if (!userId) return null;
 
-    // First check audio_urls array (most common in your JSON example)
-    if (result.audio_urls && result.audio_urls.length > 0) {
-      audioPath = result.audio_urls[0].audio_url
-    }
-
-    // If not found, check final_output
-    if (!audioPath && result.final_output) {
-      audioPath = result.final_output
-    }
-
-    // If not found, check in results array
-    if (!audioPath && result.results && result.results.length > 0) {
-      // Try to find the TTS agent result (usually the last one)
-      const ttsResult = result.results.find(
-        (r: any) => r.raw?.agent_type === "tts" || r.agent_id === 1, // Assuming agent_id 1 is the TTS agent
-      )
-
-      if (ttsResult) {
-        audioPath = ttsResult.output || ttsResult.raw?.audio_url || ttsResult.raw?.audio_file
-      }
-    }
-
-    if (!audioPath) return null
-
-    // Extract the filename from the path
-    const filename = audioPath.split("/").pop()
-
-    if (!filename) return null
-
-    // Construct the full URL to the audio file
-    return `http://127.0.0.1:8000/api/v1/audio/${filename}`
-  }
+    // Construct the base URL for audio endpoint
+    return `http://127.0.0.1:8000/api/v1/mini-services/audio/${result.process_id}?current_user_id=${userId}`;
+  };
 
   // Custom audio player controls
   const playAudio = (audioUrl: string) => {
@@ -629,7 +600,7 @@ export default function ServicePage() {
 
   // Render output based on service type and result
   const renderOutput = () => {
-    if (!result) return null
+    if (!result) return null;
 
     // Handle error display
     if (error) {
@@ -637,133 +608,79 @@ export default function ServicePage() {
         <div className="bg-red-900/20 border border-red-700/30 rounded-lg p-4">
           <p className="text-red-300">{error}</p>
         </div>
-      )
+      );
     }
 
     // Determine what to display based on output type
     switch (service?.output_type) {
       case "text":
+        const textOutput = result.final_output || result.output || result.results?.[0]?.output;
         return (
           <div className="bg-black/40 backdrop-blur-sm rounded-xl border border-purple-900/30 p-6">
             <h3 className="text-lg font-medium text-white mb-4">Result</h3>
             <div className="whitespace-pre-wrap text-gray-300">
-              {result.final_output || result.output || result.results?.[0]?.output || "No output available"}
+              {textOutput || "No output available"}
             </div>
           </div>
-        )
+        );
 
       case "sound":
-        const audioUrl = extractAudioUrl(result)
-        console.log("Extracted Audio URL:", audioUrl) // Debug log
+        const audioUrl = extractAudioUrl(result);
 
         return (
           <div className="bg-black/40 backdrop-blur-sm rounded-xl border border-purple-900/30 p-6">
             <h3 className="text-lg font-medium text-white mb-4">Audio Result</h3>
             {audioUrl ? (
               <div>
-                {/* Native audio element (hidden but functional) */}
-                <audio
-                  id="audio-element"
-                  src={audioUrl}
-                  className="hidden"
-                  onPlay={() => setIsPlaying(true)}
-                  onPause={() => setIsPlaying(false)}
-                  onEnded={() => setIsPlaying(false)}
-                />
+                <div className="mt-4">
+                  <audio 
+                    controls 
+                    className="w-full" 
+                    key={audioUrl}
+                    onError={(e) => {
+                      console.error("Audio playback error:", e);
+                      toast({
+                        title: "Error",
+                        description: "Failed to play audio. Please try downloading the file.",
+                        variant: "destructive",
+                      });
+                    }}
+                  >
+                    <source src={audioUrl} type="audio/mp3" />
+                    Your browser does not support the audio element.
+                  </audio>
+                </div>
 
-                {/* Custom audio player UI */}
-                <div className="bg-black/30 rounded-lg p-4 flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="h-10 w-10 rounded-full bg-purple-600 hover:bg-purple-700 border-none"
-                      onClick={() => {
-                        const audioElement = document.getElementById("audio-element") as HTMLAudioElement
-                        if (isPlaying) {
-                          audioElement.pause()
-                        } else {
-                          audioElement.play().catch((err) => {
-                            console.error("Error playing audio:", err)
-                            setError("Failed to play audio. Please try again.")
-                          })
-                        }
-                      }}
-                    >
-                      {isPlaying ? (
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="24"
-                          height="24"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          className="text-white"
-                        >
-                          <rect x="6" y="4" width="4" height="16"></rect>
-                          <rect x="14" y="4" width="4" height="16"></rect>
-                        </svg>
-                      ) : (
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="24"
-                          height="24"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          className="text-white"
-                        >
-                          <polygon points="5 3 19 12 5 21 5 3"></polygon>
-                        </svg>
-                      )}
-                    </Button>
-                    <div>
-                      <p className="text-sm text-white">Audio Output</p>
-                      <p className="text-xs text-gray-400">{audioUrl.split("/").pop()}</p>
-                    </div>
-                  </div>
+                <div className="mt-4 flex justify-end">
                   <Button
                     variant="outline"
                     size="sm"
                     className="text-xs"
                     onClick={() => window.open(audioUrl, "_blank")}
                   >
-                    Download
+                    Download Audio
                   </Button>
                 </div>
 
-                {/* Alternative native audio player (backup) */}
-                <div className="mt-4">
-                  <p className="text-sm text-gray-400 mb-2">
-                    If the custom player doesn't work, use this native player:
-                  </p>
-                  <audio controls className="w-full" key={audioUrl}>
-                    <source src={audioUrl} type="audio/mp3" />
-                    Your browser does not support the audio element.
-                  </audio>
-                </div>
+                {process.env.NODE_ENV === 'development' && (
+                  <div className="mt-4 pt-4 border-t border-purple-900/30">
+                    <details>
+                      <summary className="text-sm text-gray-400 cursor-pointer">Debug Information</summary>
+                      <div className="mt-2 text-xs text-gray-500">
+                        <p>Process ID: {result.process_id}</p>
+                        <pre className="mt-2 overflow-auto max-h-[200px] bg-black/30 p-2 rounded">
+                          {JSON.stringify(result, null, 2)}
+                        </pre>
+                      </div>
+                    </details>
+                  </div>
+                )}
               </div>
             ) : (
               <p className="text-gray-400">No audio output available</p>
             )}
-
-            {/* Display raw result for debugging */}
-            <div className="mt-4 pt-4 border-t border-purple-900/30">
-              <details>
-                <summary className="text-sm text-gray-400 cursor-pointer">Show raw result data</summary>
-                <pre className="mt-2 text-xs text-gray-500 overflow-auto max-h-[200px] bg-black/30 p-2 rounded">
-                  {JSON.stringify(result, null, 2)}
-                </pre>
-              </details>
-            </div>
           </div>
-        )
+        );
 
       case "image":
         const imageUrl = result.image_url || result.final_output
