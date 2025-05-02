@@ -47,6 +47,21 @@ interface MiniService {
   run_time: number
 }
 
+// Define the process type from API
+interface Process {
+  id: number
+  user_id: number
+  service_id: number
+  mini_service_id: number | null
+  service_type: string
+  status: string
+  input_text: string | null
+  output_text: string | null
+  output_url: string | null
+  created_at: string
+  updated_at: string
+}
+
 export default function DashboardPage() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -55,6 +70,8 @@ export default function DashboardPage() {
   const [miniServicesLoading, setMiniServicesLoading] = useState(false)
   const [user_id, setUserId] = useState<number | null>(null)
   const [refreshTrigger, setRefreshTrigger] = useState(0) // Used to trigger refreshes
+  const [recentActivities, setRecentActivities] = useState<Process[]>([])
+  const [recentActivitiesLoading, setRecentActivitiesLoading] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
@@ -65,7 +82,6 @@ export default function DashboardPage() {
   }, [isAuthenticated, isLoading, router])
 
   // Function to get user ID from various sources
-
   const getUserId = useCallback(() => {
     try {
       // Try from localStorage - userData
@@ -419,6 +435,57 @@ export default function DashboardPage() {
     }
   }, [isAuthenticated, user_id, refreshTrigger, getUserId])
 
+  // Fetch user's recent activities/processes
+  useEffect(() => {
+    if (isAuthenticated) {
+      const fetchRecentActivities = async () => {
+        try {
+          setRecentActivitiesLoading(true)
+
+          // Get the authentication token
+          const token = localStorage.getItem("token") || localStorage.getItem("accessToken")
+          const cookieToken = Cookies.get("accessToken")
+          const authToken = token || cookieToken
+
+          if (!authToken) {
+            throw new Error("No authentication token found")
+          }
+
+          // Get user ID if not already set
+          const currentUserId = user_id || getUserId()
+          
+          if (!currentUserId) {
+            throw new Error("User ID is required")
+          }
+
+          console.log("Fetching recent processes for user ID:", currentUserId)
+
+          const response = await fetch(`http://127.0.0.1:8000/api/v1/processes?current_user_id=${currentUserId}&limit=5`, {
+            headers: {
+              Authorization: `Bearer ${authToken}`,
+              "Content-Type": "application/json",
+            },
+          })
+
+          if (!response.ok) {
+            throw new Error(`Failed to fetch processes: ${response.status} ${response.statusText}`)
+          }
+
+          const data: Process[] = await response.json()
+          console.log("Fetched recent processes:", data)
+          setRecentActivities(data)
+        } catch (error) {
+          console.error("Error fetching recent activities:", error)
+          setRecentActivities([])
+        } finally {
+          setRecentActivitiesLoading(false)
+        }
+      }
+
+      fetchRecentActivities()
+    }
+  }, [isAuthenticated, user_id, getUserId])
+
   // Helper function to get icon component from string name
   const getIconComponent = (iconName: string) => {
     const iconMap: Record<string, React.ReactNode> = {
@@ -450,6 +517,148 @@ export default function DashboardPage() {
     }
 
     return "from-indigo-600 to-indigo-800"
+  }
+
+  // Helper function to get appropriate icon based on service_type
+  const getActivityIcon = (serviceType: string) => {
+    switch (serviceType) {
+      case "text-to-image":
+        return <ImageIcon className="h-5 w-5 text-pink-400" />
+      case "bedtime-story":
+        return <BookOpen className="h-5 w-5 text-purple-400" />
+      case "video-translation":
+        return <Video className="h-5 w-5 text-blue-400" />
+      case "ai-chat":
+        return <MessageSquare className="h-5 w-5 text-green-400" />
+      case "audio-documents":
+        return <Headphones className="h-5 w-5 text-orange-400" />
+      case "video-captions":
+        return <FileVideo className="h-5 w-5 text-red-400" />
+      case "daily-recap":
+        return <FileText className="h-5 w-5 text-emerald-400" />
+      case "mini-service":
+        return <Wand2 className="h-5 w-5 text-indigo-400" />
+      default:
+        return <Wand2 className="h-5 w-5 text-gray-400" />
+    }
+  }
+
+  // Helper function to get background color based on service_type
+  const getActivityBgColor = (serviceType: string) => {
+    switch (serviceType) {
+      case "text-to-image":
+        return "bg-pink-600/20"
+      case "bedtime-story":
+        return "bg-purple-600/20"
+      case "video-translation":
+        return "bg-blue-600/20"
+      case "ai-chat":
+        return "bg-green-600/20"
+      case "audio-documents":
+        return "bg-orange-600/20"
+      case "video-captions":
+        return "bg-red-600/20"
+      case "daily-recap":
+        return "bg-emerald-600/20"
+      case "mini-service":
+        return "bg-indigo-600/20"
+      default:
+        return "bg-gray-600/20"
+    }
+  }
+
+  // Helper function to format date for display
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString)
+    const now = new Date()
+    
+    // Today
+    if (date.toDateString() === now.toDateString()) {
+      return `Today at ${date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}`
+    }
+    
+    // Yesterday
+    const yesterday = new Date(now)
+    yesterday.setDate(now.getDate() - 1)
+    if (date.toDateString() === yesterday.toDateString()) {
+      return `Yesterday at ${date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}`
+    }
+    
+    // Within last 7 days
+    const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+    const dayDiff = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24))
+    
+    if (dayDiff < 7) {
+      return `${daysOfWeek[date.getDay()]} at ${date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}`
+    }
+    
+    // Older
+    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + 
+           ` at ${date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}`
+  }
+
+  // Helper function to get human-readable title for process
+  const getActivityTitle = (process: Process) => {
+    // If it's a mini-service, we need special handling
+    if (process.service_type === "mini-service") {
+      // Find the mini-service by ID
+      const miniService = miniServices.find(ms => ms.id === process.mini_service_id)
+      if (miniService) {
+        return `${miniService.name} Used`
+      }
+      return "Custom Workflow Used"
+    }
+    
+    // For built-in services
+    switch (process.service_type) {
+      case "text-to-image":
+        return "Image Generated"
+      case "bedtime-story":
+        return "Bedtime Story Created"
+      case "video-translation":
+        return "Video Translated"
+      case "ai-chat":
+        return "AI Chat Conversation"
+      case "audio-documents":
+        return "Audio Document Created"
+      case "video-captions":
+        return "Video Captioning Complete"
+      case "daily-recap":
+        return "Daily Recap Generated"
+      default:
+        return "Process Completed"
+    }
+  }
+
+  // Helper function to get description for a process
+  const getActivityDescription = (process: Process) => {
+    if (process.input_text) {
+      // Truncate long inputs
+      const maxLength = 100
+      const input = process.input_text.length > maxLength 
+        ? process.input_text.substring(0, maxLength) + "..." 
+        : process.input_text
+        
+      if (process.service_type === "text-to-image") {
+        return `You created an image with the prompt "${input}"`
+      }
+      
+      return `You used prompt: "${input}"`
+    }
+    
+    // Generic fallbacks based on service type
+    switch (process.service_type) {
+      case "video-translation":
+        return "You translated a video to another language"
+      case "video-captions":
+        return "You added automatic captions to a video"
+      case "audio-documents":
+        return "You converted a document to audio"
+      default:
+        return process.status === "completed" 
+          ? "Process completed successfully" 
+          : `Process status: ${process.status}`
+    }
   }
 
   if (isLoading || isAuthenticated === null) {
@@ -582,37 +791,42 @@ export default function DashboardPage() {
             />
           </div>
 
-          {/* Recent Activity Section */}
+          {/* Recent Activity Section - Now Dynamic */}
           <section className="mt-16">
             <h2 className="text-2xl md:text-3xl font-bold text-white mb-8">Recent Activity</h2>
-            <div className="bg-black/40 backdrop-blur-sm rounded-xl border border-purple-900/30 p-6">
-              <div className="space-y-6">
-                <div className="flex items-start gap-4">
-                  <div className="w-10 h-10 rounded-full bg-purple-600/20 flex items-center justify-center flex-shrink-0">
-                    <BookOpen className="h-5 w-5 text-purple-400" />
-                  </div>
-                  <div>
-                    <h3 className="text-white font-medium">Bedtime Story Created</h3>
-                    <p className="text-gray-400 text-sm mt-1">
-                      You generated a story about "The Adventures of Luna the Space Cat"
-                    </p>
-                    <p className="text-gray-500 text-xs mt-2">Today at 2:45 PM</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-4">
-                  <div className="w-10 h-10 rounded-full bg-blue-600/20 flex items-center justify-center flex-shrink-0">
-                    <ImageIcon className="h-5 w-5 text-blue-400" />
-                  </div>
-                  <div>
-                    <h3 className="text-white font-medium">Image Generated</h3>
-                    <p className="text-gray-400 text-sm mt-1">
-                      You created an image with the prompt "Futuristic city with flying cars"
-                    </p>
-                    <p className="text-gray-500 text-xs mt-2">Yesterday at 10:12 AM</p>
-                  </div>
+            
+            {recentActivitiesLoading ? (
+              <div className="bg-black/40 backdrop-blur-sm rounded-xl border border-purple-900/30 p-6 flex items-center justify-center">
+                <Loader2 className="h-6 w-6 text-purple-400 animate-spin mr-3" />
+                <span className="text-purple-300">Loading your recent activities...</span>
+              </div>
+            ) : recentActivities.length > 0 ? (
+              <div className="bg-black/40 backdrop-blur-sm rounded-xl border border-purple-900/30 p-6">
+                <div className="space-y-6">
+                  {recentActivities.map((activity) => (
+                    <div key={activity.id} className="flex items-start gap-4">
+                      <div className={`w-10 h-10 rounded-full ${getActivityBgColor(activity.service_type)} flex items-center justify-center flex-shrink-0`}>
+                        {getActivityIcon(activity.service_type)}
+                      </div>
+                      <div>
+                        <h3 className="text-white font-medium">{getActivityTitle(activity)}</h3>
+                        <p className="text-gray-400 text-sm mt-1">
+                          {getActivityDescription(activity)}
+                        </p>
+                        <p className="text-gray-500 text-xs mt-2">
+                          {formatDate(activity.created_at)}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
-            </div>
+            ) : (
+              <div className="bg-black/40 backdrop-blur-sm rounded-xl border border-purple-900/30 p-6 text-center">
+                <p className="text-gray-400">You don't have any recent activities yet.</p>
+                <p className="text-gray-500 text-sm mt-2">Try out one of our AI services to get started!</p>
+              </div>
+            )}
           </section>
         </div>
       </main>

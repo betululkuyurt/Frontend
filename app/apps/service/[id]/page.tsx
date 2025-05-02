@@ -377,7 +377,7 @@ export default function ServicePage() {
       });
 
       // Navigate back and refresh
-      router.push("/dashboard");
+      router.push("/apps");
       router.refresh();
 
     } catch (error) {
@@ -831,7 +831,7 @@ export default function ServicePage() {
             <Button
               variant="ghost"
               className="mb-6 text-gray-400 hover:text-white"
-              onClick={() => router.push("/dashboard")}
+              onClick={() => router.push("/apps")}
             >
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back to Dashboard
@@ -841,7 +841,7 @@ export default function ServicePage() {
               <h2 className="text-2xl font-bold text-white mb-4">Service Not Found</h2>
               <p className="text-gray-400 mb-6">The requested service could not be found.</p>
               <Button
-                onClick={() => router.push("/dashboard")}
+                onClick={() => router.push("/apps")}
                 className="bg-purple-600 hover:bg-purple-700 text-white"
               >
                 Return to Dashboard
@@ -862,7 +862,7 @@ export default function ServicePage() {
           <Button
             variant="ghost"
             className="mb-6 text-gray-400 hover:text-white"
-            onClick={() => router.push("/dashboard")}
+            onClick={() => router.push("/apps")}
           >
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back to Dashboard
