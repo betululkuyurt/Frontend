@@ -160,21 +160,21 @@ export function MiniAppCard({
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent className="bg-gray-900 border border-purple-900/30 text-white">
           <AlertDialogHeader>
-            <AlertDialogTitle>Servisi Sil</AlertDialogTitle>
+            <AlertDialogTitle>Delete Service</AlertDialogTitle>
             <AlertDialogDescription className="text-gray-400">
-              "{title}" servisini silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.
+              Are you sure you want to delete the "{title}" service? This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel className="bg-gray-800 text-white border-gray-700 hover:bg-gray-700">
-              İptal
+              Cancel
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleConfirmDelete}
               className="bg-red-600 hover:bg-red-700 text-white"
               disabled={isDeleting}
             >
-              {isDeleting ? "Siliniyor..." : "Evet, Sil"}
+              {isDeleting ? "Deleting..." : "Yes, Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

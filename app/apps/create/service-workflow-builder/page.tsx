@@ -1,22 +1,6 @@
 "use client"
 
 import type React from "react"
-
-/**
- * Service Workflow Builder
- *
- * This component allows users to create custom AI service workflows.
- * It consists of three main sections:
- * 1. Service Details - Configuration of basic service information
- * 2. Workflow Builder - Arrangement of interconnected AI agents
- * 3. Preview - Preview and deployment of the created service
- *
- * Features:
- * - Supports different input/output types (text, image, audio, video, document)
- * - Customizable settings for agents
- * - Intuitive workflow creation
- * - Real-time service preview
- */
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Cookies from "js-cookie"
@@ -44,6 +28,7 @@ import {
   Settings,
   Trash2,
   Key,
+  CheckCircle2,
 } from "lucide-react"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
@@ -51,6 +36,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { cn } from "@/lib/utils"
+import { useToast } from "@/components/ui/use-toast"
 
 // Type definitions
 interface BaseAgentSetting {
@@ -86,15 +73,11 @@ interface Agent {
   icon?: React.ComponentType<any>
   color?: string
   settings?: AgentSetting[]
-}
-
-interface AgentType {
-  id: string
-  name: string
-  description: string
-  configSchema: Record<string, any>
-  supportedInputTypes: string[]
-  supportedOutputTypes: string[]
+  isPublic: boolean
+  userId: string
+  apiKey?: string
+  apiKeyId?: string
+  type?: string // Add type field
 }
 
 interface ApiKey {
@@ -125,7 +108,7 @@ const inputTypes = [
 const outputTypes = [
   { value: "text", label: "Text Output", icon: MessageSquare },
   { value: "image", label: "Image Output", icon: ImageIcon },
-  { value: "audio", label: "Audio Output", icon: Headphones },
+  { value: "sound", label: "Sound Output", icon: Headphones },
   { value: "video", label: "Video Output", icon: Video },
   { value: "text-audio", label: "Text and Audio Output", icon: FileText },
   { value: "text-video", label: "Text and Video Output", icon: FileVideo },
@@ -154,6 +137,19 @@ const colorOptions = [
   { value: "from-indigo-600 to-violet-800", label: "Indigo" },
 ]
 
+// Progress steps for the workflow builder
+const progressSteps = [
+  { id: "details", label: "Service Details" },
+  { id: "workflow", label: "Workflow Builder" },
+  { id: "preview", label: "Preview & Deploy" },
+]
+
+interface ApiKeyData {
+  api_key?: string;
+  api_key_id?: string;
+  provider?: string;
+}
+
 export default function ServiceWorkflowBuilder() {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
@@ -162,10 +158,13 @@ export default function ServiceWorkflowBuilder() {
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null)
   const [agentSettingsOpen, setAgentSettingsOpen] = useState<string | null>(null)
   const [availableAgents, setAvailableAgents] = useState<Agent[]>([])
-  const [availableAgentTypes, setAvailableAgentTypes] = useState<AgentType[]>([])
-  const [selectedAgentType, setSelectedAgentType] = useState<AgentType | null>(null)
   const [savedApiKeys, setSavedApiKeys] = useState<ApiKey[]>([])
   const [isLoadingApiKeys, setIsLoadingApiKeys] = useState(false)
+  const [apiKeys, setApiKeys] = useState<ApiKey[]>([])
+  const [selectedApiKey, setSelectedApiKey] = useState<string>("")
+  const [customApiKey, setCustomApiKey] = useState<string>("")
+  const [useCustomApiKey, setUseCustomApiKey] = useState<boolean>(false)
+  const [error, setError] = useState<string | null>(null) // Add error state
 
   const [serviceData, setServiceData] = useState({
     title: "",
@@ -189,66 +188,28 @@ export default function ServiceWorkflowBuilder() {
     description: "",
     inputType: "text",
     outputType: "text",
-    agentType: "",
     systemInstruction: "",
     config: {} as Record<string, any>,
+    isPublic: false,
+    agentType: "", // Boş bırakıyoruz, kullanıcı seçmek zorunda
   })
+
+  const { toast } = useToast()
 
   // Fetch available agents and API keys on component mount
   useEffect(() => {
     fetchAgents()
-    fetchAgentTypes()
     fetchApiKeys()
   }, [])
-
-  // Determine the final output type based on the workflow
-  useEffect(() => {
-    if (workflow.length > 0) {
-      const lastStepId = workflow.find((step) => step.next === null)?.id
-      const lastStep = workflow.find((step) => step.id === lastStepId)
-
-      if (lastStep) {
-        const lastAgent = availableAgents.find((agent) => agent.id === lastStep.agentId)
-        if (lastAgent) {
-          setServiceData((prev) => ({
-            ...prev,
-            outputType: lastAgent.outputType,
-          }))
-        }
-      }
-    } else {
-      // If no workflow steps, output type is the same as input type
-      setServiceData((prev) => ({
-        ...prev,
-        outputType: prev.inputType,
-      }))
-    }
-  }, [workflow, availableAgents])
-
-  // Update agent form when agent type changes
-  useEffect(() => {
-    if (selectedAgentType) {
-      setNewAgentData((prev) => ({
-        ...prev,
-        inputType: selectedAgentType.supportedInputTypes[0] || "text",
-        outputType: selectedAgentType.supportedOutputTypes[0] || "text",
-        agentType: selectedAgentType.id,
-      }))
-    }
-  }, [selectedAgentType])
 
   // Fetch available agents from the backend
   async function fetchAgents() {
     try {
       setIsLoading(true)
+      const userId = Cookies.get("user_id")
 
-      // Try to get user ID from cookies, but don't require it
-      const userId = Cookies.get("user_id") 
-      console.log("User ID:", userId)
-
-      // Use a try-catch to handle API errors gracefully
       try {
-        const response = await fetch(`http://127.0.0.1:8000/api/v1/agents?current_user_id=${userId}`, {
+        const response = await fetch(`http://127.0.0.1:8000/api/v1/agents/?current_user_id=${userId}`, {
           method: "GET",
           headers: {
             "Content-Type": "application/json",
@@ -266,10 +227,14 @@ export default function ServiceWorkflowBuilder() {
           description: a.description || "",
           inputType: a.input_type || "text",
           outputType: a.output_type || "text",
-          // Map icon and color based on agent type
           icon: getIconForType(a.input_type),
           color: getColorForType(a.output_type),
           settings: getSettingsForAgent(a),
+          isPublic: a.is_public || false,
+          userId: a.user_id || "",
+          apiKey: a.api_key,
+          apiKeyId: a.api_key_id,
+          type: a.agent_type,
         }))
 
         setAvailableAgents(agents)
@@ -286,44 +251,6 @@ export default function ServiceWorkflowBuilder() {
     } catch (error) {
       console.error("Error in fetchAgents:", error)
       setAvailableAgents([])
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  // Fetch available agent types from the backend
-  async function fetchAgentTypes() {
-    try {
-      setIsLoading(true)
-
-      // Try to get user ID from cookies, but don't require it
-      const userId = Cookies.get("user_id")
-
-      try {
-        const response = await fetch(`http://127.0.0.1:8000/api/v1/agent-types?current_user_id=${userId}`, {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${Cookies.get("access_token") || ""}`,
-          },
-        })
-
-        if (!response.ok) throw new Error("Failed to fetch agent types")
-        const agentTypes = await response.json()
-        setAvailableAgentTypes(agentTypes)
-      } catch (error) {
-        console.error("Error fetching agent types:", error)
-        // If API fails, use localStorage as fallback
-        const localAgentTypes = localStorage.getItem("availableAgentTypes")
-        if (localAgentTypes) {
-          setAvailableAgentTypes(JSON.parse(localAgentTypes))
-        } else {
-          setAvailableAgentTypes([])
-        }
-      }
-    } catch (error) {
-      console.error("Error in fetchAgentTypes:", error)
-      setAvailableAgentTypes([])
     } finally {
       setIsLoading(false)
     }
@@ -360,6 +287,7 @@ export default function ServiceWorkflowBuilder() {
         }))
 
         setSavedApiKeys(formattedKeys)
+        setApiKeys(formattedKeys)
       } catch (error) {
         console.error("Error fetching API keys:", error)
         // If API fails, use localStorage as fallback
@@ -464,20 +392,16 @@ export default function ServiceWorkflowBuilder() {
     setServiceData((prev) => ({
       ...prev,
       inputType: value,
-      outputType: value, // Initially set output type to match input type
+      
     }))
   }
 
+  // Add output type change handler
   const handleChange = (field: string, value: string | boolean) => {
     setServiceData((prev) => ({
       ...prev,
       [field]: value,
     }))
-  }
-
-  const handleAgentTypeChange = (typeId: string) => {
-    const selectedType = availableAgentTypes.find((type) => type.id === typeId)
-    setSelectedAgentType(selectedType || null)
   }
 
   // Filter agents based on input compatibility with the previous step's output
@@ -495,6 +419,7 @@ export default function ServiceWorkflowBuilder() {
       const previousAgent = availableAgents.find((agent) => agent.id === lastStep.agentId)
       if (!previousAgent) return []
 
+      // Return all agents that can accept the previous agent's output type
       return availableAgents.filter((agent) => agent.inputType === previousAgent.outputType)
     }
   }
@@ -682,113 +607,81 @@ export default function ServiceWorkflowBuilder() {
   // Create a new agent
   const createAgent = async () => {
     try {
-      setIsCreatingAgent(true)
+      const userId = Cookies.get("user_id")
+      if (!userId) {
+        console.error("Authentication Error: No user ID found");
+        throw new Error("User not authenticated")
+      }
 
-      // Try to get user ID from cookies, but don't require it
-      const userId = Cookies.get("user_id") || "current-user"
-
-      // Prepare agent data based on the form values and selected agent type
       const agentData = {
         name: newAgentData.name,
-        description: newAgentData.description || "",
+        description: newAgentData.description,
         input_type: newAgentData.inputType,
         output_type: newAgentData.outputType,
+        system_instruction: newAgentData.systemInstruction,
+        config: newAgentData.config,
+        is_public: newAgentData.isPublic,
         agent_type: newAgentData.agentType,
-        system_instruction: newAgentData.systemInstruction || "",
-        config: newAgentData.config || {},
-        user_id: userId,
+        api_key: useCustomApiKey ? customApiKey : selectedApiKey,
+        api_key_id: useCustomApiKey ? null : selectedApiKey
       }
 
-      try {
-        const response = await fetch(`http://127.0.0.1:8000/api/v1/agents?current_user_id=${userId}`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${Cookies.get("access_token") || ""}`,
-          },
-          body: JSON.stringify(agentData),
-        })
+      console.log("Creating agent with data:", {
+        ...agentData,
+        api_key: agentData.api_key ? "PRESENT" : "NOT_PRESENT",
+        api_key_id: agentData.api_key_id
+      });
 
-        if (!response.ok) {
-          const errorData = await response.json()
-          throw new Error(errorData.detail || "Failed to create agent")
-        }
+      const response = await fetch(`http://127.0.0.1:8000/api/v1/agents/?current_user_id=${userId}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${Cookies.get("access_token")}`
+        },
+        body: JSON.stringify(agentData)
+      })
 
-        const newAgent = await response.json()
+      console.log("API Response Status:", response.status);
+      console.log("API Response Headers:", Object.fromEntries(response.headers.entries()));
 
-        // Transform the new agent to match our frontend interface
-        const formattedAgent: Agent = {
-          id: newAgent.id.toString(),
-          name: newAgent.name,
-          description: newAgent.description || "",
-          inputType: newAgent.input_type || "text",
-          outputType: newAgent.output_type || "text",
-          icon: getIconForType(newAgent.input_type),
-          color: getColorForType(newAgent.output_type),
-          settings: getSettingsForAgent(newAgent),
-        }
-
-        // Update the available agents list
-        const updatedAgents = [...availableAgents, formattedAgent]
-        setAvailableAgents(updatedAgents)
-
-        // Save to localStorage as backup
-        localStorage.setItem("availableAgents", JSON.stringify(updatedAgents))
-
-        // Reset form and close dialog
-        setNewAgentData({
-          name: "",
-          description: "",
-          inputType: "text",
-          outputType: "text",
-          agentType: "",
-          systemInstruction: "",
-          config: {},
-        })
-
-        // Add the new agent to the workflow
-        addAgentToWorkflow(formattedAgent.id)
-      } catch (error) {
-        console.error("Error creating agent:", error)
-
-        // Create a local agent with a unique ID
-        const newAgentId = `local-agent-${Date.now()}`
-        const formattedAgent: Agent = {
-          id: newAgentId,
-          name: newAgentData.name,
-          description: newAgentData.description || "",
-          inputType: newAgentData.inputType,
-          outputType: newAgentData.outputType,
-          icon: getIconForType(newAgentData.inputType),
-          color: getColorForType(newAgentData.outputType),
-          settings: [{ name: "systemInstruction", label: "System Instruction", type: "textarea" }],
-        }
-
-        // Update the available agents list
-        const updatedAgents = [...availableAgents, formattedAgent]
-        setAvailableAgents(updatedAgents)
-
-        // Save to localStorage as backup
-        localStorage.setItem("availableAgents", JSON.stringify(updatedAgents))
-
-        // Reset form
-        setNewAgentData({
-          name: "",
-          description: "",
-          inputType: "text",
-          outputType: "text",
-          agentType: "",
-          systemInstruction: "",
-          config: {},
-        })
-
-        // Add the new agent to the workflow
-        addAgentToWorkflow(newAgentId)
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error("API Error Response:", {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorData
+        });
+        throw new Error(`Failed to create agent: ${JSON.stringify(errorData)}`)
       }
-    } catch (error) {
-      console.error("Error in createAgent:", error)
-    } finally {
-      setIsCreatingAgent(false)
+
+      const data = await response.json()
+      console.log("Agent created successfully:", data);
+
+      setNewAgentData({
+        name: "",
+        description: "",
+        inputType: "text",
+        outputType: "text",
+        systemInstruction: "",
+        config: {},
+        isPublic: false,
+        agentType: "text"
+      })
+      setSelectedApiKey("")
+      setCustomApiKey("")
+      setUseCustomApiKey(false)
+      
+      return data
+    } catch (error: any) {
+      console.error("Detailed error in createAgent:", {
+        error,
+        message: error.message,
+        stack: error.stack,
+        newAgentData,
+        selectedApiKey: selectedApiKey ? "PRESENT" : "NOT_PRESENT",
+        customApiKey: customApiKey ? "PRESENT" : "NOT_PRESENT"
+      });
+      throw error
     }
   }
 
@@ -811,75 +704,116 @@ export default function ServiceWorkflowBuilder() {
   // Get API key based on form selection
   const getApiKeyForService = () => {
     if (serviceData.apiKeySource === "saved" && serviceData.savedApiKeyId) {
-      const selectedKey = savedApiKeys.find((key) => key.id === serviceData.savedApiKeyId)
-      return selectedKey?.key || ""
+      const selectedKey = savedApiKeys.find((key) => key.id === serviceData.savedApiKeyId);
+      // Return both the key ID and provider information
+      return {
+        api_key_id: selectedKey?.id,
+        provider: selectedKey?.provider
+      };
     } else if (serviceData.apiKeySource === "custom" && serviceData.customApiKey) {
-      return serviceData.customApiKey
+      // For custom keys, just return the key itself
+      return {
+        api_key: serviceData.customApiKey
+      };
     }
-    return ""
+    return null;
   }
 
-  const handleSubmit = async () => {
-    setIsLoading(true)
-
-    try {
-      // Try to get user ID from cookies, but don't require it
-      const userId = Cookies.get("user_id") || "current-user"
-
-      const formattedWorkflow = formatWorkflowForAPI()
-      const apiKey = getApiKeyForService()
-
-      const serviceDataToSend = {
-        name: serviceData.title,
-        description: serviceData.description || "",
-        input_type: serviceData.inputType,
-        output_type: serviceData.outputType,
-        workflow: formattedWorkflow,
-        enhance_prompt: serviceData.enhancePrompt,
-        api_key: apiKey || undefined,
-        icon: serviceData.icon,
-        placeholder: serviceData.placeholder,
-        button_text: serviceData.buttonText,
-        is_public: serviceData.isPublic,
+  // Enhanced handleSubmit with more detailed logging
+const handleSubmit = async () => {
+  setIsLoading(true);
+  
+  try {
+    console.log("Current serviceData before formatting:", serviceData);
+    const userId = Cookies.get("user_id") || "current-user";
+    const formattedWorkflow = formatWorkflowForAPI();
+    console.log("After formatWorkflowForAPI call, serviceData:", serviceData);
+    
+    // Get API key information
+    let apiKeyData: ApiKeyData = {};
+    
+    // Check if we're using a saved API key
+    if (selectedApiKey) {
+      const selectedKeyData = savedApiKeys.find(key => key.id === selectedApiKey);
+      if (selectedKeyData) {
+        apiKeyData = {
+          api_key_id: selectedKeyData.id,
+          provider: selectedKeyData.provider
+        };
       }
-
-      try {
-        const response = await fetch(`http://127.0.0.1:8000/api/v1/mini-services?current_user_id=${userId}`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${Cookies.get("access_token") || ""}`,
-          },
-          body: JSON.stringify(serviceDataToSend),
-        })
-
-        if (!response.ok) {
-          const errorData = await response.json()
-          throw new Error(errorData.detail || "Failed to create service")
+    }
+    // Check if we're using a custom API key
+    else if (customApiKey) {
+      apiKeyData = {
+        api_key: customApiKey
+      };
+    }
+    
+    // Log what we're sending
+    console.log("API Key Data:", {
+      selectedKeyId: selectedApiKey,
+      hasCustomKey: !!customApiKey,
+      apiKeyData
+    });
+    
+    const serviceDataToSend = {
+      name: serviceData.title,
+      description: serviceData.description || "",
+      input_type: serviceData.inputType,
+      output_type: serviceData.outputType,
+      workflow: formattedWorkflow,
+      enhance_prompt: serviceData.enhancePrompt,
+      icon: serviceData.icon,
+      color: serviceData.color,
+      placeholder: serviceData.placeholder,
+      button_text: serviceData.buttonText,
+      is_public: serviceData.isPublic,
+      api_key_id: apiKeyData.api_key_id,
+      api_key: apiKeyData.api_key,
+      provider: apiKeyData.provider
+    };
+    
+    console.log("Final serviceDataToSend:", serviceDataToSend);
+    
+    const response = await fetch(`http://127.0.0.1:8000/api/v1/mini-services?current_user_id=${userId}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${Cookies.get("access_token") || ""}`,
+      },
+      body: JSON.stringify(serviceDataToSend),
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error("Service creation failed:", {
+        status: response.status,
+        error: errorData,
+        sentData: {
+          ...serviceDataToSend,
+          api_key: serviceDataToSend.api_key ? "present" : "not present",
+          api_key_id: serviceDataToSend.api_key_id
         }
-
-        // Save the created service to localStorage as backup
-        const existingServices = JSON.parse(localStorage.getItem("customServices") || "[]")
-        localStorage.setItem("customServices", JSON.stringify([...existingServices, serviceDataToSend]))
-
-        router.push("/apps")
-      } catch (error) {
-        console.error("Error creating service:", error)
-
-        // Save the service to localStorage as backup
-        const existingServices = JSON.parse(localStorage.getItem("customServices") || "[]")
-        localStorage.setItem("customServices", JSON.stringify([...existingServices, serviceDataToSend]))
-
-        // Simulate success and redirect
-        setTimeout(() => {
-          router.push("/apps")
-        }, 1000)
-      }
-    } catch (error) {
-      console.error("Error in handleSubmit:", error)
-      setIsLoading(false)
+      });
+      throw new Error(errorData.detail || "Failed to create service");
     }
+    
+    const createdService = await response.json();
+    console.log("Service created:", {
+      id: createdService.id,
+      api_key_id: createdService.api_key_id,
+      provider: createdService.provider,
+      icon: createdService.icon,
+      color: createdService.color
+    });
+    
+    router.push("/apps");
+  } catch (error) {
+    console.error("Error in handleSubmit:", error);
+    setError(error instanceof Error ? error.message : "Failed to create service");
+    setIsLoading(false);
   }
+};
 
   // Get the selected icon component
   const SelectedIcon = iconOptions.find((icon) => icon.value === serviceData.icon)?.icon || Wand2
@@ -892,6 +826,13 @@ export default function ServiceWorkflowBuilder() {
 
   const orderedWorkflow = getOrderedWorkflow()
 
+  // Calculate progress percentage
+  const getProgressPercentage = () => {
+    const stepIndex = progressSteps.findIndex((step) => step.id === activeTab)
+    if (stepIndex === -1) return 0
+    return ((stepIndex + 1) / progressSteps.length) * 100
+  }
+
   // Add this useEffect to load data from localStorage on component mount
   useEffect(() => {
     // Load agents from localStorage if available
@@ -901,16 +842,6 @@ export default function ServiceWorkflowBuilder() {
         setAvailableAgents(JSON.parse(localAgents))
       } catch (e) {
         console.error("Error parsing local agents:", e)
-      }
-    }
-
-    // Load agent types from localStorage if available
-    const localAgentTypes = localStorage.getItem("availableAgentTypes")
-    if (localAgentTypes) {
-      try {
-        setAvailableAgentTypes(JSON.parse(localAgentTypes))
-      } catch (e) {
-        console.error("Error parsing local agent types:", e)
       }
     }
 
@@ -925,6 +856,54 @@ export default function ServiceWorkflowBuilder() {
     }
   }, [])
 
+  // Add API key selection UI in the form
+  const renderApiKeySelection = () => {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center space-x-2">
+          <Switch
+            checked={useCustomApiKey}
+            onCheckedChange={setUseCustomApiKey}
+            id="use-custom-key"
+          />
+          <Label htmlFor="use-custom-key">Use Custom API Key</Label>
+        </div>
+
+        {useCustomApiKey ? (
+          <div className="space-y-2">
+            <Label htmlFor="custom-api-key">Custom API Key</Label>
+            <Input
+              id="custom-api-key"
+              type="password"
+              value={customApiKey}
+              onChange={(e) => setCustomApiKey(e.target.value)}
+              placeholder="Enter your API key"
+              className="bg-black/40 border-purple-900/30"
+            />
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <Label htmlFor="api-key-select">Select Saved API Key</Label>
+            <Select value={selectedApiKey} onValueChange={setSelectedApiKey}>
+              <SelectTrigger className="bg-black/40 border-purple-900/30">
+                <SelectValue placeholder="Select an API key" />
+              </SelectTrigger>
+              <SelectContent>
+                {savedApiKeys
+                  .filter(key => key.provider === "gemini") // Only show Gemini keys for Gemini agents
+                  .map((key) => (
+                    <SelectItem key={key.id} value={key.id}>
+                      {key.name} ({key.provider})
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-black via-purple-950/20 to-black">
       <NavBar />
@@ -936,14 +915,60 @@ export default function ServiceWorkflowBuilder() {
             <p className="text-gray-400">Design your own AI service workflow</p>
           </div>
 
-          <Tabs defaultValue="details" value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-            <div className="bg-black/40 border border-purple-900/30 rounded-md p-1">
-              <TabsList>
-                <TabsTrigger value="details">Service Details</TabsTrigger>
-                <TabsTrigger value="workflow">Workflow Builder</TabsTrigger>
-                <TabsTrigger value="preview">Preview</TabsTrigger>
-              </TabsList>
+          {/* Progress Bar */}
+          <div className="mb-8">
+            <div className="flex justify-between mb-2">
+              {progressSteps.map((step, index) => (
+                <div
+                  key={step.id}
+                  className={cn(
+                    "flex flex-col items-center relative",
+                    "md:flex-row md:items-center",
+                    {
+                      "text-purple-400":
+                        activeTab === step.id || progressSteps.findIndex((s) => s.id === activeTab) > index,
+                    },
+                    {
+                      "text-gray-500":
+                        activeTab !== step.id && progressSteps.findIndex((s) => s.id === activeTab) < index,
+                    },
+                  )}
+                >
+                  <div
+                    className={cn(
+                      "w-8 h-8 rounded-full flex items-center justify-center z-10",
+                      {
+                        "bg-purple-600":
+                          activeTab === step.id || progressSteps.findIndex((s) => s.id === activeTab) > index,
+                      },
+                      {
+                        "bg-gray-800 border border-gray-700":
+                          activeTab !== step.id && progressSteps.findIndex((s) => s.id === activeTab) < index,
+                      },
+                    )}
+                  >
+                    {activeTab === step.id ? (
+                      <span className="text-white font-medium">{index + 1}</span>
+                    ) : progressSteps.findIndex((s) => s.id === activeTab) > index ? (
+                      <CheckCircle2 className="h-4 w-4 text-white" />
+                    ) : (
+                      <span className="text-gray-400">{index + 1}</span>
+                    )}
+                  </div>
+                  <span className="mt-2 text-sm font-medium md:ml-2 md:mt-0">{step.label}</span>
+                </div>
+              ))}
             </div>
+            <div className="w-full bg-gray-800 rounded-full h-2.5">
+              <div
+                className="bg-gradient-to-r from-purple-600 to-purple-800 h-2.5 rounded-full transition-all duration-300 ease-in-out"
+                style={{ width: `${getProgressPercentage()}%` }}
+              ></div>
+            </div>
+          </div>
+
+          <Tabs defaultValue="details" value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+            
 
             {/* Service Details Tab */}
             <TabsContent value="details" className="space-y-6">
@@ -1050,14 +1075,25 @@ export default function ServiceWorkflowBuilder() {
                     <div className="space-y-2">
                       <Label htmlFor="outputType" className="text-white flex items-center">
                         Output Type
-                        <Badge variant="outline" className="ml-2 text-xs bg-purple-900/20">
-                          Determined by workflow
-                        </Badge>
                       </Label>
-                      <div className="h-10 px-3 py-2 rounded-md border border-purple-900/30 bg-black/40 text-gray-400 flex items-center">
-                        <OutputTypeIcon className="h-4 w-4 mr-2 text-gray-400" />
-                        {outputTypes.find((type) => type.value === serviceData.outputType)?.label || "Text Output"}
-                      </div>
+                      <Select
+                        value={serviceData.outputType}
+                        onValueChange={(value) => handleChange("outputType", value)}
+                      >
+                        <SelectTrigger
+                          id="outputType"
+                          className="bg-black/40 border-purple-900/30 text-white"
+                        >
+                          <SelectValue placeholder="Select output type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <div className="bg-black/90 border-purple-900/30 text-white">
+                            <SelectItem value="text">Text</SelectItem>
+                            <SelectItem value="image">Image</SelectItem>
+                            <SelectItem value="sound">Sound</SelectItem>
+                          </div>
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
 
@@ -1181,9 +1217,9 @@ export default function ServiceWorkflowBuilder() {
                           </Label>
                           <Input
                             id="customApiKey"
-                            type="password"
-                            value={serviceData.customApiKey}
-                            onChange={(e) => handleChange("customApiKey", e.target.value)}
+              type="password"
+              value={serviceData.customApiKey}
+              onChange={(e) => handleChange("customApiKey", e.target.value)}
                             placeholder="Enter API key"
                             className="bg-black/40 border-purple-900/30 text-white"
                           />
@@ -1231,10 +1267,9 @@ export default function ServiceWorkflowBuilder() {
                   </div>
 
                   {availableAgents.length === 0 && !isLoading && (
-                    <div className="bg-red-900/20 border border-red-900/30 rounded-md p-4 mb-4">
+                    <div className="bg-red-900/20 border border-purple-900/30 rounded-md p-4 mb-4">
                       <p className="text-white text-sm">
-                        No agents are available from the backend. You need to create agents or ensure your connection to
-                        the backend is working.
+                        No agents are available. First you need to create agents to use in your workflow.
                       </p>
                     </div>
                   )}
@@ -1551,100 +1586,102 @@ export default function ServiceWorkflowBuilder() {
                         Create New Agent
                       </Button>
                     </DialogTrigger>
-                    <DialogContent className="bg-gray-900 border-gray-700 text-white">
+                    <DialogContent className="bg-gray-900 border-gray-700 text-white max-w-3xl w-[90vw] max-h-[90vh] overflow-y-auto">
                       <DialogHeader>
                         <DialogTitle>Create New Agent</DialogTitle>
                       </DialogHeader>
                       <div className="space-y-4 mt-4">
+                        {/* Agent Type Selection */}
                         <div className="space-y-2">
-                          <Label htmlFor="agentName">Agent Name</Label>
-                          <Input
-                            id="agentName"
-                            value={newAgentData.name}
-                            onChange={(e) => setNewAgentData({ ...newAgentData, name: e.target.value })}
-                            placeholder="My Custom Agent"
-                            className="bg-black/40 border-purple-900/30 text-white"
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor="agentDescription">Description</Label>
-                          <Textarea
-                            id="agentDescription"
-                            value={newAgentData.description}
-                            onChange={(e) => setNewAgentData({ ...newAgentData, description: e.target.value })}
-                            placeholder="What does this agent do?"
-                            className="bg-black/40 border-purple-900/30 text-white min-h-[80px]"
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor="agentType">Agent Type</Label>
+                          <Label htmlFor="agentType" className="text-white">
+                            Agent Type <span className="text-red-500">*</span>
+                          </Label>
                           <Select
                             value={newAgentData.agentType}
-                            onValueChange={(value) => {
-                              handleAgentTypeChange(value)
-                              setNewAgentData({ ...newAgentData, agentType: value })
-                            }}
+                            onValueChange={(value) => setNewAgentData({ ...newAgentData, agentType: value })}
                           >
-                            <SelectTrigger id="agentType" className="bg-black/40 border-purple-900/30 text-white">
+                            <SelectTrigger 
+                              id="agentType" 
+                              className={cn(
+                                "bg-black/40 border-purple-900/30 text-white",
+                                !newAgentData.agentType && "border-red-500"
+                              )}
+                            >
                               <SelectValue placeholder="Select agent type" />
                             </SelectTrigger>
                             <SelectContent>
                               <div className="bg-black/90 border-purple-900/30 text-white">
-                                {isLoading ? (
-                                  <div className="flex items-center justify-center p-4">
-                                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                                    <span>Loading agent types...</span>
+                                <SelectItem value="gemini">
+                                  <div className="flex flex-col">
+                                    <span>Gemini AI Agent</span>
+                                    <span className="text-xs text-gray-400">General purpose AI agent powered by Google Gemini</span>
                                   </div>
-                                ) : availableAgentTypes.length > 0 ? (
-                                  availableAgentTypes.map((type) => (
-                                    <SelectItem key={type.id} value={type.id}>
-                                      {type.name}
-                                    </SelectItem>
-                                  ))
-                                ) : (
-                                  <div className="text-center p-4">
-                                    <p className="text-gray-400">No agent types available</p>
-                                    <p className="text-xs text-gray-500 mt-1">
-                                      Please check your connection to the backend
-                                    </p>
+                                </SelectItem>
+                                <SelectItem value="text2speech">
+                                  <div className="flex flex-col">
+                                    <span>Text-to-Speech</span>
+                                    <span className="text-xs text-gray-400">Convert text to natural speech</span>
                                   </div>
-                                )}
+                                </SelectItem>
+                                <SelectItem value="bark_tts">
+                                  <div className="flex flex-col">
+                                    <span>Bark TTS</span>
+                                    <span className="text-xs text-gray-400">Advanced text-to-speech using Bark</span>
+                                  </div>
+                                </SelectItem>
+                                <SelectItem value="transcribe">
+                                  <div className="flex flex-col">
+                                    <span>Transcriber</span>
+                                    <span className="text-xs text-gray-400">Transcribe audio to text</span>
+                                  </div>
+                                </SelectItem>
                               </div>
                             </SelectContent>
                           </Select>
+                          {!newAgentData.agentType && (
+                            <p className="text-xs text-red-500">Please select an agent type</p>
+                          )}
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="agentName">Agent Name</Label>
+                            <Input
+                              id="agentName"
+                              value={newAgentData.name}
+                              onChange={(e) => setNewAgentData({ ...newAgentData, name: e.target.value })}
+                              placeholder="My Custom Agent"
+                              className="bg-black/40 border-purple-900/30 text-white"
+                            />
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label htmlFor="agentDescription">Description</Label>
+                            <Input
+                              id="agentDescription"
+                              value={newAgentData.description}
+                              onChange={(e) => setNewAgentData({ ...newAgentData, description: e.target.value })}
+                              placeholder="What does this agent do?"
+                              className="bg-black/40 border-purple-900/30 text-white"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div className="space-y-2">
                             <Label htmlFor="agentInputType">Input Type</Label>
                             <Select
                               value={newAgentData.inputType}
                               onValueChange={(value) => setNewAgentData({ ...newAgentData, inputType: value })}
-                              disabled={selectedAgentType?.supportedInputTypes?.length === 1}
                             >
-                              <SelectTrigger
-                                id="agentInputType"
-                                className="bg-black/40 border-purple-900/30 text-white"
-                              >
+                              <SelectTrigger id="agentInputType" className="bg-black/40 border-purple-900/30 text-white">
                                 <SelectValue placeholder="Select input type" />
                               </SelectTrigger>
                               <SelectContent>
                                 <div className="bg-black/90 border-purple-900/30 text-white">
-                                  {selectedAgentType?.supportedInputTypes?.map((type) => (
-                                    <SelectItem key={type} value={type}>
-                                      {type.charAt(0).toUpperCase() + type.slice(1)}
-                                    </SelectItem>
-                                  )) || (
-                                    <>
-                                      <SelectItem value="text">Text</SelectItem>
-                                      <SelectItem value="image">Image</SelectItem>
-                                      <SelectItem value="audio">Audio</SelectItem>
-                                      <SelectItem value="video">Video</SelectItem>
-                                      <SelectItem value="document">Document</SelectItem>
-                                    </>
-                                  )}
+                                  <SelectItem value="text">Text</SelectItem>
+                                  <SelectItem value="image">Image</SelectItem>
+                                  <SelectItem value="audio">Sound</SelectItem>
                                 </div>
                               </SelectContent>
                             </Select>
@@ -1655,29 +1692,15 @@ export default function ServiceWorkflowBuilder() {
                             <Select
                               value={newAgentData.outputType}
                               onValueChange={(value) => setNewAgentData({ ...newAgentData, outputType: value })}
-                              disabled={selectedAgentType?.supportedOutputTypes?.length === 1}
                             >
-                              <SelectTrigger
-                                id="agentOutputType"
-                                className="bg-black/40 border-purple-900/30 text-white"
-                              >
+                              <SelectTrigger id="agentOutputType" className="bg-black/40 border-purple-900/30 text-white">
                                 <SelectValue placeholder="Select output type" />
                               </SelectTrigger>
                               <SelectContent>
                                 <div className="bg-black/90 border-purple-900/30 text-white">
-                                  {selectedAgentType?.supportedOutputTypes?.map((type) => (
-                                    <SelectItem key={type} value={type}>
-                                      {type.charAt(0).toUpperCase() + type.slice(1)}
-                                    </SelectItem>
-                                  )) || (
-                                    <>
-                                      <SelectItem value="text">Text</SelectItem>
-                                      <SelectItem value="image">Image</SelectItem>
-                                      <SelectItem value="audio">Audio</SelectItem>
-                                      <SelectItem value="video">Video</SelectItem>
-                                      <SelectItem value="document">Document</SelectItem>
-                                    </>
-                                  )}
+                                  <SelectItem value="text">Text</SelectItem>
+                                  <SelectItem value="image">Image</SelectItem>
+                                  <SelectItem value="sound">Sound</SelectItem>
                                 </div>
                               </SelectContent>
                             </Select>
@@ -1696,96 +1719,99 @@ export default function ServiceWorkflowBuilder() {
                           <p className="text-gray-400 text-xs">Provide instructions to guide the agent's behavior</p>
                         </div>
 
-                        {/* Dynamic config fields based on agent type */}
-                        {selectedAgentType && selectedAgentType.configSchema && (
-                          <div className="space-y-4 mt-4">
-                            <h3 className="text-sm font-medium">Configuration</h3>
-                            {Object.entries(selectedAgentType.configSchema).map(([key, schema]) => {
-                              if (schema.type === "string" && schema.enum) {
-                                // Render as select for enum string types
-                                return (
-                                  <div key={key} className="space-y-2">
-                                    <Label htmlFor={`config-${key}`}>{schema.title || key}</Label>
-                                    <Select
-                                      value={newAgentData.config[key] || ""}
-                                      onValueChange={(value) =>
-                                        setNewAgentData({
-                                          ...newAgentData,
-                                          config: { ...newAgentData.config, [key]: value },
-                                        })
-                                      }
-                                    >
-                                      <SelectTrigger
-                                        id={`config-${key}`}
-                                        className="bg-black/40 border-purple-900/30 text-white"
-                                      >
-                                        <SelectValue placeholder={`Select ${schema.title || key}`} />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <div className="bg-black/90 border-purple-900/30 text-white">
-                                          {schema.enum.map((option: string) => (
-                                            <SelectItem key={option} value={option}>
-                                              {option}
-                                            </SelectItem>
-                                          ))}
-                                        </div>
-                                      </SelectContent>
-                                    </Select>
-                                    {schema.description && (
-                                      <p className="text-gray-400 text-xs">{schema.description}</p>
-                                    )}
-                                  </div>
-                                )
-                              } else if (schema.type === "string") {
-                                // Render as input for string types
-                                return (
-                                  <div key={key} className="space-y-2">
-                                    <Label htmlFor={`config-${key}`}>{schema.title || key}</Label>
-                                    <Input
-                                      id={`config-${key}`}
-                                      value={newAgentData.config[key] || ""}
-                                      onChange={(e) =>
-                                        setNewAgentData({
-                                          ...newAgentData,
-                                          config: { ...newAgentData.config, [key]: e.target.value },
-                                        })
-                                      }
-                                      placeholder={schema.placeholder || ""}
-                                      className="bg-black/40 border-purple-900/30 text-white"
-                                    />
-                                    {schema.description && (
-                                      <p className="text-gray-400 text-xs">{schema.description}</p>
-                                    )}
-                                  </div>
-                                )
-                              } else if (schema.type === "boolean") {
-                                // Render as switch for boolean types
-                                return (
-                                  <div key={key} className="flex items-center justify-between">
-                                    <div className="space-y-0.5">
-                                      <Label htmlFor={`config-${key}`}>{schema.title || key}</Label>
-                                      {schema.description && (
-                                        <p className="text-gray-400 text-xs">{schema.description}</p>
-                                      )}
-                                    </div>
-                                    <Switch
-                                      id={`config-${key}`}
-                                      checked={!!newAgentData.config[key]}
-                                      onCheckedChange={(checked) =>
-                                        setNewAgentData({
-                                          ...newAgentData,
-                                          config: { ...newAgentData.config, [key]: checked },
-                                        })
-                                      }
-                                    />
-                                  </div>
-                                )
+                        {/* Agent type specific fields */}
+                        {newAgentData.agentType === "gemini" && (
+                          <div className="space-y-2">
+                            <Label htmlFor="model">Model</Label>
+                            <Select
+                              value={newAgentData.config.model || ""}
+                              onValueChange={(value) => 
+                                setNewAgentData({ 
+                                  ...newAgentData, 
+                                  config: { ...newAgentData.config, model: value }
+                                })
                               }
-
-                              return null
-                            })}
+                            >
+                              <SelectTrigger className="bg-black/40 border-purple-900/30 text-white">
+                                <SelectValue placeholder="Select model" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <div className="bg-black/90 border-purple-900/30 text-white">
+                                  <SelectItem value="gemini-pro">Gemini Pro</SelectItem>
+                                  <SelectItem value="gemini-pro-vision">Gemini Pro Vision</SelectItem>
+                                </div>
+                              </SelectContent>
+                            </Select>
                           </div>
                         )}
+
+                        {newAgentData.agentType === "text2speech" && (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label htmlFor="voice">Voice</Label>
+                              <Select
+                                value={newAgentData.config.voice || ""}
+                                onValueChange={(value) => 
+                                  setNewAgentData({ 
+                                    ...newAgentData, 
+                                    config: { ...newAgentData.config, voice: value }
+                                  })
+                                }
+                              >
+                                <SelectTrigger className="bg-black/40 border-purple-900/30 text-white">
+                                  <SelectValue placeholder="Select voice" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <div className="bg-black/90 border-purple-900/30 text-white">
+                                    <SelectItem value="en-US-ChristopherNeural">English US - Christopher</SelectItem>
+                                    <SelectItem value="en-US-JennyNeural">English US - Jenny</SelectItem>
+                                    <SelectItem value="en-US-GuyNeural">English US - Guy</SelectItem>
+                                    <SelectItem value="en-US-AriaNeural">English US - Aria</SelectItem>
+                                    <SelectItem value="en-GB-SoniaNeural">English UK - Sonia</SelectItem>
+                                    <SelectItem value="en-GB-RyanNeural">English UK - Ryan</SelectItem>
+                                  </div>
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label htmlFor="rate">Speech Rate</Label>
+                              <Select
+                                value={newAgentData.config.rate || "+0%"}
+                                onValueChange={(value) => 
+                                  setNewAgentData({ 
+                                    ...newAgentData, 
+                                    config: { ...newAgentData.config, rate: value }
+                                  })
+                                }
+                              >
+                                <SelectTrigger className="bg-black/40 border-purple-900/30 text-white">
+                                  <SelectValue placeholder="Select rate" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <div className="bg-black/90 border-purple-900/30 text-white">
+                                    <SelectItem value="-50%">Very Slow</SelectItem>
+                                    <SelectItem value="-25%">Slow</SelectItem>
+                                    <SelectItem value="+0%">Normal</SelectItem>
+                                    <SelectItem value="+25%">Fast</SelectItem>
+                                    <SelectItem value="+50%">Very Fast</SelectItem>
+                                  </div>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="flex items-center space-x-2">
+                          <Switch
+                            id="isPublic"
+                            checked={newAgentData.isPublic}
+                            onCheckedChange={(checked) => setNewAgentData({ ...newAgentData, isPublic: checked })}
+                          />
+                          <Label htmlFor="isPublic" className="text-white">
+                            Make this agent public
+                          </Label>
+                        </div>
 
                         <div className="flex justify-end pt-2">
                           <Button
@@ -1793,8 +1819,16 @@ export default function ServiceWorkflowBuilder() {
                             className="bg-gradient-to-r from-purple-600 to-purple-800 text-white hover:opacity-90"
                             disabled={isCreatingAgent || !newAgentData.name || !newAgentData.agentType}
                           >
-                            {isCreatingAgent ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                            Create Agent
+                            {isCreatingAgent ? (
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : null}
+                            {!newAgentData.name ? (
+                              "Enter agent name"
+                            ) : !newAgentData.agentType ? (
+                              "Select agent type"
+                            ) : (
+                              "Create Agent"
+                            )}
                           </Button>
                         </div>
                       </div>
@@ -1932,7 +1966,7 @@ export default function ServiceWorkflowBuilder() {
                               </div>
                             )}
 
-                            {serviceData.outputType === "audio" && (
+                            {serviceData.outputType === "sound" && (
                               <div className="bg-black/40 backdrop-blur-sm rounded-xl border border-purple-900/30 p-4">
                                 <div className="w-full h-12 bg-gray-900/50 rounded-lg flex items-center justify-center">
                                   <Headphones className="h-6 w-6 text-gray-700 mr-2" />

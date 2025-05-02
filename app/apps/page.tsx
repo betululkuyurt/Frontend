@@ -20,6 +20,7 @@ import {
   Loader2,
 } from "lucide-react"
 import { toast } from "@/components/ui/use-toast"
+import { decodeJWT } from "@/lib/auth"
 
 // Define the service type
 interface Service {
@@ -128,23 +129,28 @@ export default function DashboardPage() {
   }, [])
 
   useEffect(() => {
-    // Check both localStorage and cookies for auth token and user ID
+    // Check authentication using the enhanced useAuth hook
     const checkAuth = () => {
-      // Check localStorage
-      const token = localStorage.getItem("token") || localStorage.getItem("accessToken")
+      const cookieToken = Cookies.get("accessToken")
+      const cookieUserId = Cookies.get("user_id")
 
-      // Get user ID
-      const id = getUserId()
-      if (id) {
-        setUserId(id)
+      if (!cookieToken || !cookieUserId) {
+        setIsAuthenticated(false)
+        router.push("/auth/login")
+        return
       }
 
-      // Check cookies as fallback
-      const cookieToken = Cookies.get("accessToken")
+      try {
+        // Validate token
+        const decodedToken = decodeJWT(cookieToken)
+        if (!decodedToken || !decodedToken.sub || decodedToken.sub !== cookieUserId) {
+          throw new Error("Invalid token or user ID mismatch")
+        }
 
-      if (token || cookieToken) {
         setIsAuthenticated(true)
-      } else {
+        setUserId(Number(cookieUserId))
+      } catch (error) {
+        console.error("Auth validation failed:", error)
         setIsAuthenticated(false)
         router.push("/auth/login")
       }
@@ -153,38 +159,52 @@ export default function DashboardPage() {
     }
 
     checkAuth()
-  }, [router, getUserId])
+  }, [router])
 
   // Load custom services from localStorage
   useEffect(() => {
     if (typeof window !== "undefined" && isAuthenticated) {
-      const loadCustomServices = () => {
+      const loadCustomServices = async () => {
         try {
-          const servicesJson = localStorage.getItem("customServices")
-          if (servicesJson) {
-            const services = JSON.parse(servicesJson)
+          const cookieToken = Cookies.get("accessToken")
+          const cookieUserId = Cookies.get("user_id")
 
-            // Map the services to the format expected by MiniAppCard
-            const formattedServices = services.map((service: any) => {
-              // Get the icon component based on the icon name
-              const iconComponent = getIconComponent(service.icon)
-
-              return {
-                id: service.id,
-                name: service.name,
-                description: service.description,
-                icon: iconComponent,
-                serviceType: service.type,
-                color: service.color,
-                isCustom: true,
-              }
-            })
-
-            setCustomServices(formattedServices)
-          } else {
-            // If no services found, set empty array
-            setCustomServices([])
+          if (!cookieToken || !cookieUserId) {
+            throw new Error("No authentication data")
           }
+
+          // Fetch services from API
+          const response = await fetch(
+            `http://127.0.0.1:8000/api/v1/mini-services?current_user_id=${cookieUserId}`,
+            {
+              headers: {
+                Authorization: `Bearer ${cookieToken}`,
+                "Content-Type": "application/json",
+              },
+            }
+          )
+
+          if (!response.ok) {
+            throw new Error("Failed to fetch services")
+          }
+
+          const services = await response.json()
+
+          // Map the services to the format expected by MiniAppCard
+          const formattedServices = services.map((service: any) => {
+            return {
+              id: service.id,
+              name: service.name,
+              description: service.description,
+              icon: getIconComponent(service.icon || "Wand2"),
+              serviceType: "mini-service",
+              color: service.color || getColorForService(service.input_type, service.output_type),
+              isCustom: true,
+              onDelete: handleMiniServiceDelete,
+            }
+          })
+
+          setCustomServices(formattedServices)
         } catch (error) {
           console.error("Error loading custom services:", error)
           setCustomServices([])
@@ -192,20 +212,6 @@ export default function DashboardPage() {
       }
 
       loadCustomServices()
-
-      // Add event listener to update services when localStorage changes
-      window.addEventListener("storage", loadCustomServices)
-
-      // Also listen for our custom event
-      const handleStorageChange = () => {
-        loadCustomServices()
-      }
-      window.addEventListener("customServiceChange", handleStorageChange)
-
-      return () => {
-        window.removeEventListener("storage", loadCustomServices)
-        window.removeEventListener("customServiceChange", handleStorageChange)
-      }
     }
   }, [isAuthenticated])
 
@@ -271,75 +277,43 @@ export default function DashboardPage() {
         return false
       }
 
-      // Try to delete the mini service directly without trying to delete processes first
-      // This avoids the 404 error if the processes endpoint doesn't exist
-      try {
-        const response = await fetch(
-          `http://127.0.0.1:8000/api/v1/mini-services/${id}?current_user_id=${currentUserId}`,
-          {
-            method: "DELETE",
-            headers: {
-              Authorization: `Bearer ${authToken}`,
-              "Content-Type": "application/json",
-              // Add CORS headers on the client side
-              "Access-Control-Allow-Origin": "*",
-            },
-            // Add mode: 'cors' to explicitly request CORS
-            mode: "cors",
-          },
-        )
-
-        if (!response.ok) {
-          // Try to get error message from JSON response
-          let errorMessage = "Mini servis silinemedi."
-          try {
-            const errorData = await response.json()
-            errorMessage = errorData.detail || errorMessage
-          } catch (e) {
-            // Use default message if JSON parsing fails
+      const response = await fetch(
+        `http://127.0.0.1:8000/api/v1/mini-services/${id}?current_user_id=${currentUserId}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+            "Content-Type": "application/json"
           }
-
-          toast({
-            title: "Hata",
-            description: errorMessage,
-            variant: "destructive",
-          })
-          return false
         }
+      )
 
-        // If successful, remove the mini service from state
-        setMiniServices((prev) => prev.filter((service) => service.id !== id))
-
-        toast({
-          title: "Başarılı",
-          description: "Mini servis başarıyla silindi.",
-        })
-
-        return true
-      } catch (error) {
-        console.error("Error deleting mini service:", error)
-
-        // Try an alternative approach with a proxy if direct deletion fails
+      if (!response.ok) {
+        let errorMessage = "Mini servis silinemedi."
         try {
-          // You could implement a proxy route in your Next.js app to handle CORS
-          // For now, we'll just show a more helpful error message
-          toast({
-            title: "CORS Hatası",
-            description: "API'ye erişim engellendi. Sunucu tarafında CORS ayarlarını kontrol edin.",
-            variant: "destructive",
-          })
-        } catch (proxyError) {
-          console.error("Proxy error:", proxyError)
+          const errorData = await response.json()
+          errorMessage = errorData.detail || errorMessage
+        } catch (e) {
+          console.error("Error parsing error response:", e)
         }
 
         toast({
           title: "Hata",
-          description: "Mini servis silinirken bir hata oluştu. Sunucu bağlantısı veya CORS ayarları kontrol edilmeli.",
+          description: errorMessage,
           variant: "destructive",
         })
-
         return false
       }
+
+      // If successful, remove the mini service from state
+      setMiniServices((prev) => prev.filter((service) => service.id !== id))
+
+      toast({
+        title: "Başarılı",
+        description: "Mini servis başarıyla silindi.",
+      })
+
+      return true
     } catch (error) {
       console.error("Error in delete function:", error)
 

@@ -1,3 +1,44 @@
+/**
+ * Service Detail Page Component
+ * ============================
+ * 
+ * This page handles the display and interaction with individual services in the application.
+ * It supports multiple types of services including text, image, audio, and video processing.
+ * 
+ * Key Features:
+ * -------------
+ * 1. Authentication & Authorization
+ *    - Checks user authentication status
+ *    - Handles API keys for external services (e.g., Gemini)
+ * 
+ * 2. Service Types Support:
+ *    - Text to Text
+ *    - Text to Image
+ *    - Text to Speech (TTS)
+ *    - Image Processing
+ *    - Audio Processing
+ *    - Video Processing
+ * 
+ * 3. File Handling:
+ *    - Supports file uploads for images, audio, video
+ *    - Handles different input types dynamically
+ * 
+ * 4. API Integration:
+ *    - Communicates with backend API
+ *    - Handles different response types
+ *    - Manages API keys and authentication tokens
+
+ * 
+ * API Endpoints Used:
+ * ------------------
+ * - GET    /api/v1/mini-services/{id} - Fetch service details
+ * - POST   /api/v1/mini-services/{id}/run - Run service
+ * - DELETE /api/v1/mini-services/{id} - Delete service
+ * - GET    /api/v1/mini-services/audio/{processId} - Get audio output
+ * 
+
+ */
+
 "use client"
 
 import type React from "react"
@@ -11,6 +52,7 @@ import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Loader2, ArrowLeft, Wand2, ImageIcon, Headphones, FileText, Video } from "lucide-react"
+import { toast } from "@/components/ui/use-toast"
 
 interface MiniService {
   id: number
@@ -19,6 +61,8 @@ interface MiniService {
   workflow: any
   input_type: string
   output_type: string
+  api_key?: string
+  api_key_id?: string
 }
 
 export default function ServicePage() {
@@ -66,9 +110,9 @@ export default function ServicePage() {
     const fetchService = async () => {
       try {
         setIsServiceLoading(true);
-        const currentUserId = Cookies.get("user_id") || "0"; // Fallback to "0" if undefined
+        const currentUserId = Cookies.get("user_id") || "0";
   
-        console.log("Using currentUserId for fetch:", currentUserId); // Debug log
+        console.log("Fetching service details for ID:", serviceId);
   
         const response = await fetch(
           `http://127.0.0.1:8000/api/v1/mini-services/${serviceId}?current_user_id=${currentUserId}`
@@ -79,6 +123,15 @@ export default function ServicePage() {
         }
   
         const data = await response.json();
+        console.log("Loaded service data:", {
+          id: data.id,
+          name: data.name,
+          workflow: data.workflow,
+          api_key: data.api_key ? "present" : "not present",
+          api_key_id: data.api_key_id,
+          workflow_first_step: data.workflow?.steps?.[0]
+        });
+        
         setService(data);
       } catch (error) {
         console.error("Error fetching service:", error);
@@ -108,47 +161,239 @@ export default function ServicePage() {
     setError(null);
   
     try {
-      // Prepare form data for file uploads if needed
-      const formData = new FormData();
+      const token = localStorage.getItem("token") || localStorage.getItem("accessToken") || Cookies.get("accessToken");
+      if (!token) {
+        throw new Error("Authentication token not found");
+      }
   
-      if (service.input_type === "text") {
-        formData.append("input", userInput);
-      } else if (uploadedFile) {
-        formData.append("file", uploadedFile);
-        if (userInput) {
-          formData.append("input", userInput); // Additional text input if provided
+      const currentUserId = Cookies.get("user_id");
+      if (!currentUserId) {
+        throw new Error("User ID not found");
+      }
+  
+      // Debug log service details
+      console.log("Service details:", {
+        id: service.id,
+        workflow: service.workflow,
+        api_key: service.api_key ? "present" : "not present",
+        api_key_id: service.api_key_id,
+      });
+  
+      // Prepare request headers
+      const headers: Record<string, string> = {
+        "Authorization": `Bearer ${token}`,
+      };
+  
+      // Add API key to headers if available
+      if (service.api_key) {
+        // If we have a direct API key, send it
+        headers["X-API-Key"] = service.api_key;
+        console.log("Using direct API key");
+      } else if (service.api_key_id) {
+        // If we have an API key ID, send it to let backend retrieve the actual key
+        headers["X-API-Key-ID"] = service.api_key_id;
+        console.log("Using API key ID:", service.api_key_id);
+        
+        // For Gemini services, we need to explicitly request the key type
+        const workflow = service.workflow;
+        if (workflow && workflow.steps && workflow.steps.length > 0) {
+          const firstStep = workflow.steps[0];
+          if (firstStep.agent_type === "gemini") {
+            headers["X-API-Provider"] = "gemini";
+            console.log("Detected Gemini service, added provider header");
+          }
         }
       }
   
-      // Get current user ID from cookies
-      const currentUserId = Cookies.get("user_id") || "0"; // Fallback to "0" if undefined
+      // Debug log headers
+      console.log("Request headers:", {
+        ...headers,
+        "Authorization": headers.Authorization ? "present" : "not present",
+        "X-API-Key": headers["X-API-Key"] ? "present" : "not present",
+        "X-API-Key-ID": headers["X-API-Key-ID"],
+        "X-API-Provider": headers["X-API-Provider"],
+      });
   
-      console.log("Using currentUserId:", currentUserId); // Debug log
+      // Prepare request body
+      let body: FormData | string;
+      if (service.input_type === "text") {
+        const bodyData = { 
+          input: userInput,
+          // Include API key information in the request body as well
+          api_key: service.api_key,
+          api_key_id: service.api_key_id,
+          provider: service.workflow?.steps?.[0]?.agent_type
+        };
+        body = JSON.stringify(bodyData);
+        console.log("Request body:", {
+          ...bodyData,
+          api_key: bodyData.api_key ? "present" : "not present",
+        });
+        headers["Content-Type"] = "application/json";
+      } else if (uploadedFile) {
+        body = new FormData();
+        body.append("file", uploadedFile);
+        if (userInput) {
+          body.append("input", userInput);
+        }
+        // Include API key information in FormData
+        if (service.api_key) {
+          body.append("api_key", service.api_key);
+        }
+        if (service.api_key_id) {
+          body.append("api_key_id", service.api_key_id);
+        }
+        const provider = service.workflow?.steps?.[0]?.agent_type;
+        if (provider) {
+          body.append("provider", provider);
+        }
+      } else {
+        throw new Error("No input provided");
+      }
   
-      // Call the service API with current_user_id parameter
+      // Make the API request
       const response = await fetch(
         `http://127.0.0.1:8000/api/v1/mini-services/${serviceId}/run?current_user_id=${currentUserId}`,
         {
           method: "POST",
-          body: service.input_type === "text" ? JSON.stringify({ input: userInput }) : formData,
-          headers: service.input_type === "text" ? { "Content-Type": "application/json" } : {}, // No Content-Type header for multipart/form-data
+          headers,
+          body,
         }
       );
   
       if (!response.ok) {
-        throw new Error(`Error: ${response.status}`);
+        const errorData = await response.json().catch(() => null);
+        console.error("Backend error details:", {
+          status: response.status,
+          statusText: response.statusText,
+          errorData,
+          headers: response.headers,
+        });
+        
+        throw new Error(
+          errorData?.detail || 
+          `Server error: ${response.status} ${response.statusText}`
+        );
       }
   
       const data = await response.json();
-      console.log("Service response:", data); // Debug log
+      console.log("Service response:", data);
       setResult(data);
     } catch (err) {
       console.error("Error running service:", err);
-      setError("Failed to process your request. Please try again.");
+      setError(
+        err instanceof Error 
+          ? err.message 
+          : "An unexpected error occurred while processing your request"
+      );
     } finally {
       setIsLoading(false);
     }
   };
+
+  const handleMiniServiceDelete = async (serviceId: number) => {
+    try {
+      const userId = Cookies.get("user_id");
+      // Use the same token retrieval logic as the auth check
+      const token = localStorage.getItem("token") ||
+        localStorage.getItem("accessToken") ||
+        Cookies.get("accessToken");
+
+      if (!userId || !token) {
+        toast({
+          variant: "destructive",
+          title: "Authentication Error",
+          description: "You must be logged in to delete a service.",
+        });
+        return;
+      }
+
+      // Log request details for debugging
+      console.log("Delete request details:", {
+        url: `http://127.0.0.1:8000/api/v1/mini-services/${serviceId}?current_user_id=${userId}`,
+        userId,
+        hasToken: !!token
+      });
+
+      const response = await fetch(
+        `http://127.0.0.1:8000/api/v1/mini-services/${serviceId}?current_user_id=${userId}`,
+        {
+          method: "DELETE",
+          headers: {
+            "Authorization": `Bearer ${token}`,
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Origin": window.location.origin
+          },
+          credentials: "include",
+        }
+      );
+
+      // Enhanced error handling with specific error messages
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorMessage = "Failed to delete service";
+        let errorTitle = "Delete Failed";
+        
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.detail || errorData.message || errorMessage;
+          
+          // Check for specific error conditions
+          if (response.status === 404) {
+            errorTitle = "Service Not Found";
+            errorMessage = "The service you're trying to delete no longer exists.";
+          } else if (response.status === 403) {
+            errorTitle = "Permission Denied";
+            errorMessage = "You don't have permission to delete this service.";
+          } else if (response.status === 409) {
+            errorTitle = "Cannot Delete";
+            errorMessage = "This service cannot be deleted because it's being used by other processes.";
+          }
+        } catch (e) {
+          console.error("Error parsing error response:", errorText);
+        }
+
+        console.error("Delete failed:", {
+          status: response.status,
+          statusText: response.statusText,
+          errorMessage,
+          headers: Object.fromEntries(response.headers.entries())
+        });
+
+        toast({
+          variant: "destructive",
+          title: errorTitle,
+          description: errorMessage,
+        });
+
+        throw new Error(errorMessage);
+      }
+
+      // Success handling
+      toast({
+        title: "Service Deleted",
+        description: "The service has been successfully deleted.",
+      });
+
+      // Navigate back and refresh
+      router.push("/dashboard");
+      router.refresh();
+
+    } catch (error) {
+      console.error("Error in delete function:", error);
+      
+      // Don't show another toast if we've already shown one for a specific error
+      if (!(error instanceof Error && error.message.includes("Failed to delete service"))) {
+        toast({
+          variant: "destructive",
+          title: "Unexpected Error",
+          description: "An unexpected error occurred while trying to delete the service. Please try again.",
+        });
+      }
+    }
+  };
+
   // Get color based on input/output type
   const getServiceColor = () => {
     if (!service) return "from-purple-600 to-purple-800"

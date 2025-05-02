@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import Cookies from "js-cookie"
+import { decodeJWT } from "@/lib/auth"
 
 export const useAuth = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
@@ -11,42 +13,69 @@ export const useAuth = () => {
 
   useEffect(() => {
     const checkAuth = () => {
-      // Check localStorage
-      const token = localStorage.getItem("token") || localStorage.getItem("accessToken")
+      try {
+        // Get token from cookies (primary source)
+        const cookieToken = Cookies.get("accessToken")
+        const cookieUserId = Cookies.get("user_id")
 
-      // Check cookies as fallback
-      const cookieToken = document.cookie
-        .split("; ")
-        .find((row) => row.startsWith("accessToken="))
-        ?.split("=")[1]
+        // If no token in cookies, user is not authenticated
+        if (!cookieToken) {
+          throw new Error("No token found")
+        }
 
-      if (token || cookieToken) {
+        // Validate token
+        const decodedToken = decodeJWT(cookieToken)
+        if (!decodedToken || !decodedToken.sub || !decodedToken.email) {
+          throw new Error("Invalid token")
+        }
+
+        // Check token expiration
+        const currentTime = Math.floor(Date.now() / 1000)
+        if (decodedToken.exp && decodedToken.exp < currentTime) {
+          throw new Error("Token expired")
+        }
+
+        // Validate user ID matches token
+        if (!cookieUserId || decodedToken.sub !== cookieUserId) {
+          throw new Error("User ID mismatch")
+        }
+
         setIsAuthenticated(true)
-
-        // Get user ID from localStorage
-        const storedUserId = localStorage.getItem("userId")
-        setUserId(storedUserId)
-      } else {
+        setUserId(cookieUserId)
+      } catch (error) {
+        console.error("Auth check failed:", error)
         setIsAuthenticated(false)
         setUserId(null)
+        
+        // Clean up any invalid auth data
+        clearAuthData()
+      } finally {
+        setIsLoading(false)
       }
-
-      setIsLoading(false)
     }
 
     checkAuth()
     window.addEventListener("authChange", checkAuth)
     return () => window.removeEventListener("authChange", checkAuth)
-  }, [])
+  }, [router])
 
-  const signOut = () => {
+  const clearAuthData = () => {
+    // Clear cookies
+    Cookies.remove("accessToken")
+    Cookies.remove("user_id")
+    Cookies.remove("user_email")
+
+    // Clear localStorage
     localStorage.removeItem("token")
     localStorage.removeItem("accessToken")
     localStorage.removeItem("userId")
+    localStorage.removeItem("userData")
+    localStorage.removeItem("user")
+    localStorage.removeItem("userInfo")
+  }
 
-    // Clear cookies
-    document.cookie = "accessToken=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;"
-
+  const signOut = () => {
+    clearAuthData()
     setIsAuthenticated(false)
     setUserId(null)
     router.push("/auth/login")
