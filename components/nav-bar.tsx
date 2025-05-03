@@ -11,8 +11,43 @@ import { useEffect, useState } from "react"
 export function NavBar() {
   const pathname = usePathname()
   const router = useRouter()
-  const { isAuthenticated, isLoading, signOut } = useAuth()
+  const { isAuthenticated, isLoading, signOut, userId } = useAuth()
   const [open, setOpen] = useState(false)
+  const [renderState, setRenderState] = useState({
+    showUserNav: false,
+    checkCount: 0
+  })
+
+  // Güvenilir bir isAuthenticated kontrolü ekleyin
+  useEffect(() => {
+    if (isAuthenticated && !renderState.showUserNav) {
+      setRenderState(prev => ({ 
+        showUserNav: true, 
+        checkCount: prev.checkCount 
+      }))
+    } else if (!isAuthenticated && renderState.showUserNav) {
+      // Oturum kapatıldığında UserNav'ı gizleyin
+      setRenderState(prev => ({ 
+        showUserNav: false, 
+        checkCount: prev.checkCount 
+      }))
+    }
+  }, [isAuthenticated, renderState.showUserNav])
+
+  // İlk yüklemede isAuthenticated değerinin stabilize olması için ek kontrol
+  useEffect(() => {
+    // Maksimum 3 kontrol ile sınırlayın
+    if (!renderState.showUserNav && isAuthenticated && renderState.checkCount < 3) {
+      const timer = setTimeout(() => {
+        setRenderState(prev => ({ 
+          showUserNav: isAuthenticated, 
+          checkCount: prev.checkCount + 1 
+        }))
+      }, 100)
+      
+      return () => clearTimeout(timer)
+    }
+  }, [isAuthenticated, renderState])
 
   // Empty navigation items array - removed My Apps, API Keys, and Settings
   const navItems: { title: string; href: string }[] = []
@@ -61,12 +96,9 @@ export function NavBar() {
           </div>
 
           <div className="flex items-center gap-4">
-            {isAuthenticated ? (
-              //This div contains user navigation elements and is conditionally rendered based on authentication status.
-              // If the user is authenticated, render the UserNav component for user-specific actions.
-              <UserNav />
+            {renderState.showUserNav || isAuthenticated ? (
+              <UserNav key={userId || 'guest'} />
             ) : (
-              // If the user is not authenticated, render nothing (empty fragment).
               <></>
             )}
           </div>

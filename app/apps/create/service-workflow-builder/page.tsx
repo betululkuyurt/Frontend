@@ -176,9 +176,6 @@ export default function ServiceWorkflowBuilder() {
     placeholder: "",
     buttonText: "Generate",
     isPublic: false,
-    apiKeySource: "saved",
-    savedApiKeyId: "",
-    customApiKey: "",
     enhancePrompt: false,
   })
 
@@ -627,29 +624,47 @@ export default function ServiceWorkflowBuilder() {
   // Create a new agent
   const createAgent = async () => {
     try {
+      setIsCreatingAgent(true);
       const userId = Cookies.get("user_id")
       if (!userId) {
         console.error("Authentication Error: No user ID found");
         throw new Error("User not authenticated")
       }
 
+      // Clone the config object to avoid mutation
+      let config = {...newAgentData.config};
+      
+      // For all agent types, add the custom API key to the config if provided
+      if (useCustomApiKey && customApiKey) {
+        config = {
+          ...config,
+          api_key: customApiKey
+        };
+      }
+      
       const agentData = {
         name: newAgentData.name,
         description: newAgentData.description,
         input_type: newAgentData.inputType,
         output_type: newAgentData.outputType,
         system_instruction: newAgentData.systemInstruction,
-        config: newAgentData.config,
+        config: config,
         is_public: newAgentData.isPublic,
         agent_type: newAgentData.agentType,
-        api_key: useCustomApiKey ? customApiKey : selectedApiKey,
+        api_key: useCustomApiKey ? customApiKey : null,
         api_key_id: useCustomApiKey ? null : selectedApiKey
       }
 
       console.log("Creating agent with data:", {
         ...agentData,
         api_key: agentData.api_key ? "PRESENT" : "NOT_PRESENT",
-        api_key_id: agentData.api_key_id
+        api_key_id: agentData.api_key_id,
+        config: {
+          ...agentData.config,
+          api_key: agentData.config.api_key ? "PRESENT IN CONFIG" : "NOT PRESENT IN CONFIG"
+        },
+        useCustomApiKey,
+        customKeyProvided: !!customApiKey
       });
 
       const response = await fetch(`http://127.0.0.1:8000/api/v1/agents/?current_user_id=${userId}`, {
@@ -677,6 +692,9 @@ export default function ServiceWorkflowBuilder() {
       const data = await response.json()
       console.log("Agent created successfully:", data);
 
+      // Yeni agent oluşturulduktan sonra agent listesini güncelle
+      await fetchAgents();
+
       setNewAgentData({
         name: "",
         description: "",
@@ -691,6 +709,12 @@ export default function ServiceWorkflowBuilder() {
       setCustomApiKey("")
       setUseCustomApiKey(false)
       
+      // Başarı mesajı göster
+      toast({
+        title: "Agent oluşturuldu",
+        description: "Yeni agent başarıyla oluşturuldu ve listeye eklendi.",
+      })
+      
       return data
     } catch (error: any) {
       console.error("Detailed error in createAgent:", {
@@ -701,7 +725,17 @@ export default function ServiceWorkflowBuilder() {
         selectedApiKey: selectedApiKey ? "PRESENT" : "NOT_PRESENT",
         customApiKey: customApiKey ? "PRESENT" : "NOT_PRESENT"
       });
+      
+      // Hata mesajı göster
+      toast({
+        variant: "destructive",
+        title: "Agent creation failed",
+        description: error.message || "An error occurred while creating the agent.",
+      });
+      
       throw error
+    } finally {
+      setIsCreatingAgent(false);
     }
   }
 
@@ -721,29 +755,7 @@ export default function ServiceWorkflowBuilder() {
     return { nodes }
   }
 
-  // Get API key based on form selection
-  const getApiKeyForService = (): ApiKeyData => {
-    console.log("useCustomApiKey:", useCustomApiKey);
-    console.log("customApiKey:", customApiKey);
-    console.log("savedApiKeyId:", serviceData.savedApiKeyId);
-  
-    if (useCustomApiKey && customApiKey) {
-      console.log("Returning customApiKey");
-      return { api_key: customApiKey };
-    } else if (!useCustomApiKey && serviceData.savedApiKeyId) {
-      const key = savedApiKeys.find(k => k.id === serviceData.savedApiKeyId);
-      if (key) {
-        console.log("Returning saved key:", key);
-        return {
-          api_key_id: key.id,
-          provider: key.provider,
-        };
-      }
-    }
-  
-    console.log("No valid API key found, returning {}");
-    return {};
-  };
+  // API keys are now handled at the agent level
   
 
 
@@ -759,14 +771,8 @@ const handleSubmit = async () => {
     const formattedWorkflow = formatWorkflowForAPI();
     console.log("After formatWorkflowForAPI call, serviceData:", serviceData);
     
-    // Get API key information
-    const apiKeyData = getApiKeyForService();
-    if (!apiKeyData.api_key_id && !apiKeyData.api_key) {
-
-  setError("API anahtarı girilmedi. Lütfen bir key seçin ya da özel bir key girin.");
-  setIsLoading(false);
-  return;
-}
+    // API keys are handled at the agent level now
+    const apiKeyData = {};
  // Bu fonksiyon yukarıda tanımlı
  const cleanObject = (obj: Record<string, any>) => {
   return Object.fromEntries(
@@ -777,10 +783,11 @@ const handleSubmit = async () => {
    
     
     // Log what we're sending
-    console.log("API Key Data:", {
-      selectedKeyId: selectedApiKey,
-      hasCustomKey: !!customApiKey,
-      apiKeyData
+    console.log("Service data to be created:", {
+      title: serviceData.title,
+      inputType: serviceData.inputType,
+      outputType: serviceData.outputType,
+      stepsCount: orderedWorkflow.length
     });
     
     const serviceDataToSend = cleanObject({
@@ -794,10 +801,7 @@ const handleSubmit = async () => {
       color: serviceData.color,
       placeholder: serviceData.placeholder,
       button_text: serviceData.buttonText,
-      is_public: serviceData.isPublic,
-      api_key_id: apiKeyData.api_key_id,
-      api_key: apiKeyData.api_key,
-      provider: apiKeyData.provider,
+      is_public: serviceData.isPublic
     });
     
     
@@ -884,55 +888,12 @@ const handleSubmit = async () => {
         console.error("Error parsing local API keys:", e)
       }
     }
+    
+    // Fetch API keys from server for agent creation
+    fetchApiKeys();
   }, [])
 
-  // Add API key selection UI in the form
-  const renderApiKeySelection = () => {
-    return (
-      <div className="space-y-4">
-        <div className="flex items-center space-x-2">
-          <Switch
-            checked={useCustomApiKey}
-            onCheckedChange={setUseCustomApiKey}
-            id="use-custom-key"
-          />
-          <Label htmlFor="use-custom-key">Use Custom API Key</Label>
-        </div>
-
-        {useCustomApiKey ? (
-          <div className="space-y-2">
-            <Label htmlFor="custom-api-key">Custom API Key</Label>
-            <Input
-              id="custom-api-key"
-              type="password"
-              value={customApiKey}
-              onChange={(e) => setCustomApiKey(e.target.value)}
-              placeholder="Enter your API key"
-              className="bg-black/40 border-purple-900/30"
-            />
-          </div>
-        ) : (
-          <div className="space-y-2">
-            <Label htmlFor="api-key-select">Select Saved API Key</Label>
-            <Select value={serviceData.savedApiKeyId} onValueChange={(value) => handleChange("savedApiKeyId", value)}>
-              <SelectTrigger className="bg-black/40 border-purple-900/30">
-                <SelectValue placeholder="Select an API key" />
-              </SelectTrigger>
-              <SelectContent>
-                {savedApiKeys
-                  .filter(key => key.provider === "gemini") // Only show Gemini keys for Gemini agents
-                  .map((key) => (
-                    <SelectItem key={key.id} value={key.id}>
-                      {key.name} ({key.provider})
-                    </SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-      </div>
-    );
-  };
+  // API key selection is now handled at the agent level
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-black via-purple-950/20 to-black">
@@ -1167,99 +1128,7 @@ const handleSubmit = async () => {
                     <p className="text-gray-400 text-sm">Automatically improve prompts using AI</p>
                   </div>
 
-                  <div className="space-y-4 border-t border-purple-900/30 pt-4">
-                    <h3 className="text-lg font-medium text-white flex items-center">
-                      <Key className="h-5 w-5 mr-2 text-purple-400" />
-                      API Key Configuration
-                    </h3>
 
-                    <div className="space-y-3">
-                      <div className="flex flex-col space-y-2">
-                        <div className="flex items-center space-x-2">
-                          <input
-                            type="radio"
-                            id="saved-key"
-                            value="saved"
-                            checked={serviceData.apiKeySource === "saved"}
-                            onChange={() => handleChange("apiKeySource", "saved")}
-                            className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-600 bg-gray-700"
-                          />
-                          <label htmlFor="saved-key" className="text-sm font-medium text-white">
-                            Use saved API key
-                          </label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <input
-                            type="radio"
-                            id="custom-key"
-                            value="custom"
-                            checked={serviceData.apiKeySource === "custom"}
-                            onChange={() => handleChange("apiKeySource", "custom")}
-                            className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-600 bg-gray-700"
-                          />
-                          <label htmlFor="custom-key" className="text-sm font-medium text-white">
-                            Use custom API key
-                          </label>
-                        </div>
-                      </div>
-
-                      {serviceData.apiKeySource === "saved" && (
-                        <div className="space-y-2">
-                          <Label htmlFor="savedApiKeyId" className="text-white">
-                            Select API Key
-                          </Label>
-                          <Select
-                            value={serviceData.savedApiKeyId}
-                            onValueChange={(value) => handleChange("savedApiKeyId", value)}
-                          >
-                            <SelectTrigger id="savedApiKeyId" className="bg-black/40 border-purple-900/30 text-white">
-                              <SelectValue placeholder="Select a saved API key" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <div className="bg-black/90 border-purple-900/30 text-white">
-                                {isLoadingApiKeys ? (
-                                  <div className="flex items-center justify-center p-2">
-                                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                                    <span>Loading keys...</span>
-                                  </div>
-                                ) : savedApiKeys.length > 0 ? (
-                                  savedApiKeys.map((key) => (
-                                    <SelectItem key={key.id} value={key.id}>
-                                      {key.name} ({key.provider})
-                                    </SelectItem>
-                                  ))
-                                ) : (
-                                  <div className="p-2 text-center text-sm text-gray-400">No saved API keys found</div>
-                                )}
-                              </div>
-                            </SelectContent>
-                          </Select>
-                          <p className="text-gray-400 text-sm">
-                            Select from your saved API keys. These are securely stored and encrypted.
-                          </p>
-                        </div>
-                      )}
-
-                      {serviceData.apiKeySource === "custom" && (
-                        <div className="space-y-2">
-                          <Label htmlFor="customApiKey" className="text-white">
-                            Custom API Key
-                          </Label>
-                          <Input
-                            id="customApiKey"
-              type="password"
-              value={serviceData.customApiKey}
-              onChange={(e) => handleChange("customApiKey", e.target.value)}
-                            placeholder="Enter API key"
-                            className="bg-black/40 border-purple-900/30 text-white"
-                          />
-                          <p className="text-gray-400 text-sm">
-                            This key will only be used for this service and won't be saved to your account.
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
 
                   <div className="flex items-center space-x-2">
                     <Switch
@@ -1813,6 +1682,97 @@ const handleSubmit = async () => {
                           </div>
                         )}
 
+                        {/* API Key Selection for Agent */}
+                        <div className="space-y-4 border-t border-purple-900/30 pt-4">
+                          <h3 className="text-lg font-medium text-white flex items-center">
+                            <Key className="h-5 w-5 mr-2 text-purple-400" />
+                            API Key Configuration
+                          </h3>
+
+                          <div className="space-y-3">
+                            <div className="flex flex-col space-y-2">
+                              <div className="flex items-center space-x-2">
+                                <input
+                                  type="radio"
+                                  id="agent-saved-key"
+                                  checked={!useCustomApiKey}
+                                  onChange={() => setUseCustomApiKey(false)}
+                                  className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-600 bg-gray-700"
+                                />
+                                <label htmlFor="agent-saved-key" className="text-sm font-medium text-white">
+                                  Use saved API key
+                                </label>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <input
+                                  type="radio"
+                                  id="agent-custom-key"
+                                  checked={useCustomApiKey}
+                                  onChange={() => setUseCustomApiKey(true)}
+                                  className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-600 bg-gray-700"
+                                />
+                                <label htmlFor="agent-custom-key" className="text-sm font-medium text-white">
+                                  Use custom API key
+                                </label>
+                              </div>
+                            </div>
+
+                            {!useCustomApiKey ? (
+                              <div className="space-y-2">
+                                <Label htmlFor="selectedApiKey" className="text-white">
+                                  Select API Key
+                                </Label>
+                                <Select
+                                  value={selectedApiKey}
+                                  onValueChange={setSelectedApiKey}
+                                >
+                                  <SelectTrigger id="selectedApiKey" className="bg-black/40 border-purple-900/30 text-white">
+                                    <SelectValue placeholder="Select a saved API key" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <div className="bg-black/90 border-purple-900/30 text-white">
+                                      {isLoadingApiKeys ? (
+                                        <div className="flex items-center justify-center p-2">
+                                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                          <span>Loading keys...</span>
+                                        </div>
+                                      ) : savedApiKeys.length > 0 ? (
+                                        savedApiKeys.map((key) => (
+                                          <SelectItem key={key.id} value={key.id}>
+                                            {key.name} ({key.provider})
+                                          </SelectItem>
+                                        ))
+                                      ) : (
+                                        <div className="p-2 text-center text-sm text-gray-400">No saved API keys found</div>
+                                      )}
+                                    </div>
+                                  </SelectContent>
+                                </Select>
+                                <p className="text-gray-400 text-xs">
+                                  Select from your saved API keys. These are securely stored and encrypted.
+                                </p>
+                              </div>
+                            ) : (
+                              <div className="space-y-2">
+                                <Label htmlFor="customApiKey" className="text-white">
+                                  Custom API Key
+                                </Label>
+                                <Input
+                                  id="customApiKey"
+                                  type="password"
+                                  value={customApiKey}
+                                  onChange={(e) => setCustomApiKey(e.target.value)}
+                                  placeholder="Enter API key"
+                                  className="bg-black/40 border-purple-900/30 text-white"
+                                />
+                                <p className="text-gray-400 text-xs">
+                                  This key will only be used for this agent and won't be saved to your account.
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
                         <div className="flex items-center space-x-2">
                           <Switch
                             id="isPublic"
@@ -1826,7 +1786,21 @@ const handleSubmit = async () => {
 
                         <div className="flex justify-end pt-2">
                           <Button
-                            onClick={createAgent}
+                            onClick={async () => {
+                              setIsCreatingAgent(true);
+                              try {
+                                await createAgent();
+                                // Dialog'u kapat - bunu parent component'te yapmamız gerekiyor
+                                const dialogCloseButton = document.querySelector('[data-state="open"] button[aria-label="Close"], [data-state="open"] button.dialog-close');
+                                if (dialogCloseButton) {
+                                  (dialogCloseButton as HTMLButtonElement).click();
+                                }
+                              } catch (error) {
+                                console.error("Agent oluşturma hatası:", error);
+                              } finally {
+                                setIsCreatingAgent(false);
+                              }
+                            }}
                             className="bg-gradient-to-r from-purple-600 to-purple-800 text-white hover:opacity-90"
                             disabled={isCreatingAgent || !newAgentData.name || !newAgentData.agentType}
                           >
@@ -2101,16 +2075,6 @@ const handleSubmit = async () => {
                               <span className="text-gray-500 text-sm">Enhance Prompt:</span>
                               <span className="text-white text-sm font-medium">
                                 {serviceData.enhancePrompt ? "Enabled" : "Disabled"}
-                              </span>
-                            </li>
-                            <li className="flex justify-between">
-                              <span className="text-gray-500 text-sm">API Key:</span>
-                              <span className="text-white text-sm font-medium">
-                                {serviceData.apiKeySource === "saved" && serviceData.savedApiKeyId
-                                  ? "Using saved key"
-                                  : serviceData.apiKeySource === "custom" && serviceData.customApiKey
-                                    ? "Using custom key"
-                                    : "None"}
                               </span>
                             </li>
                           </ul>
