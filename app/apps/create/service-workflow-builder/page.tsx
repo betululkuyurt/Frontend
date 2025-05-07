@@ -200,7 +200,13 @@ export default function ServiceWorkflowBuilder() {
     const fetchAgentTypes = async () => {
       setIsLoadingAgentTypes(true);
       try {
-        const res = await fetch("http://127.0.0.1:8000/api/v1/mini-services/types");
+        const userId = Cookies.get("user_id");
+        const res = await fetch(`http://127.0.0.1:8000/api/v1/agents/types?current_user_id=${userId}`, {
+          headers: {
+            "Authorization": `Bearer ${Cookies.get("access_token")}`,
+            "Content-Type": "application/json"
+          }
+        });
         if (!res.ok) throw new Error("Failed to fetch agent types");
         const types = await res.json();
         setAgentTypes(types);
@@ -676,9 +682,6 @@ export default function ServiceWorkflowBuilder() {
         body: JSON.stringify(agentData)
       })
 
-      console.log("API Response Status:", response.status);
-      console.log("API Response Headers:", Object.fromEntries(response.headers.entries()));
-
       if (!response.ok) {
         const errorData = await response.json();
         console.error("API Error Response:", {
@@ -741,19 +744,24 @@ export default function ServiceWorkflowBuilder() {
 
   // Format workflow for API
   const formatWorkflowForAPI = () => {
-    const orderedSteps = getOrderedWorkflow()
-    const nodes: Record<string, any> = {}
+    const orderedSteps = getOrderedWorkflow();
+    const nodes: Record<string, any> = {};
 
     orderedSteps.forEach((step, index) => {
-      nodes[index.toString()] = {
-        agent_id: step.agentId,
+      const agent = availableAgents.find(a => a.id === step.agentId);
+      if (!agent) return;
+
+      const nodeId = index.toString(); // Start from 0
+      nodes[nodeId] = {
+        agent_id: parseInt(step.agentId),
         next: index < orderedSteps.length - 1 ? (index + 1).toString() : null,
         settings: step.settings,
-      }
-    })
+        agent_type: agent.type || "text"
+      };
+    });
 
-    return { nodes }
-  }
+    return { nodes };
+  };
 
   // API keys are now handled at the agent level
   
@@ -762,35 +770,48 @@ export default function ServiceWorkflowBuilder() {
 
   // Enhanced handleSubmit with more detailed logging
 const handleSubmit = async () => {
-
   setIsLoading(true);
  
   try {
-    console.log("Current serviceData before formatting:", serviceData);
     const userId = Cookies.get("user_id") || "current-user";
+    console.log("Current user ID:", userId);
+    console.log("Current serviceData:", serviceData);
+    
     const formattedWorkflow = formatWorkflowForAPI();
-    console.log("After formatWorkflowForAPI call, serviceData:", serviceData);
+    console.log("Formatted workflow:", formattedWorkflow);
     
-    // API keys are handled at the agent level now
-    const apiKeyData = {};
- // Bu fonksiyon yukarıda tanımlı
- const cleanObject = (obj: Record<string, any>) => {
-  return Object.fromEntries(
-    Object.entries(obj).filter(([_, v]) => v !== undefined)
-  );
-};
-
-   
+    // Log available agents with more detail
+    console.log("Available agents:", availableAgents.map(a => ({
+      id: a.id,
+      name: a.name,
+      type: a.type,
+      userId: a.userId
+    })));
     
-    // Log what we're sending
-    console.log("Service data to be created:", {
-      title: serviceData.title,
-      inputType: serviceData.inputType,
-      outputType: serviceData.outputType,
-      stepsCount: orderedWorkflow.length
+    // Validate workflow agents - only check if they exist, not ownership
+    const workflowAgentIds = Object.values(formattedWorkflow.nodes).map(node => node.agent_id);
+    console.log("Workflow agent IDs:", workflowAgentIds);
+    
+    const missingAgents = workflowAgentIds.filter(agentId => {
+      const agent = availableAgents.find(a => a.id === agentId.toString());
+      if (!agent) {
+        console.log(`Agent ${agentId} not found in available agents`);
+        return true;
+      }
+      return false;
     });
     
-    const serviceDataToSend = cleanObject({
+    if (missingAgents.length > 0) {
+      toast({
+        variant: "destructive",
+        title: "Invalid Agents",
+        description: `Some agents in the workflow (${missingAgents.join(', ')}) were not found.`,
+      });
+      setIsLoading(false);
+      return;
+    }
+    
+    const serviceDataToSend = {
       name: serviceData.title,
       description: serviceData.description || "",
       input_type: serviceData.inputType,
@@ -802,11 +823,9 @@ const handleSubmit = async () => {
       placeholder: serviceData.placeholder,
       button_text: serviceData.buttonText,
       is_public: serviceData.isPublic
-    });
+    };
     
-    
-    
-    console.log("Final serviceDataToSend:", serviceDataToSend);
+    console.log("Service data to be sent:", JSON.stringify(serviceDataToSend, null, 2));
     
     const response = await fetch(`http://127.0.0.1:8000/api/v1/mini-services?current_user_id=${userId}`, {
       method: "POST",
@@ -817,34 +836,24 @@ const handleSubmit = async () => {
       body: JSON.stringify(serviceDataToSend),
     });
 
-    if (response.status === 204) {
-      // No content, but success
-      console.warn("Backend 204 No Content döndü. Service oluşturulmuş olabilir ama veri dönmedi.");
-      router.push("/apps");
-      return;
-    }
-
-    // Try to parse JSON only if not 204
     const responseBody = await response.text();
+    console.log("Response status:", response.status);
+    console.log("Response body:", responseBody);
+
     if (!response.ok) {
-      console.error("Raw response text:", responseBody);
-      alert("Service creation failed: " + responseBody);
+      toast({
+        variant: "destructive",
+        title: "Service Creation Failed",
+        description: responseBody,
+      });
       throw new Error("Failed to create service");
     }
 
-    // If response is ok and has content, parse as JSON
-    let createdService = {};
-    try {
-      createdService = JSON.parse(responseBody);
-    } catch (err) {
-      console.error("JSON parse hatası:", err);
-      // If you expect empty body, that's fine
-    }
-    console.log("Service created:", createdService);
     router.push("/apps");
   } catch (error) {
     console.error("Error in handleSubmit:", error);
     setError(error instanceof Error ? error.message : "Failed to create service");
+  } finally {
     setIsLoading(false);
   }
 };
