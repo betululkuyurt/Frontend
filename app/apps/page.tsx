@@ -60,6 +60,7 @@ interface Process {
   output_url: string | null
   created_at: string
   updated_at: string
+  description: string | null
 }
 
 export default function DashboardPage() {
@@ -460,13 +461,13 @@ export default function DashboardPage() {
 
           console.log("Fetching recent processes for user ID:", currentUserId)
 
-          const response = await fetch(`http://127.0.0.1:8000/api/v1/processes?current_user_id=${currentUserId}&limit=5`, {
+          const response = await fetch(`http://127.0.0.1:8000/api/v1/processes/recent-activities?current_user_id=${currentUserId}&limit=5`, {
             headers: {
               Authorization: `Bearer ${authToken}`,
               "Content-Type": "application/json",
             },
           })
-
+          
           if (!response.ok) {
             throw new Error(`Failed to fetch processes: ${response.status} ${response.statusText}`)
           }
@@ -632,21 +633,26 @@ export default function DashboardPage() {
 
   // Helper function to get description for a process
   const getActivityDescription = (process: Process) => {
+    // Prefer backend-provided description if available
+    if (process.description) {
+      return process.description
+    }
+  
+    // Fallback to constructing from input_text if available
     if (process.input_text) {
-      // Truncate long inputs
       const maxLength = 100
-      const input = process.input_text.length > maxLength 
-        ? process.input_text.substring(0, maxLength) + "..." 
+      const input = process.input_text.length > maxLength
+        ? process.input_text.substring(0, maxLength) + "..."
         : process.input_text
-        
+  
       if (process.service_type === "text-to-image") {
         return `You created an image with the prompt "${input}"`
       }
-      
+  
       return `You used prompt: "${input}"`
     }
-    
-    // Generic fallbacks based on service type
+  
+    // Fallbacks based on service type
     switch (process.service_type) {
       case "video-translation":
         return "You translated a video to another language"
@@ -655,11 +661,12 @@ export default function DashboardPage() {
       case "audio-documents":
         return "You converted a document to audio"
       default:
-        return process.status === "completed" 
-          ? "Process completed successfully" 
+        return process.status === "completed"
+          ? "Process completed successfully"
           : `Process status: ${process.status}`
     }
   }
+  
 
   if (isLoading || isAuthenticated === null) {
     return <div className="min-h-screen flex items-center justify-center text-white">Loading...</div>
