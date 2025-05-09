@@ -17,9 +17,9 @@
 import type React from "react"
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { ArrowRight, Trash2 } from "lucide-react"
+import { ArrowRight, Trash2, Loader2 } from "lucide-react"
 import { useState } from "react"
-import { deleteCustomService } from "@/lib/custom-services"
+import { deleteMiniService } from "@/lib/services"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,6 +30,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { toast } from "@/components/ui/use-toast"
 
 interface MiniAppCardProps {
   title: string
@@ -94,34 +95,33 @@ export function MiniAppCard({
 
   // Handle confirm delete
   const handleConfirmDelete = async () => {
-    if (!id) return
-
-    setIsDeleting(true)
+    if (!id) return;
+    setIsDeleting(true);
 
     try {
-      if (onDelete) {
-        // Use the provided onDelete function for mini-services
-        const success = await onDelete(id)
-        if (!success) {
-          console.error("Delete failed from parent component")
-          return
+      const success = await deleteMiniService(id);
+      if (success) {
+        setShowDeleteDialog(false);
+        // If onDelete prop exists, call it
+        if (onDelete) {
+          await onDelete(id);
         }
-      } else {
-        // Use the default deleteCustomService for custom services
-        deleteCustomService(id)
-
-        // Trigger a refresh to update the UI
-        window.dispatchEvent(new Event("storage"))
+        // Kısa bir loading state göster
+        await new Promise(resolve => setTimeout(resolve, 100));
+        // Sayfayı yenile ve yönlendir
+        window.location.href = "/apps";
       }
-
-      // Close the dialog
-      setShowDeleteDialog(false)
     } catch (error) {
-      console.error("Error deleting service:", error)
+      console.error("Error deleting service:", error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to delete service. Please try again.",
+      });
     } finally {
-      setIsDeleting(false)
+      setIsDeleting(false);
     }
-  }
+  };
 
   return (
     <>
@@ -139,8 +139,13 @@ export function MiniAppCard({
               onClick={handleDeleteClick}
               className="absolute top-3 right-3 p-1.5 rounded-full bg-black/40 text-gray-400 hover:text-red-400 hover:bg-black/60 transition-colors z-10"
               aria-label="Delete service"
+              disabled={isDeleting}
             >
-              <Trash2 className="h-4 w-4" />
+              {isDeleting ? (
+                <Loader2 className="h-4 w-4 animate-spin text-purple-400" />
+              ) : (
+                <Trash2 className="h-4 w-4" />
+              )}
             </button>
           )}
 

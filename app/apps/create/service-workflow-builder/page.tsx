@@ -100,18 +100,17 @@ interface WorkflowStep {
 const inputTypes = [
   { value: "text", label: "Text Input", icon: MessageSquare },
   { value: "image", label: "Image Upload", icon: ImageIcon },
-  { value: "video", label: "Video Upload", icon: Video },
-  { value: "document", label: "Document Upload", icon: FileText },
-  { value: "audio", label: "Audio Upload", icon: Headphones },
+ // { value: "video", label: "Video Upload", icon: Video },
+ // { value: "document", label: "Document Upload", icon: FileText },
+  { value: "sound", label: "Sound Upload", icon: Headphones },
 ]
 
 const outputTypes = [
   { value: "text", label: "Text Output", icon: MessageSquare },
   { value: "image", label: "Image Output", icon: ImageIcon },
   { value: "sound", label: "Sound Output", icon: Headphones },
-  { value: "video", label: "Video Output", icon: Video },
-  { value: "text-audio", label: "Text and Audio Output", icon: FileText },
-  { value: "text-video", label: "Text and Video Output", icon: FileVideo },
+  //{ value: "video", label: "Video Output", icon: Video },
+  
 ]
 
 const iconOptions = [
@@ -171,13 +170,19 @@ export default function ServiceWorkflowBuilder() {
     description: "",
     icon: "Wand2",
     color: "from-purple-600 to-purple-800",
-    inputType: "text",
-    outputType: "text",
+    inputType: "select",  // This will now be the actual workflow input type
+    outputType: "select", // This will now be the actual workflow output type
     placeholder: "",
     buttonText: "Generate",
     isPublic: false,
     enhancePrompt: false,
   })
+
+  // Add new state for filtering
+  const [filterTypes, setFilterTypes] = useState({
+    inputType: "select",
+    outputType: "select"
+  });
 
   const [workflow, setWorkflow] = useState<WorkflowStep[]>([])
   const [newAgentData, setNewAgentData] = useState({
@@ -408,44 +413,53 @@ export default function ServiceWorkflowBuilder() {
     return settings
   }
 
-  // Handle input type change
+  // Update the handleInputTypeChange to use filterTypes
   const handleInputTypeChange = (value: string) => {
-    // Clear workflow when input type changes
-    setWorkflow([])
-    setServiceData((prev) => ({
+    setFilterTypes(prev => ({
       ...prev,
-      inputType: value,
-      
-    }))
+      inputType: value
+    }));
   }
 
-  // Add output type change handler
-  const handleChange = (field: string, value: string | boolean) => {
-    setServiceData((prev) => ({
+  // Add output type change handler for filters
+  const handleOutputTypeChange = (value: string) => {
+    setFilterTypes(prev => ({
       ...prev,
-      [field]: value,
-    }))
+      outputType: value
+    }));
   }
 
-  // Filter agents based on input compatibility with the previous step's output
-  const getCompatibleAgents = () => {
+  // Get the required input type based on the last agent's output
+  const getRequiredInputType = (): string | null => {
+    if (workflow.length === 0) return null;
+    
+    const lastStep = workflow.find(step => step.next === null);
+    if (!lastStep) return null;
+
+    const previousAgent = availableAgents.find(agent => agent.id === lastStep.agentId);
+    return previousAgent ? previousAgent.outputType : null;
+  };
+
+  // Update getCompatibleAgents to use required input type
+  const getCompatibleAgents = (): Agent[] => {
+    const requiredInputType = getRequiredInputType();
+
     if (workflow.length === 0) {
-      // For the first step, filter agents that accept the selected input type
-      return availableAgents.filter((agent) => agent.inputType === serviceData.inputType)
+      // First step: Filter based on selected filter types
+      return availableAgents.filter(agent => {
+        const inputMatches = filterTypes.inputType === "select" || agent.inputType === filterTypes.inputType;
+        const outputMatches = filterTypes.outputType === "select" || agent.outputType === filterTypes.outputType;
+        return inputMatches && outputMatches;
+      });
     } else {
-      // For subsequent steps, filter agents that accept the output type of the previous step
-      const lastStepId = workflow.find((step) => step.next === null)?.id
-      const lastStep = workflow.find((step) => step.id === lastStepId)
-
-      if (!lastStep) return []
-
-      const previousAgent = availableAgents.find((agent) => agent.id === lastStep.agentId)
-      if (!previousAgent) return []
-
-      // Return all agents that can accept the previous agent's output type
-      return availableAgents.filter((agent) => agent.inputType === previousAgent.outputType)
+      // For subsequent steps: Input must match previous agent's output
+      return availableAgents.filter(agent => {
+        const inputMatches = agent.inputType === requiredInputType;
+        const outputMatches = filterTypes.outputType === "select" || agent.outputType === filterTypes.outputType;
+        return inputMatches && outputMatches;
+      });
     }
-  }
+  };
 
   // Add an agent to the workflow
   const addAgentToWorkflow = (agentId: string) => {
@@ -470,11 +484,22 @@ export default function ServiceWorkflowBuilder() {
 
     setWorkflow((prev) => {
       if (prev.length === 0) {
+        // If this is the first agent, set both input and output types
+        setServiceData(current => ({
+          ...current,
+          inputType: agent.inputType,
+          outputType: agent.outputType
+        }));
         return [{ id: newStepId, agentId, settings: defaultSettings, next: null }]
       }
 
       const lastStep = prev.find((step) => step.next === null)
       if (lastStep) {
+        // When adding subsequent agents, only update the output type
+        setServiceData(current => ({
+          ...current,
+          outputType: agent.outputType
+        }));
         return prev
           .map((step) => (step.id === lastStep.id ? { ...step, next: newStepId } : step))
           .concat([{ id: newStepId, agentId, settings: defaultSettings, next: null }])
@@ -493,12 +518,25 @@ export default function ServiceWorkflowBuilder() {
     const nextStepId = targetStep?.next
 
     setWorkflow((prev) => {
-      if (previousStep) {
-        return prev
-          .map((step) => (step.id === previousStep.id ? { ...step, next: nextStepId } : step))
-          .filter((step) => step.id !== stepId)
+      const newWorkflow = previousStep
+        ? prev
+            .map((step) => (step.id === previousStep.id ? { ...step, next: nextStepId } : step))
+            .filter((step) => step.id !== stepId)
+        : prev.filter((step) => step.id !== stepId)
+
+      if (newWorkflow.length === 0) {
+        // If no steps remain, reset to select
+        setServiceData(current => ({
+          ...current,
+          inputType: "select",
+          outputType: "select"
+        }));
+      } else {
+        // Update service output type based on the new last agent
+        updateServiceOutputType(newWorkflow);
       }
-      return prev.filter((step) => step.id !== stepId)
+
+      return newWorkflow
     })
   }
 
@@ -510,6 +548,20 @@ export default function ServiceWorkflowBuilder() {
       ),
     )
   }
+
+  // Helper function to update service output type based on the last agent
+  const updateServiceOutputType = (workflowSteps: WorkflowStep[]) => {
+    const lastStep = workflowSteps.find(step => step.next === null);
+    if (lastStep) {
+      const lastAgent = availableAgents.find(a => a.id === lastStep.agentId);
+      if (lastAgent) {
+        setServiceData(current => ({
+          ...current,
+          outputType: lastAgent.outputType
+        }));
+      }
+    }
+  };
 
   // Move a step up in the workflow
   const moveStepUp = (stepId: string) => {
@@ -555,6 +607,9 @@ export default function ServiceWorkflowBuilder() {
         previousStepInWorkflow.next = currentStep.next
       }
 
+      // Update service output type based on the new last agent
+      updateServiceOutputType(newWorkflow);
+
       return newWorkflow
     })
   }
@@ -598,6 +653,9 @@ export default function ServiceWorkflowBuilder() {
       if (nextStepInWorkflow) {
         nextStepInWorkflow.next = currentStep.id
       }
+
+      // Update service output type based on the new last agent
+      updateServiceOutputType(newWorkflow);
 
       return newWorkflow
     })
@@ -904,6 +962,14 @@ const handleSubmit = async () => {
 
   // API key selection is now handled at the agent level
 
+  // Add handleChange function back for other service properties
+  const handleChange = (field: string, value: string | boolean) => {
+    setServiceData((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-black via-purple-950/20 to-black">
       <NavBar />
@@ -1048,55 +1114,6 @@ const handleSubmit = async () => {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="inputType" className="text-white">
-                        Input Type
-                      </Label>
-                      <Select value={serviceData.inputType} onValueChange={handleInputTypeChange}>
-                        <SelectTrigger id="inputType" className="bg-black/40 border-purple-900/30 text-white">
-                          <SelectValue placeholder="Select input type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <div className="bg-black/90 border-purple-900/30 text-white">
-                            {inputTypes.map((type) => (
-                              <SelectItem key={type.value} value={type.value}>
-                                <div className="flex items-center">
-                                  <type.icon className="h-4 w-4 mr-2" />
-                                  <span>{type.label}</span>
-                                </div>
-                              </SelectItem>
-                            ))}
-                          </div>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="outputType" className="text-white">
-                        Output Type
-                      </Label>
-                      <Select
-                        value={serviceData.outputType}
-                        onValueChange={(value) => handleChange("outputType", value)}
-                      >
-                        <SelectTrigger
-                          id="outputType"
-                          className="bg-black/40 border-purple-900/30 text-white"
-                        >
-                          <SelectValue placeholder="Select output type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <div className="bg-black/90 border-purple-900/30 text-white">
-                            <SelectItem value="text">Text</SelectItem>
-                            <SelectItem value="image">Image</SelectItem>
-                            <SelectItem value="sound">Sound</SelectItem>
-                          </div>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
                   <div className="space-y-2">
                     <Label htmlFor="placeholder" className="text-white">
                       Input Placeholder
@@ -1137,19 +1154,6 @@ const handleSubmit = async () => {
                     <p className="text-gray-400 text-sm">Automatically improve prompts using AI</p>
                   </div>
 
-
-
-                  <div className="flex items-center space-x-2">
-                    <Switch
-                      id="isPublic"
-                      checked={serviceData.isPublic}
-                      onCheckedChange={(checked) => handleChange("isPublic", checked)}
-                    />
-                    <Label htmlFor="isPublic" className="text-white">
-                      Make this service public
-                    </Label>
-                  </div>
-
                   <div className="flex justify-end">
                     <Button
                       onClick={() => setActiveTab("workflow")}
@@ -1174,6 +1178,80 @@ const handleSubmit = async () => {
                     </Badge>
                   </div>
 
+                  {/* Input/Output Type Selection */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 p-4 bg-black/20 rounded-lg border border-purple-900/30">
+                    <div className="space-y-2">
+                      
+                        <span>Filter by Input Type</span>
+                        {getRequiredInputType() && (
+                          <Badge variant="outline" className="bg-purple-900/20">
+                            Required: {getRequiredInputType()}
+                          </Badge>
+                        )}
+                      
+                      <Select 
+                        value={workflow.length > 0 ? getRequiredInputType() || "select" : filterTypes.inputType} 
+                        onValueChange={handleInputTypeChange}
+                        disabled={workflow.length > 0}
+                      >
+                        <SelectTrigger 
+                          id="inputType" 
+                          className={cn(
+                            "bg-black/40 border-purple-900/30 text-white",
+                            workflow.length > 0 && "opacity-50 cursor-not-allowed"
+                          )}
+                        >
+                          <SelectValue placeholder="Select input type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <div className="bg-black/90 border-purple-900/30 text-white">
+                            <SelectItem value="select">All input types</SelectItem>
+                            {inputTypes.map((type) => (
+                              <SelectItem key={type.value} value={type.value}>
+                                <div className="flex items-center">
+                                  <type.icon className="h-4 w-4 mr-2" />
+                                  <span>{type.label}</span>
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </div>
+                        </SelectContent>
+                      </Select>
+                      {workflow.length > 0 && (
+                        <p className="text-xs text-gray-400">
+                          Input type is determined by the previous agent's output type
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="outputType" className="text-white">
+                        Filter by Output Type
+                      </Label>
+                      <Select 
+                        value={filterTypes.outputType} 
+                        onValueChange={handleOutputTypeChange}
+                      >
+                        <SelectTrigger id="outputType" className="bg-black/40 border-purple-900/30 text-white">
+                          <SelectValue placeholder="Select output type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <div className="bg-black/90 border-purple-900/30 text-white">
+                            <SelectItem value="select">All output types</SelectItem>
+                            {outputTypes.map((type) => (
+                              <SelectItem key={type.value} value={type.value}>
+                                <div className="flex items-center">
+                                  <type.icon className="h-4 w-4 mr-2" />
+                                  <span>{type.label}</span>
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </div>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
                   {availableAgents.length === 0 && !isLoading && (
                     <div className="bg-red-900/20 border border-purple-900/30 rounded-md p-4 mb-4">
                       <p className="text-white text-sm">
@@ -1190,7 +1268,9 @@ const handleSubmit = async () => {
                       <div className="ml-3">
                         <h4 className="text-white font-medium">Input</h4>
                         <p className="text-gray-400 text-sm">
-                          {inputTypes.find((type) => type.value === serviceData.inputType)?.label || "Text Input"}
+                          {serviceData.inputType === "select" 
+                            ? "Select input type" 
+                            : inputTypes.find((type) => type.value === serviceData.inputType)?.label || "Text Input"}
                         </p>
                       </div>
                     </div>
@@ -1480,7 +1560,9 @@ const handleSubmit = async () => {
                       <div className="ml-3">
                         <h4 className="text-white font-medium">Output</h4>
                         <p className="text-gray-400 text-sm">
-                          {outputTypes.find((type) => type.value === serviceData.outputType)?.label || "Text Output"}
+                          {serviceData.outputType === "select" 
+                            ? "Select output type" 
+                            : outputTypes.find((type) => type.value === serviceData.outputType)?.label || "Text Output"}
                         </p>
                       </div>
                     </div>
@@ -1506,7 +1588,40 @@ const handleSubmit = async () => {
                           </Label>
                           <Select
                             value={newAgentData.agentType}
-                            onValueChange={(value) => setNewAgentData({ ...newAgentData, agentType: value })}
+                            onValueChange={(value) => {
+                              // Set input and output types based on agent type
+                              let inputType = "text";
+                              let outputType = "text";
+                              
+                              switch(value) {
+                                case "gemini":
+                                case "openai":
+                                  inputType = "text";
+                                  outputType = "text";
+                                  break;
+                                case "edge_tts":
+                                case "bark_tts":
+                                  inputType = "text";
+                                  outputType = "sound";
+                                  break;
+                                case "transcribe":
+                                  inputType = "sound";
+                                  outputType = "text";
+                                  break;
+                                case "image_generation":
+                                  inputType = "text";
+                                  outputType = "image";
+                                  break;
+                                
+                              }
+                              
+                              setNewAgentData({ 
+                                ...newAgentData, 
+                                agentType: value,
+                                inputType,
+                                outputType
+                              });
+                            }}
                           >
                             <SelectTrigger id="agentType" className="bg-black/40 border-purple-900/30 text-white">
                               <SelectValue placeholder="Select agent type" />
@@ -1556,43 +1671,24 @@ const handleSubmit = async () => {
                           </div>
                         </div>
 
+                        {/* Replace input/output type dropdowns with text display */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div className="space-y-2">
-                            <Label htmlFor="agentInputType">Input Type</Label>
-                            <Select
-                              value={newAgentData.inputType}
-                              onValueChange={(value) => setNewAgentData({ ...newAgentData, inputType: value })}
-                            >
-                              <SelectTrigger id="agentInputType" className="bg-black/40 border-purple-900/30 text-white">
-                                <SelectValue placeholder="Select input type" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <div className="bg-black/90 border-purple-900/30 text-white">
-                                  <SelectItem value="text">Text</SelectItem>
-                                  <SelectItem value="image">Image</SelectItem>
-                                  <SelectItem value="audio">Sound</SelectItem>
-                                </div>
-                              </SelectContent>
-                            </Select>
+                            <Label>Input Type</Label>
+                            <div className="p-2 bg-black/40 border border-purple-900/30 rounded-md">
+                              <p className="text-white text-sm">
+                                {newAgentData.inputType || "Will be set based on agent type"}
+                              </p>
+                            </div>
                           </div>
 
                           <div className="space-y-2">
-                            <Label htmlFor="agentOutputType">Output Type</Label>
-                            <Select
-                              value={newAgentData.outputType}
-                              onValueChange={(value) => setNewAgentData({ ...newAgentData, outputType: value })}
-                            >
-                              <SelectTrigger id="agentOutputType" className="bg-black/40 border-purple-900/30 text-white">
-                                <SelectValue placeholder="Select output type" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <div className="bg-black/90 border-purple-900/30 text-white">
-                                  <SelectItem value="text">Text</SelectItem>
-                                  <SelectItem value="image">Image</SelectItem>
-                                  <SelectItem value="sound">Sound</SelectItem>
-                                </div>
-                              </SelectContent>
-                            </Select>
+                            <Label>Output Type</Label>
+                            <div className="p-2 bg-black/40 border border-purple-900/30 rounded-md">
+                              <p className="text-white text-sm">
+                                {newAgentData.outputType || "Will be set based on agent type"}
+                              </p>
+                            </div>
                           </div>
                         </div>
 

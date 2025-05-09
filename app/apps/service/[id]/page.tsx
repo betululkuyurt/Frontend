@@ -51,9 +51,9 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { Loader2, ArrowLeft, Wand2, ImageIcon, Headphones, FileText, Video } from "lucide-react"
+import { Loader2, ArrowLeft, Wand2, ImageIcon, Headphones, FileText, Video, Trash2 } from "lucide-react"
 import { toast } from "@/components/ui/use-toast"
-
+import { deleteMiniService } from "@/lib/services"
 interface MiniService {
   id: number
   name: string
@@ -119,6 +119,11 @@ export default function ServicePage() {
         );
   
         if (!response.ok) {
+          if (response.status === 404) {
+            // Service not found, redirect to apps page
+            window.location.href = "/apps";
+            return;
+          }
           throw new Error("Service not found");
         }
   
@@ -291,106 +296,25 @@ export default function ServicePage() {
     }
   };
 
-  const handleMiniServiceDelete = async (serviceId: number) => {
+  // Handle service deletion
+  const handleDelete = async () => {
+    if (!service?.id) return;
+    
     try {
-      const userId = Cookies.get("user_id");
-      // Use the same token retrieval logic as the auth check
-      const token = localStorage.getItem("token") ||
-        localStorage.getItem("accessToken") ||
-        Cookies.get("accessToken");
-
-      if (!userId || !token) {
-        toast({
-          variant: "destructive",
-          title: "Authentication Error",
-          description: "You must be logged in to delete a service.",
-        });
-        return;
+      const success = await deleteMiniService(service.id);
+      if (success) {
+        // Clear router cache for this page and apps page
+        router.refresh();
+        // Navigate to apps page
+        router.push("/apps");
       }
-
-      // Log request details for debugging
-      console.log("Delete request details:", {
-        url: `http://127.0.0.1:8000/api/v1/mini-services/${serviceId}?current_user_id=${userId}`,
-        userId,
-        hasToken: !!token
-      });
-
-      const response = await fetch(
-        `http://127.0.0.1:8000/api/v1/mini-services/${serviceId}?current_user_id=${userId}`,
-        {
-          method: "DELETE",
-          headers: {
-            "Authorization": `Bearer ${token}`,
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-            "Origin": window.location.origin
-          },
-          credentials: "include",
-        }
-      );
-
-      // Enhanced error handling with specific error messages
-      if (!response.ok) {
-        const errorText = await response.text();
-        let errorMessage = "Failed to delete service";
-        let errorTitle = "Delete Failed";
-        
-        try {
-          const errorData = JSON.parse(errorText);
-          errorMessage = errorData.detail || errorData.message || errorMessage;
-          
-          // Check for specific error conditions
-          if (response.status === 404) {
-            errorTitle = "Service Not Found";
-            errorMessage = "The service you're trying to delete no longer exists.";
-          } else if (response.status === 403) {
-            errorTitle = "Permission Denied";
-            errorMessage = "You don't have permission to delete this service.";
-          } else if (response.status === 409) {
-            errorTitle = "Cannot Delete";
-            errorMessage = "This service cannot be deleted because it's being used by other processes.";
-          }
-        } catch (e) {
-          console.error("Error parsing error response:", errorText);
-        }
-
-        console.error("Delete failed:", {
-          status: response.status,
-          statusText: response.statusText,
-          errorMessage,
-          headers: Object.fromEntries(response.headers.entries())
-        });
-
-        toast({
-          variant: "destructive",
-          title: errorTitle,
-          description: errorMessage,
-        });
-
-        throw new Error(errorMessage);
-      }
-
-      // Success handling
-      toast({
-        title: "Service Deleted",
-        description: "The service has been successfully deleted.",
-      });
-
-      // Navigate back and refresh
-      router.push("/apps");
-      router.refresh();
-
     } catch (error) {
-      console.error("Error in delete function:", error);
-      
-      // Don't show another toast if we've already shown one for a specific error
-      if (!(error instanceof Error && error.message.includes("Failed to delete service"))) {
-        toast({
-          variant: "destructive",
-          title: "Unexpected Error",
-          description: "An unexpected error occurred while trying to delete the service. Please try again.",
-        });
-      }
+      console.error("Error deleting service:", error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to delete service. Please try again.",
+      });
     }
   };
 
@@ -776,14 +700,18 @@ export default function ServicePage() {
 
       <main className="pt-24 pb-16 px-4">
         <div className="max-w-4xl mx-auto">
-          <Button
-            variant="ghost"
-            className="mb-6 text-gray-400 hover:text-white"
-            onClick={() => router.push("/apps")}
-          >
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Dashboard
-          </Button>
+          <div className="flex items-center justify-between mb-6">
+            <Button
+              variant="ghost"
+              className="text-gray-400 hover:text-white"
+              onClick={() => router.push("/apps")}
+            >
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Dashboard
+            </Button>
+            
+         
+          </div>
 
           {/* Service header with gradient background */}
           <div className={`bg-gradient-to-r ${getServiceColor()} rounded-xl p-6 mb-8`}>
