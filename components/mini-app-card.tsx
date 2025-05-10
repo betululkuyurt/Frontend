@@ -41,7 +41,7 @@ interface MiniAppCardProps {
   isAddCard?: boolean
   isCustom?: boolean
   id?: number
-  onDelete?: (id: number) => Promise<boolean>
+  onDelete?: (id: number) => Promise<boolean> | boolean
 }
 
 export function MiniAppCard({
@@ -61,12 +61,10 @@ export function MiniAppCard({
 
   const handleClick = () => {
     if (isAddCard) {
-      router.push("/apps/create/service-workflow-builder") // This redirects to the workflow builder
+      router.push("/apps/create/service-workflow-builder")
     } else if (isCustom && id) {
-      // For custom services, use the ID directly
       router.push(`/apps/service/${id}`)
     } else {
-      // For built-in services, get the ID from the serviceType
       const serviceId = getServiceIdByType(serviceType)
       router.push(`/apps/service/${serviceId}`)
     }
@@ -95,33 +93,60 @@ export function MiniAppCard({
 
   // Handle confirm delete
   const handleConfirmDelete = async () => {
-    if (!id) return;
-    setIsDeleting(true);
-
+    if (!id) return
+    
+    setIsDeleting(true)
+    
     try {
-      const success = await deleteMiniService(id);
-      if (success) {
-        setShowDeleteDialog(false);
-        // If onDelete prop exists, call it
+      // Call the deleteMiniService function
+      const deleteResult = await deleteMiniService(id)
+      
+      if (deleteResult) {
+        // Close dialog first
+        setShowDeleteDialog(false)
+        
+        // Show success message
+        toast({
+          title: "Success",
+          description: `"${title}" has been deleted successfully.`,
+        })
+        
+        // If parent component provided a callback, call it
         if (onDelete) {
-          await onDelete(id);
+          try {
+            await Promise.resolve(onDelete(id))
+          } catch (callbackError) {
+            console.error("Error in onDelete callback:", callbackError)
+            // Continue execution even if callback fails
+          }
         }
-        // Kısa bir loading state göster
-        await new Promise(resolve => setTimeout(resolve, 100));
-        // Sayfayı yenile ve yönlendir
-        window.location.href = "/apps";
+        
+        // Redirect after a short delay to ensure state updates complete
+        setTimeout(() => {
+          try {
+            router.refresh() // Refresh the current route data
+            router.push("/apps") // Navigate to apps page
+          } catch (navError) {
+            console.error("Navigation error:", navError)
+            // Fallback to window.location if Next.js router fails
+            window.location.href = "/apps"
+          }
+        }, 500) // Increased delay for more reliable state updates
+      } else {
+        throw new Error("Service deletion failed")
       }
     } catch (error) {
-      console.error("Error deleting service:", error);
+      console.error("Error deleting service:", error)
       toast({
         variant: "destructive",
-        title: "Error",
-        description: "Failed to delete service. Please try again.",
-      });
+        title: "Deletion Failed",
+        description: "There was a problem deleting this service. Please try again.",
+      })
+      setShowDeleteDialog(false) // Close dialog on error
     } finally {
-      setIsDeleting(false);
+      setIsDeleting(false)
     }
-  };
+  }
 
   return (
     <>
