@@ -52,18 +52,6 @@ export function NavBar() {
   // Empty navigation items array - removed My Apps, API Keys, and Settings
   const navItems: { title: string; href: string }[] = []
 
-  if (isLoading) {
-    return (
-      <nav className="fixed top-0 w-full h-14 px-4 border-b border-purple-900/30 shadow-sm bg-black/50 backdrop-blur-md flex items-center">
-        {/* Loading placeholder */}
-        <div className="animate-pulse w-full max-w-screen-2xl mx-auto flex items-center justify-between">
-          <div className="h-8 w-24 bg-purple-900/30 rounded"></div>
-          <div className="h-8 w-8 bg-purple-900/30 rounded-full"></div>
-        </div>
-      </nav>
-    )
-  }
-
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-black/50 backdrop-blur-md border-b border-purple-900/30">
       <div className="max-w-7xl mx-auto px-4">
