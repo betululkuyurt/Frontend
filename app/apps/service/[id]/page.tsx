@@ -54,6 +54,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Loader2, ArrowLeft, Wand2, ImageIcon, Headphones, FileText, Video, Trash2 } from "lucide-react"
 import { toast } from "@/components/ui/use-toast"
 import { deleteMiniService } from "@/lib/services"
+
 interface MiniService {
   id: number
   name: string
@@ -63,8 +64,13 @@ interface MiniService {
   output_type: string
   api_key?: string
   api_key_id?: string
+  average_token_usage?: {
+    prompt_tokens: number
+    completion_tokens: number
+    total_tokens: number
+  }
+  run_time?: number
 }
-
 export default function ServicePage() {
   const router = useRouter()
   const params = useParams()
@@ -127,15 +133,17 @@ export default function ServicePage() {
           throw new Error("Service not found");
         }
   
-        const data = await response.json();
-        console.log("Loaded service data:", {
-          id: data.id,
-          name: data.name,
-          workflow: data.workflow,
-          api_key: data.api_key ? "present" : "not present",
-          api_key_id: data.api_key_id,
-          workflow_first_step: data.workflow?.steps?.[0]
-        });
+       const data = await response.json();
+      console.log("Loaded service data:", {
+      id: data.id,
+      name: data.name,
+      workflow: data.workflow,
+      api_key: data.api_key ? "present" : "not present",
+      api_key_id: data.api_key_id,
+       workflow_first_step: data.workflow?.steps?.[0],
+      average_token_usage: data.average_token_usage,
+       run_time: data.run_time
+      });
         
         setService(data);
       } catch (error) {
@@ -714,25 +722,56 @@ export default function ServicePage() {
           </div>
 
           {/* Service header with gradient background */}
-          <div className={`bg-gradient-to-r ${getServiceColor()} rounded-xl p-6 mb-8`}>
-            <div className="flex items-start space-x-4">
-              <div className="w-12 h-12 rounded-full bg-black/20 backdrop-blur-sm flex items-center justify-center flex-shrink-0">
-                <Wand2 className="h-6 w-6 text-white" />
-              </div>
-              <div>
-                <h2 className="text-2xl font-bold text-white">{service?.name}</h2>
-                <p className="text-white/80 mt-1">{service?.description}</p>
-                <div className="flex items-center mt-2 space-x-2">
-                  <span className="text-xs bg-black/30 text-white px-2 py-1 rounded-full">
-                    Input: {service?.input_type}
-                  </span>
-                  <span className="text-xs bg-black/30 text-white px-2 py-1 rounded-full">
-                    Output: {service?.output_type}
-                  </span>
-                </div>
-              </div>
-            </div>
+<div className={`bg-gradient-to-r ${getServiceColor()} rounded-xl p-6 mb-8`}>
+  <div className="flex items-start space-x-4">
+    <div className="w-12 h-12 rounded-full bg-black/20 backdrop-blur-sm flex items-center justify-center flex-shrink-0">
+      <Wand2 className="h-6 w-6 text-white" />
+    </div>
+    <div>
+      <h2 className="text-2xl font-bold text-white">{service?.name}</h2>
+      <p className="text-white/80 mt-1">{service?.description}</p>
+      <div className="flex items-center mt-2 space-x-2">
+        <span className="text-xs bg-black/30 text-white px-2 py-1 rounded-full">
+          Input: {service?.input_type}
+        </span>
+        <span className="text-xs bg-black/30 text-white px-2 py-1 rounded-full">
+          Output: {service?.output_type}
+        </span>
+      </div>
+
+      {/* Usage stats */}
+{(service?.average_token_usage || service?.run_time !== undefined) && (
+  <div className="mt-3 pt-2 border-t border-white/20">
+    <h3 className="text-sm text-white/90 mb-1">Service Stats:</h3>
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      {service?.run_time !== undefined && (
+        <div className="text-xs bg-black/30 p-2 rounded">
+          <span className="block text-white/70">Avg. Run Time</span>
+          <span className="text-white font-medium">{Math.round(service.run_time)}s</span>
+        </div>
+      )}
+      {service?.average_token_usage && (
+        <>
+          <div className="text-xs bg-black/30 p-2 rounded">
+            <span className="block text-white/70">Prompt Tokens</span>
+            <span className="text-white font-medium">{Math.round(service.average_token_usage.prompt_tokens)}</span>
           </div>
+          <div className="text-xs bg-black/30 p-2 rounded">
+            <span className="block text-white/70">Completion Tokens</span>
+            <span className="text-white font-medium">{Math.round(service.average_token_usage.completion_tokens)}</span>
+          </div>
+          <div className="text-xs bg-black/30 p-2 rounded">
+            <span className="block text-white/70">Total Tokens</span>
+            <span className="text-white font-medium">{Math.round(service.average_token_usage.total_tokens)}</span>
+          </div>
+        </>
+      )}
+    </div>
+  </div>
+)}
+    </div>
+  </div>
+</div>
 
           {/* Main content card */}
           <Card className="bg-black/40 backdrop-blur-sm border border-purple-900/30 p-6 md:p-8">
