@@ -171,7 +171,7 @@ export default function ServiceWorkflowBuilder() {
   const [customApiKey, setCustomApiKey] = useState<string>("")
   const [useCustomApiKey, setUseCustomApiKey] = useState<boolean>(false)
   const [error, setError] = useState<string | null>(null) // Add error state
-
+  const userId = Cookies.get("user_id") || "current-user"
   const [serviceData, setServiceData] = useState({
     title: "",
     description: "",
@@ -212,7 +212,6 @@ export default function ServiceWorkflowBuilder() {
     const fetchAgentTypes = async () => {
       setIsLoadingAgentTypes(true);
       try {
-        const userId = Cookies.get("user_id");
         const res = await fetch(`http://127.0.0.1:8000/api/v1/agents/types?current_user_id=${userId}`, {
           headers: {
             "Authorization": `Bearer ${Cookies.get("access_token")}`,
@@ -242,7 +241,7 @@ export default function ServiceWorkflowBuilder() {
   async function fetchAgents() {
     try {
       setIsLoading(true)
-      const userId = Cookies.get("user_id")
+      
 
       try {
         const response = await fetch(`http://127.0.0.1:8000/api/v1/agents/?current_user_id=${userId}`, {
@@ -297,8 +296,6 @@ export default function ServiceWorkflowBuilder() {
     try {
       setIsLoadingApiKeys(true)
 
-      // Try to get user ID from cookies, but don't require it
-      const userId = Cookies.get("user_id")
 
       try {
         const response = await fetch(`http://127.0.0.1:8000/api/v1/api-keys?current_user_id=${userId}`, {
@@ -696,7 +693,6 @@ export default function ServiceWorkflowBuilder() {
   const createAgent = async () => {
     try {
       setIsCreatingAgent(true);
-      const userId = Cookies.get("user_id")
       if (!userId) {
         console.error("Authentication Error: No user ID found");
         throw new Error("User not authenticated")
@@ -843,7 +839,6 @@ const handleSubmit = async () => {
   setIsLoading(true);
  
   try {
-    const userId = Cookies.get("user_id") || "current-user";
     console.log("Current user ID:", userId);
     console.log("Current serviceData:", serviceData);
     
@@ -2016,7 +2011,6 @@ const handleSubmit = async () => {
                           >
                             {serviceData.buttonText || "Generate"}
                           </Button>
-
                           {/* Output Preview */}
                           <div className="mt-6 pt-6 border-t border-purple-900/30">
                             <h4 className="text-white font-medium mb-3">Output Preview</h4>
@@ -2218,3 +2212,4 @@ const handleSubmit = async () => {
     </div>
   )
 }
+

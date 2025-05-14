@@ -6,7 +6,6 @@ import { cn } from "@/lib/utils"
 import { ArrowRight, Trash2, Loader2, Clock, Cpu } from "lucide-react"
 import { useState, useEffect, useCallback } from "react"
 import { deleteMiniService } from "@/lib/services"
-import Cookies from "js-cookie"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -61,40 +60,15 @@ export function MiniAppCard({
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [isHovering, setIsHovering] = useState(false)
-  const [serviceStats, setServiceStats] = useState<UsageStats | null>(usageStats || null)
-  const [isLoading, setIsLoading] = useState(false)
 
-  const handleClick = async () => {
+  const handleClick = () => {
     if (isAddCard) {
       router.push("/apps/create/service-workflow-builder")
       return
     }
 
     if (isCustom && id) {
-      try {
-        setIsLoading(true)
-        const currentUserId = Cookies.get("user_id") || "0"
-        const response = await fetch(
-          `http://127.0.0.1:8000/api/v1/mini-services/${id}?current_user_id=${currentUserId}`
-        )
-
-        if (response.ok) {
-          const data = await response.json()
-          setServiceStats({
-            average_token_usage: data.average_token_usage,
-            run_time: data.run_time,
-            input_type: data.input_type,
-            output_type: data.output_type
-          })
-        }
-        router.push(`/apps/service/${id}`)
-      } catch (error) {
-        console.error("Error fetching service stats:", error)
-        // Hata durumunda da yönlendirme yap
-        router.push(`/apps/service/${id}`)
-      } finally {
-        setIsLoading(false)
-      }
+      router.push(`/apps/service/${id}`)
     } else {
       const serviceId = getServiceIdByType(serviceType)
       router.push(`/apps/service/${serviceId}`)
@@ -237,11 +211,11 @@ export function MiniAppCard({
               <div className="mb-2 text-xs">
                 <div className="flex items-center">
                   <span className="text-gray-500 w-14 inline-block">Input:</span>
-                  <span className="text-gray-300">{serviceStats?.input_type || "Text"}</span>
+                  <span className="text-gray-300">{usageStats?.input_type || "Text"}</span>
                 </div>
                 <div className="flex items-center">
                   <span className="text-gray-500 w-14 inline-block">Output:</span>
-                  <span className="text-gray-300">{serviceStats?.output_type || "Text"}</span>
+                  <span className="text-gray-300">{usageStats?.output_type || "Text"}</span>
                 </div>
               </div>
 
@@ -250,25 +224,19 @@ export function MiniAppCard({
                 <div className="bg-black/30 rounded p-1.5">
                   <span className="block text-gray-500 text-[10px]">Avg. Tokens</span>
                   <span className="text-gray-300 flex items-center">
-                    {isLoading ? (
-                      <Loader2 className="h-2.5 w-2.5 animate-spin text-purple-400 mr-1" />
-                    ) : (
-                      serviceStats?.average_token_usage?.total_tokens !== undefined ?
-                        Math.round(serviceStats.average_token_usage.total_tokens) :
-                        "—"
-                    )}
+                    {usageStats?.average_token_usage?.total_tokens !== undefined ?
+                      Math.round(usageStats.average_token_usage.total_tokens) :
+                      "—"
+                    }
                   </span>
                 </div>
                 <div className="bg-black/30 rounded p-1.5">
                   <span className="block text-gray-500 text-[10px]">Run time</span>
                   <span className="text-gray-300 flex items-center">
-                    {isLoading ? (
-                      <Loader2 className="h-2.5 w-2.5 animate-spin text-purple-400 mr-1" />
-                    ) : (
-                      serviceStats?.run_time !== undefined ?
-                        `${Math.round(serviceStats.run_time)}s` :
-                        "—"
-                    )}
+                    {usageStats?.run_time !== undefined ?
+                      `${Math.round(usageStats.run_time)}` :
+                      "—"
+                    }
                   </span>
                 </div>
               </div>

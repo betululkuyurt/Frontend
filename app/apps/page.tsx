@@ -33,6 +33,18 @@ interface Service {
   color: string
   isCustom?: boolean
   onDelete?: (id: number) => Promise<boolean>
+  usageStats?: {
+    average_token_usage: {
+      input_type: number
+      output_type: number
+      prompt_tokens: number
+      completion_tokens: number
+      total_tokens: number
+    }
+    run_time: number
+    input_type: string
+    output_type: string
+  }
 }
 
 // Define the mini-service type from API
@@ -71,7 +83,7 @@ export default function DashboardPage() {
   const [miniServices, setMiniServices] = useState<Service[]>([])
   const [miniServicesLoading, setMiniServicesLoading] = useState(false)
   const [user_id, setUserId] = useState<number | null>(null)
-  const [refreshTrigger, setRefreshTrigger] = useState(0) // Used to trigger refreshes
+  const [refreshTrigger, setRefreshTrigger] = useState(0)
   const [recentActivities, setRecentActivities] = useState<Process[]>([])
   const [recentActivitiesLoading, setRecentActivitiesLoading] = useState(false)
   const router = useRouter()
@@ -219,6 +231,12 @@ export default function DashboardPage() {
               color: service.color || getColorForService(service.input_type, service.output_type),
               isCustom: true,
               onDelete: handleMiniServiceDelete,
+              usageStats: {
+                average_token_usage: service.average_token_usage,
+                run_time: service.run_time,
+                input_type: service.input_type,
+                output_type: service.output_type
+              }
             }
           })
 
@@ -347,6 +365,12 @@ export default function DashboardPage() {
               color,
               isCustom: true, // Mark as custom so it can be deleted
               onDelete: handleMiniServiceDelete, // Add delete handler
+              usageStats: {
+                average_token_usage: service.average_token_usage,
+                run_time: service.run_time,
+                input_type: service.input_type,
+                output_type: service.output_type
+              }
             }
           })
 
@@ -668,17 +692,20 @@ export default function DashboardPage() {
 
       <main className="pt-24 pb-16 px-4">
         <div className="max-w-6xl mx-auto">
-          {/* User-created Mini-Services Section - Show at the top when there are mini-services */}
-          {miniServicesLoading ? (
-            <div className="mb-12 flex items-center justify-center p-12 bg-black/40 backdrop-blur-sm rounded-xl border border-purple-900/30">
-              <Loader2 className="h-8 w-8 text-purple-400 animate-spin mr-3" />
-              <span className="text-purple-300">Loading your AI workflows...</span>
-            </div>
-          ) : miniServices.length > 0 ? (
-            <section className="mb-12">
-              <h2 className="text-2xl md:text-3xl font-bold text-white mb-8">Your AI Workflows</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {miniServices.map((service) => (
+          {/* User-created Mini-Services Section */}
+          <section className="mb-12">
+            <h2 className="text-2xl md:text-3xl font-bold text-white mb-8">Your AI Workflows</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {miniServicesLoading ? (
+                // Placeholder cards during loading
+                Array.from({ length: 3 }).map((_, index) => (
+                  <div
+                    key={`placeholder-${index}`}
+                    className="h-[220px] bg-black/40 backdrop-blur-sm rounded-xl border border-purple-900/30 animate-pulse"
+                  />
+                ))
+              ) : miniServices.length > 0 ? (
+                miniServices.map((service) => (
                   <MiniAppCard
                     key={`mini-service-${service.id}`}
                     title={service.name}
@@ -689,11 +716,13 @@ export default function DashboardPage() {
                     isCustom={service.isCustom}
                     id={service.id}
                     onDelete={service.onDelete}
+                    usageStats={service.usageStats}
                   />
-                ))}
-              </div>
-            </section>
-          ) : null}
+                ))
+              ) : null}
+            </div>
+          </section>
+
           <div className="mb-8 flex justify-between items-center">
             <div>
               <h1 className="text-3xl font-bold text-white mb-2">AI Services</h1>
@@ -725,7 +754,7 @@ export default function DashboardPage() {
             />
           </div>
 
-          {/* Recent Activity Section - Now Dynamic */}
+          {/* Recent Activity Section */}
           <section className="mt-16">
             <h2 className="text-2xl md:text-3xl font-bold text-white mb-8">Recent Activity</h2>
             
