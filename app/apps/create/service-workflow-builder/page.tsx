@@ -267,8 +267,8 @@ export default function ServiceWorkflowBuilder() {
           description: a.description || "",
           inputType: a.input_type || "text",
           outputType: a.output_type || "text",
-          icon: getIconForType(a.input_type),
-          color: getColorForType(a.output_type),
+          icon: getIconForType(a.output_type),
+          color: getColorForType(a.input_type),
           settings: getSettingsForAgent(a),
           isPublic: a.is_public || false,
           userId: a.user_id || "",
@@ -276,6 +276,8 @@ export default function ServiceWorkflowBuilder() {
           apiKeyId: a.api_key_id,
           type: a.agent_type,
         }))
+
+        console.log("Mapped agents:", agents);
 
         setAvailableAgents(agents)
       } catch (error) {
@@ -344,8 +346,8 @@ export default function ServiceWorkflowBuilder() {
   }
 
   // Helper functions for mapping backend data
-  function getIconForType(type: string): React.ComponentType<any> {
-    switch (type) {
+  function getIconForType(outputType: string): React.ComponentType<any> {
+    switch (outputType) {
       case "text":
         return MessageSquare
       case "image":
@@ -354,7 +356,7 @@ export default function ServiceWorkflowBuilder() {
         return Video
       case "document":
         return FileText
-      case "audio":
+      case "sound":
         return Headphones
       default:
         return MessageSquare
@@ -369,9 +371,9 @@ export default function ServiceWorkflowBuilder() {
         return "from-pink-600 to-pink-800"
       case "video":
         return "from-red-600 to-red-800"
-      case "document":
-        return "from-emerald-600 to-teal-800"
-      case "audio":
+      case "file":
+        return "from-red-600 to-red-800"
+      case "sound":
         return "from-green-600 to-green-800"
       default:
         return "from-purple-600 to-purple-800"
