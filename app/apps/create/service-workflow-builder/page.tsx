@@ -574,127 +574,132 @@ export default function ServiceWorkflowBuilder() {
     }
   };
 
-  // Move a step up in the workflow
-  const moveStepUp = (stepId: string) => {
-    const orderedSteps = getOrderedWorkflow()
-    const stepIndex = orderedSteps.findIndex((step) => step.id === stepId)
-
-    if (stepIndex <= 0) return
-
-    // Get the steps involved in the swap
-    const currentStep = orderedSteps[stepIndex]
-    const previousStep = orderedSteps[stepIndex - 1]
-    const previousPreviousStep = stepIndex > 1 ? orderedSteps[stepIndex - 2] : null
-
-    // Check compatibility
-    const currentAgent = availableAgents.find((a) => a.id === currentStep.agentId)
-    const previousAgent = availableAgents.find((a) => a.id === previousStep.agentId)
-
-    if (!currentAgent || !previousAgent) return
-
-    // Update the workflow with the new order
-    setWorkflow((prev) => {
-      // Create a new workflow with the steps swapped
-      const newWorkflow = [...prev]
-
-      // Update the next pointers
-      if (previousPreviousStep) {
-        // Find the step that points to previousStep
-        const stepPointingToPrevious = newWorkflow.find((s) => s.next === previousStep.id)
-        if (stepPointingToPrevious) {
-          stepPointingToPrevious.next = currentStep.id
-        }
-      }
-
-      // Update current step to point to previous step
-      const currentStepInWorkflow = newWorkflow.find((s) => s.id === currentStep.id)
-      if (currentStepInWorkflow) {
-        currentStepInWorkflow.next = previousStep.next
-      }
-
-      // Update previous step to be after current step
-      const previousStepInWorkflow = newWorkflow.find((s) => s.id === previousStep.id)
-      if (previousStepInWorkflow) {
-        previousStepInWorkflow.next = currentStep.next
-      }
-
-      // Update service output type based on the new last agent
-      updateServiceOutputType(newWorkflow);
-
-      return newWorkflow
-    })
-  }
-
-  // Move a step down in the workflow
-  const moveStepDown = (stepId: string) => {
-    const orderedSteps = getOrderedWorkflow()
-    const stepIndex = orderedSteps.findIndex((step) => step.id === stepId)
-
-    if (stepIndex === -1 || stepIndex >= orderedSteps.length - 1) return
-
-    // Get the steps involved in the swap
-    const currentStep = orderedSteps[stepIndex]
-    const nextStep = orderedSteps[stepIndex + 1]
-
-    // Check compatibility
-    const currentAgent = availableAgents.find((a) => a.id === currentStep.agentId)
-    const nextAgent = availableAgents.find((a) => a.id === nextStep.agentId)
-
-    if (!currentAgent || !nextAgent) return
-
-    // Update the workflow with the new order
-    setWorkflow((prev) => {
-      // Create a new workflow with the steps swapped
-      const newWorkflow = [...prev]
-
-      // Find the step that points to currentStep
-      const stepPointingToCurrent = newWorkflow.find((s) => s.next === currentStep.id)
-      if (stepPointingToCurrent) {
-        stepPointingToCurrent.next = nextStep.id
-      }
-
-      // Update current step to point to next step's next
-      const currentStepInWorkflow = newWorkflow.find((s) => s.id === currentStep.id)
-      if (currentStepInWorkflow) {
-        currentStepInWorkflow.next = nextStep.next
-      }
-
-      // Update next step to point to current step
-      const nextStepInWorkflow = newWorkflow.find((s) => s.id === nextStep.id)
-      if (nextStepInWorkflow) {
-        nextStepInWorkflow.next = currentStep.id
-      }
-
-      // Update service output type based on the new last agent
-      updateServiceOutputType(newWorkflow);
-
-      return newWorkflow
-    })
-  }
-
-  // Get the ordered workflow steps for display
+  // Ensure getOrderedWorkflow is correctly implemented
   const getOrderedWorkflow = () => {
-    if (workflow.length === 0) return []
-
+    if (workflow.length === 0) return [];
+  
     // Find the first step (the one that no other step points to)
-    const allTargetIds = workflow.map((step) => step.next).filter(Boolean) as string[]
-    const firstStepId = workflow.find((step) => !allTargetIds.includes(step.id))?.id
-
-    if (!firstStepId) return workflow
-
-    const ordered: typeof workflow = []
-    let currentId = firstStepId
-
-    while (currentId) {
-      const currentStep = workflow.find((step) => step.id === currentId)
-      if (!currentStep) break
-
-      ordered.push(currentStep)
-      currentId = currentStep.next || ""
+    const allTargetIds = workflow.map((step) => step.next).filter(Boolean) as string[];
+    const firstStepId = workflow.find((step) => !allTargetIds.includes(step.id))?.id;
+  
+    if (!firstStepId) {
+      console.warn("Could not determine first step - workflow might have cycles");
+      return workflow; // Fallback if we can't determine the first step
     }
-
-    return ordered
-  }
+  
+    const ordered: WorkflowStep[] = [];
+    let currentId = firstStepId;
+    const visited = new Set<string>(); // Track visited steps to prevent infinite loops
+  
+    // Walk through the workflow in order
+    while (currentId) {
+      if (visited.has(currentId)) {
+        console.warn("Cycle detected in workflow", { currentId, visited });
+        break; // Prevent infinite loop
+      }
+      
+      const currentStep = workflow.find((step) => step.id === currentId);
+      if (!currentStep) break;
+  
+      visited.add(currentId);
+      ordered.push(currentStep);
+      currentId = currentStep.next || "";
+      
+      // Safety check to prevent infinite loops
+      if (ordered.length > workflow.length) {
+        console.error("Potential infinite loop detected in getOrderedWorkflow");
+        break;
+      }
+    }
+  
+    return ordered;
+  };
+  
+  // Fix the moveStepUp function
+  const moveStepUp = (stepId: string) => {
+    const orderedSteps = getOrderedWorkflow();
+    const stepIndex = orderedSteps.findIndex((step) => step.id === stepId);
+    
+    if (stepIndex <= 0) return; // Already at the top or not found
+    
+    // Create a deep copy of the workflow
+    const newWorkflow = JSON.parse(JSON.stringify(workflow));
+    
+    // Get the steps involved
+    const currentStep = orderedSteps[stepIndex];
+    const previousStep = orderedSteps[stepIndex - 1];
+    const beforePreviousStep = stepIndex > 1 ? orderedSteps[stepIndex - 2] : null;
+    
+    // Find the actual step objects in the new workflow
+    const currentStepInNew = newWorkflow.find((s: any) => s.id === currentStep.id);
+    const previousStepInNew = newWorkflow.find((s: any) => s.id === previousStep.id);
+    
+    // If we're moving the second step up (to first position)
+    if (stepIndex === 1) {
+      // Current step becomes first (no incoming connection)
+      // Previous step (was first) now points to what current pointed to
+      currentStepInNew.next = previousStep.id;
+      previousStepInNew.next = currentStep.next;
+    } else {
+      // We're moving a step that's not the second one
+      // Find the step that pointed to the previous step
+      const stepPointingToPrevious = newWorkflow.find((s: any) => s.next === previousStep.id);
+      if (stepPointingToPrevious) {
+        // Make it point to the current step instead
+        stepPointingToPrevious.next = currentStep.id;
+      }
+      
+      // Make current step point to previous step
+      currentStepInNew.next = previousStep.id;
+      
+      // Make previous step point to what current step was pointing to
+      previousStepInNew.next = currentStep.next;
+    }
+    
+    setWorkflow(newWorkflow);
+  };
+  
+  // Fix the moveStepDown function
+  const moveStepDown = (stepId: string) => {
+    const orderedSteps = getOrderedWorkflow();
+    const stepIndex = orderedSteps.findIndex((step) => step.id === stepId);
+    
+    if (stepIndex === -1 || stepIndex >= orderedSteps.length - 1) return; // Already at the bottom or not found
+    
+    // Create a deep copy of the workflow
+    const newWorkflow = JSON.parse(JSON.stringify(workflow));
+    
+    // Get the steps involved
+    const currentStep = orderedSteps[stepIndex];
+    const nextStep = orderedSteps[stepIndex + 1];
+    
+    // Find the actual step objects in the new workflow
+    const currentStepInNew = newWorkflow.find((s: any) => s.id === currentStep.id);
+    const nextStepInNew = newWorkflow.find((s: any) => s.id === nextStep.id);
+    
+    // If we're moving the first step down
+    if (stepIndex === 0) {
+      // Next step becomes first step (no incoming connections)
+      // Current step (was first) now points to what next step pointed to
+      nextStepInNew.next = currentStep.id;
+      currentStepInNew.next = nextStep.next;
+    } else {
+      // Find the step that pointed to the current step
+      const stepPointingToCurrent = newWorkflow.find((s: any) => s.next === currentStep.id);
+      if (stepPointingToCurrent) {
+        // Make it point to the next step instead
+        stepPointingToCurrent.next = nextStep.id;
+      }
+      
+      // Make next step point to current step
+      nextStepInNew.next = currentStep.id;
+      
+      // Make current step point to what next step was pointing to
+      currentStepInNew.next = nextStep.next;
+    }
+    
+    setWorkflow(newWorkflow);
+  };
 
   // Create a new agent
   const createAgent = async () => {
@@ -1220,18 +1225,18 @@ const handleSubmit = async () => {
                       <div className="flex items-center justify-between mb-2">
                         <h5 className="text-white text-sm font-medium">Workflow Steps</h5>
                         
-                        {/* Filter Controls - Moved here */}
-                        <div className="flex items-center space-x-2">
+                        {/* Filter Controls - Responsive Version */}
+                        <div className="flex flex-col md:flex-row md:items-center gap-2 w-full md:w-auto">
                           {/* Search Button/Input */}
-                          <div className="relative">
+                          <div className="relative w-full md:w-auto">
                             {isSearchOpen ? (
-                              <div className="flex items-center bg-black/40 border border-purple-900/30 rounded-md pr-1">
+                              <div className="flex items-center bg-black/40 border border-purple-900/30 rounded-md pr-1 w-full">
                                 <Input
                                   type="text"
                                   placeholder="Search agents..."
                                   value={searchQuery}
                                   onChange={(e) => setSearchQuery(e.target.value)}
-                                  className="h-8 text-xs w-[140px] border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 text-white"
+                                  className="h-8 text-xs border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 text-white w-full"
                                   autoFocus
                                   onBlur={() => {
                                     if (!searchQuery) {
@@ -1242,7 +1247,7 @@ const handleSubmit = async () => {
                                 <Button 
                                   variant="ghost" 
                                   size="icon"
-                                  className="h-7 w-7 p-0"
+                                  className="h-7 w-7 p-0 flex-shrink-0"
                                   onClick={() => {
                                     setSearchQuery("")
                                     setIsSearchOpen(false)
@@ -1254,68 +1259,71 @@ const handleSubmit = async () => {
                             ) : (
                               <Button
                                 variant="outline"
-                                size="icon"
-                                className="h-8 w-8 bg-black/40 border-purple-900/30 hover:bg-purple-900/20"
+                                size="sm"
+                                className="h-8 bg-black/40 border-purple-900/30 hover:bg-purple-900/20 w-full md:w-auto"
                                 onClick={() => setIsSearchOpen(true)}
                               >
-                                <Search className="h-4 w-4 text-white" />
+                                <Search className="h-4 w-4 text-white mr-2" />
+                                
                               </Button>
                             )}
                           </div>
                           
-                          <Select 
-                            value={workflow.length > 0 ? getRequiredInputType() || "select" : filterTypes.inputType} 
-                            onValueChange={handleInputTypeChange}
-                            disabled={workflow.length > 0}
-                          >
-                            <SelectTrigger 
-                              id="inputType" 
-                              className={cn(
-                                "bg-black/40 border-purple-900/30 text-white h-8 text-xs w-[140px]",
-                                workflow.length > 0 && "opacity-50 cursor-not-allowed"
-                              )}
+                          <div className="flex flex-wrap gap-2 w-full md:w-auto">
+                            <Select 
+                              value={workflow.length > 0 ? getRequiredInputType() || "select" : filterTypes.inputType} 
+                              onValueChange={handleInputTypeChange}
+                              disabled={workflow.length > 0}
                             >
-                              <SelectValue placeholder="Input Type" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <div className="bg-black/90 border-purple-900/30 text-white">
-                                <SelectItem value="select">All Inputs</SelectItem>
-                                {inputTypes.map((type) => (
-                                  <SelectItem key={type.value} value={type.value}>
-                                    <div className="flex items-center">
-                                      <type.icon className="h-3 w-3 mr-2" />
-                                      <span>{type.label}</span>
-                                    </div>
-                                  </SelectItem>
-                                ))}
-                              </div>
-                            </SelectContent>
-                          </Select>
-                          
-                          <Select 
-                            value={filterTypes.outputType} 
-                            onValueChange={handleOutputTypeChange}
-                          >
-                            <SelectTrigger 
-                              id="outputType" 
-                              className="bg-black/40 border-purple-900/30 text-white h-8 text-xs w-[140px]"
+                              <SelectTrigger 
+                                id="inputType" 
+                                className={cn(
+                                  "bg-black/40 border-purple-900/30 text-white h-8 text-xs flex-1 min-w-[120px] md:w-[140px]",
+                                  workflow.length > 0 && "opacity-50 cursor-not-allowed"
+                                )}
+                              >
+                                <SelectValue placeholder="Input Type" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <div className="bg-black/90 border-purple-900/30 text-white">
+                                  <SelectItem value="select">All Inputs</SelectItem>
+                                  {inputTypes.map((type) => (
+                                    <SelectItem key={type.value} value={type.value}>
+                                      <div className="flex items-center">
+                                        <type.icon className="h-3 w-3 mr-2" />
+                                        <span>{type.label}</span>
+                                      </div>
+                                    </SelectItem>
+                                  ))}
+                                </div>
+                              </SelectContent>
+                            </Select>
+                            
+                            <Select 
+                              value={filterTypes.outputType} 
+                              onValueChange={handleOutputTypeChange}
                             >
-                              <SelectValue placeholder="Output Type" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <div className="bg-black/90 border-purple-900/30 text-white">
-                                <SelectItem value="select">All Outputs</SelectItem>
-                                {outputTypes.map((type) => (
-                                  <SelectItem key={type.value} value={type.value}>
-                                    <div className="flex items-center">
-                                      <type.icon className="h-3 w-3 mr-2" />
-                                      <span>{type.label}</span>
-                                    </div>
-                                  </SelectItem>
-                                ))}
-                              </div>
-                            </SelectContent>
-                          </Select>
+                              <SelectTrigger 
+                                id="outputType" 
+                                className="bg-black/40 border-purple-900/30 text-white h-8 text-xs flex-1 min-w-[120px] md:w-[140px]"
+                              >
+                                <SelectValue placeholder="Output Type" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <div className="bg-black/90 border-purple-900/30 text-white">
+                                  <SelectItem value="select">All Outputs</SelectItem>
+                                  {outputTypes.map((type) => (
+                                    <SelectItem key={type.value} value={type.value}>
+                                      <div className="flex items-center">
+                                        <type.icon className="h-3 w-3 mr-2" />
+                                        <span>{type.label}</span>
+                                      </div>
+                                    </SelectItem>
+                                  ))}
+                                </div>
+                              </SelectContent>
+                            </Select>
+                          </div>
                         </div>
                       </div>
 
