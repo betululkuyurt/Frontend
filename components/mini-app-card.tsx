@@ -144,114 +144,116 @@ export function MiniAppCard({
     }
   };
 
-  return (
-    <>
+ return (
+  <>
+    <div
+      onClick={handleClick}
+      onMouseEnter={() => setIsHovering(true)}
+      onMouseLeave={() => setIsHovering(false)}
+      className="cursor-pointer group relative h-64 transform transition-all duration-300"
+    >
       <div
-        onClick={handleClick}
-        onMouseEnter={() => setIsHovering(true)}
-        onMouseLeave={() => setIsHovering(false)}
-        className="cursor-pointer group relative h-[220px] transform transition-all duration-300"
+        className={cn(
+          "absolute inset-0 rounded-xl bg-gradient-to-br opacity-0 group-hover:opacity-100 blur-xl transition-opacity duration-300",
+          color,
+        )}
+      />
+      <div
+        className={cn(
+          "h-full bg-black/40 backdrop-blur-sm rounded-xl border border-purple-900/30 flex flex-col transition-all duration-300 relative",
+          isHovering && "scale-105 z-10",
+          isAddCard ? "p-5 justify-center items-center" : "p-4"
+        )}
       >
-        <div
-          className={cn(
-            "absolute inset-0 rounded-xl bg-gradient-to-br opacity-0 group-hover:opacity-100 blur-xl transition-opacity duration-300",
-            color,
-          )}
-        />
-        <div
-          className={cn(
-            "h-full bg-black/40 backdrop-blur-sm rounded-xl border border-purple-900/30 flex flex-col transition-all duration-300",
-            isHovering && "scale-105 z-10",
-            isAddCard ? "p-5 justify-center items-center" : "p-4 pb-14"
-          )}
-        >
-          {isAddCard ? (
-            // Simplified "Create New" card
-            <>
-              <div className={cn("w-16 h-16 rounded-lg flex items-center justify-center bg-gradient-to-br mb-5", color)}>
+        {isAddCard ? (
+          // Simplified "Create New" card
+          <>
+            <div className={cn("w-16 h-16 rounded-lg flex items-center justify-center bg-gradient-to-br mb-5", color)}>
+              {icon}
+            </div>
+            <p className="text-white text-center font-medium">Create New</p>
+          </>
+        ) : (
+          // Regular service card with better spacing
+          <>
+            {/* Service icon and title section */}
+            <div className="flex items-start space-x-3 mb-2">
+              <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center bg-gradient-to-br", color)}>
                 {icon}
               </div>
-              <p className="text-white text-center font-medium">Create New</p>
-            </>
-          ) : (
-            // Regular service card
-            <>
-              {/* Service icon and title section */}
-              <div className="flex items-start space-x-3 mb-2">
-                <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center bg-gradient-to-br", color)}>
-                  {icon}
-                </div>
-                <div className="flex-1 pr-5">
-                  <h3 className="text-sm font-semibold text-white">{title}</h3>
-                </div>
-
-                {/* Delete button for custom services */}
-                {isCustom && (
-                  <button
-                    onClick={handleDeleteClick}
-                    className="absolute top-3 right-3 p-1.5 rounded-full bg-black/40 text-gray-400 hover:text-red-400 hover:bg-black/60 transition-colors z-10"
-                    aria-label="Delete service"
-                    disabled={isDeleting}
-                  >
-                    {isDeleting ? (
-                      <Loader2 className="h-3 w-3 animate-spin text-purple-400" />
-                    ) : (
-                      <Trash2 className="h-3 w-3" />
-                    )}
-                  </button>
-                )}
+              <div className="flex-1 pr-5">
+                <h3 className="text-sm font-semibold text-white">{title}</h3>
               </div>
 
-              {/* Description - with fixed height */}
-              <div className="h-12 mb-3"> {/* Fixed height container for description */}
-                <p className="text-gray-300 text-xs line-clamp-2">{description}</p>
-              </div>
+              {/* Delete button for custom services */}
+              {isCustom && (
+                <button
+                  onClick={handleDeleteClick}
+                  className="absolute top-3 right-3 p-1.5 rounded-full bg-black/40 text-gray-400 hover:text-red-400 hover:bg-black/60 transition-colors z-10"
+                  aria-label="Delete service"
+                  disabled={isDeleting}
+                >
+                  {isDeleting ? (
+                    <Loader2 className="h-3 w-3 animate-spin text-purple-400" />
+                  ) : (
+                    <Trash2 className="h-3 w-3" />
+                  )}
+                </button>
+              )}
+            </div>
 
-              {/* Service details - more compact */}
-              <div className="mb-2 text-xs">
-                <div className="flex items-center">
-                  <span className="text-gray-500 w-14 inline-block">Input:</span>
-                  <span className="text-gray-300">{usageStats?.input_type || "Text"}</span>
-                </div>
-                <div className="flex items-center">
-                  <span className="text-gray-500 w-14 inline-block">Output:</span>
-                  <span className="text-gray-300">{usageStats?.output_type || "Text"}</span>
-                </div>
-              </div>
+            {/* Description - with max height and overflow handling */}
+            <div className="mb-3 max-h-4 overflow-hidden">
+              <p className="text-gray-300 text-xs line-clamp-2">{description}</p>
+            </div>
 
-              {/* Stats - side by side with better spacing */}
-              <div className="grid grid-cols-2 gap-2">
-                <div className="bg-black/30 rounded p-1.5">
-                  <span className="block text-gray-500 text-[10px]">Avg. Tokens</span>
-                  <span className="text-gray-300 flex items-center">
-                    {usageStats?.average_token_usage?.total_tokens !== undefined ?
-                      Math.round(usageStats.average_token_usage.total_tokens) :
-                      "—"
-                    }
-                  </span>
-                </div>
-                <div className="bg-black/30 rounded p-1.5">
-                  <span className="block text-gray-500 text-[10px]">Run time</span>
-                  <span className="text-gray-300 flex items-center">
-                    {usageStats?.run_time !== undefined ?
-                      `${Math.round(usageStats.run_time)}` :
-                      "—"
-                    }
-                  </span>
-                </div>
+            {/* Service details - more compact */}
+            <div className="mb-2 text-xs">
+              <div className="flex items-center">
+                <span className="text-gray-500 w-14 inline-block">Input:</span>
+                <span className="text-gray-300">{usageStats?.input_type || "Text"}</span>
               </div>
+              <div className="flex items-center">
+                <span className="text-gray-500 w-14 inline-block">Output:</span>
+                <span className="text-gray-300">{usageStats?.output_type || "Text"}</span>
+              </div>
+            </div>
 
-              {/* Open app button - positioned at bottom edge of card */}
-              <button
-                className="absolute bottom-0 left-0 right-0 text-center py-2.5 rounded-b-xl bg-black/40 hover:bg-black/60 text-purple-400 hover:text-purple-300 transition-colors border-t border-purple-900/30 hover:border-purple-500/50 text-sm flex items-center justify-center"
-              >
-                <span>Open App</span>
-                <ArrowRight className="ml-1.5 h-5 w-5 transition-transform group-hover:translate-x-1" />
-              </button>
-            </>
-          )}
-        </div>
+            {/* Stats - side by side with better spacing */}
+            <div className="grid grid-cols-2 gap-2 mb-12">
+              <div className="bg-black/30 rounded p-1.5">
+                <span className="block text-gray-500 text-[10px]">Avg. Tokens</span>
+                <span className="text-gray-300 flex items-center">
+                  {usageStats?.average_token_usage?.total_tokens !== undefined ?
+                    Math.round(usageStats.average_token_usage.total_tokens) :
+                    "—"
+                  }
+                </span>
+              </div>
+              <div className="bg-black/30 rounded p-1.5">
+                <span className="block text-gray-500 text-[10px]">Run time</span>
+                <span className="text-gray-300 flex items-center">
+                  {usageStats?.run_time !== undefined ?
+                    `${Math.round(usageStats.run_time)}` :
+                    "—"
+                  }
+                </span>
+              </div>
+            </div>
+
+            {/* Open app button - positioned at bottom edge of card */}
+            <button
+              className="absolute bottom-0 left-0 right-0 text-center py-2.5 rounded-b-xl bg-black/40 hover:bg-black/60 text-purple-400 hover:text-purple-300 transition-colors border-t border-purple-900/30 hover:border-purple-500/50 text-sm flex items-center justify-center"
+            >
+              <span>Open App</span>
+              <ArrowRight className="ml-1.5 h-5 w-5 transition-transform group-hover:translate-x-1" />
+            </button>
+          </>
+        )}
       </div>
+    </div>
+  
+
 
       {/* Delete confirmation dialog */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
