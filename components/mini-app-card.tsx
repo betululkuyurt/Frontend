@@ -42,6 +42,7 @@ interface MiniAppCardProps {
   id?: number
   onDelete?: (id: number) => Promise<boolean> | boolean
   usageStats?: UsageStats
+  enhanced?: boolean
 }
 
 export function MiniAppCard({
@@ -55,6 +56,7 @@ export function MiniAppCard({
   id,
   onDelete,
   usageStats,
+  enhanced = false,
 }: Readonly<MiniAppCardProps>) {
   const router = useRouter()
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
@@ -152,44 +154,60 @@ export function MiniAppCard({
       onMouseLeave={() => setIsHovering(false)}
       className="cursor-pointer group relative h-64 transform transition-all duration-300"
     >
+      {/* Enhanced background glow effect */}
       <div
         className={cn(
-          "absolute inset-0 rounded-xl bg-gradient-to-br opacity-0 group-hover:opacity-100 blur-xl transition-opacity duration-300",
+          "absolute inset-0 rounded-xl bg-gradient-to-br opacity-0 group-hover:opacity-100 blur-2xl transition-opacity duration-500",
           color,
         )}
       />
+      
+      {/* Card container with glass morphism effect */}
       <div
         className={cn(
-          "h-full bg-black/40 backdrop-blur-sm rounded-xl border border-purple-900/30 flex flex-col transition-all duration-300 relative",
-          isHovering && "scale-105 z-10",
+          "h-full bg-black/50 backdrop-blur-md rounded-xl border border-purple-900/40 flex flex-col transition-all duration-300 relative overflow-hidden",
+          isHovering && "scale-105 shadow-lg shadow-purple-900/20 z-10 border-purple-600/40",
           isAddCard ? "p-5 justify-center items-center" : "p-4"
         )}
       >
+        {/* Subtle background pattern */}
+        <div className="absolute inset-0 opacity-5 bg-[radial-gradient(circle_at_center,_rgba(255,255,255,0.15)_0%,_transparent_70%)]"></div>
+        
         {isAddCard ? (
-          // Simplified "Create New" card
+          // Enhanced "Create New" card
           <>
-            <div className={cn("w-16 h-16 rounded-lg flex items-center justify-center bg-gradient-to-br mb-5", color)}>
+            <div className={cn(
+              "w-16 h-16 rounded-lg flex items-center justify-center bg-gradient-to-br shadow-md transition-transform duration-300 group-hover:scale-110 mb-5", 
+              color
+            )}>
               {icon}
             </div>
-            <p className="text-white text-center font-medium">Create New</p>
+            <p className="text-white text-center font-medium text-lg tracking-wide">Create New</p>
+            <div className="mt-2 text-purple-300/80 text-xs text-center">Click to add service</div>
           </>
         ) : (
-          // Regular service card with better spacing
+          // Enhanced regular service card
           <>
-            {/* Service icon and title section */}
-            <div className="flex items-start space-x-3 mb-2">
-              <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center bg-gradient-to-br", color)}>
+            {/* Top shine effect */}
+            <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-purple-500/30 to-transparent"></div>
+            
+            {/* Service icon and title section with better visual hierarchy */}
+            <div className="flex items-center space-x-3 mb-3">
+              <div className={cn(
+                "w-10 h-10 rounded-lg flex items-center justify-center bg-gradient-to-br shadow-md transition-all duration-300 group-hover:scale-110", 
+                color
+              )}>
                 {icon}
               </div>
-              <div className="flex-1 pr-5">
-                <h3 className="text-sm font-semibold text-white">{title}</h3>
+              <div className="flex-1 pr-6">
+                <h3 className="text-sm font-semibold text-white tracking-wide">{title}</h3>
               </div>
 
-              {/* Delete button for custom services */}
+              {/* Delete button with improved hover effect */}
               {isCustom && (
                 <button
                   onClick={handleDeleteClick}
-                  className="absolute top-3 right-3 p-1.5 rounded-full bg-black/40 text-gray-400 hover:text-red-400 hover:bg-black/60 transition-colors z-10"
+                  className="absolute top-3 right-3 p-1.5 rounded-full bg-black/60 text-gray-400 hover:text-red-400 hover:bg-black/80 transition-all hover:scale-110 z-10"
                   aria-label="Delete service"
                   disabled={isDeleting}
                 >
@@ -202,56 +220,61 @@ export function MiniAppCard({
               )}
             </div>
 
-            {/* Description - with max height and overflow handling */}
-            <div className="mb-3 max-h-4 overflow-hidden">
-              <p className="text-gray-300 text-xs line-clamp-2">{description}</p>
+            {/* Description with better styling */}
+            <div className="mb-3 max-h-12 overflow-hidden">
+              <p className="bg-black/40 rounded-md p-2 text-gray-300 text-xs line-clamp-2 leading-relaxed">{description}</p>
             </div>
 
-            {/* Service details - more compact */}
-            <div className="mb-2 text-xs">
+            {/* Service details with improved styling */}
+            <div className="mb-3 text-xs space-y-1">
               <div className="flex items-center">
-                <span className="text-gray-500 w-14 inline-block">Input:</span>
-                <span className="text-gray-300">{usageStats?.input_type || "Text"}</span>
+                
+                <span className="text-gray-400 w-14 inline-block font-medium">Input:</span>
+                <span className="text-gray-200">{usageStats?.input_type || "Text"}</span>
               </div>
               <div className="flex items-center">
-                <span className="text-gray-500 w-14 inline-block">Output:</span>
-                <span className="text-gray-300">{usageStats?.output_type || "Text"}</span>
+                <span className="text-gray-400 w-14 inline-block font-medium">Output:</span>
+                <span className="text-gray-200">{usageStats?.output_type || "Text"}</span>
               </div>
             </div>
 
-            {/* Stats - side by side with better spacing */}
-            <div className="grid grid-cols-2 gap-2 mb-12">
-              <div className="bg-black/30 rounded p-1.5">
-                <span className="block text-gray-500 text-[10px]">Avg. Tokens</span>
-                <span className="text-gray-300 flex items-center">
+            {/* Stats with enhanced visual design */}
+            <div className="grid grid-cols-2 gap-3 mb-12">
+              <div className="bg-black/40 rounded-md p-2 backdrop-blur-sm border border-purple-900/20">
+                <span className="block text-purple-300/80 text-[10px] font-medium mb-0.5">Avg. Tokens</span>
+                <span className="text-gray-200 flex items-center font-semibold">
                   {usageStats?.average_token_usage?.total_tokens !== undefined ?
                     Math.round(usageStats.average_token_usage.total_tokens) :
                     "—"
                   }
                 </span>
               </div>
-              <div className="bg-black/30 rounded p-1.5">
-                <span className="block text-gray-500 text-[10px]">Run time</span>
-                <span className="text-gray-300 flex items-center">
+              <div className="bg-black/40 rounded-md p-2 backdrop-blur-sm border border-purple-900/20">
+                <span className="block text-purple-300/80 text-[10px] font-medium mb-0.5">Run time</span>
+                <span className="text-gray-200 flex items-center font-semibold">
                   {usageStats?.run_time !== undefined ?
-                    `${Math.round(usageStats.run_time)}` :
+                    `${Math.round(usageStats.run_time)}ms` :
                     "—"
                   }
                 </span>
               </div>
             </div>
 
-            {/* Open app button - positioned at bottom edge of card */}
+            {/* Enhanced "Open App" button with better hover effects */}
             <button
-              className="absolute bottom-0 left-0 right-0 text-center py-2.5 rounded-b-xl bg-black/40 hover:bg-black/60 text-purple-400 hover:text-purple-300 transition-colors border-t border-purple-900/30 hover:border-purple-500/50 text-sm flex items-center justify-center"
+              className="absolute bottom-0 left-0 right-0 text-center py-3 bg-gradient-to-r from-purple-900/60 via-purple-800/60 to-purple-900/60 hover:from-purple-800/70 hover:to-purple-700/70 text-purple-200 transition-all duration-300 border-t border-purple-500/30 text-sm font-medium flex items-center justify-center group"
             >
               <span>Open App</span>
-              <ArrowRight className="ml-1.5 h-5 w-5 transition-transform group-hover:translate-x-1" />
+              <ArrowRight className="ml-1.5 h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
+              
+              {/* Subtle shine effect on button hover */}
+              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 bg-gradient-to-r from-transparent via-white/5 to-transparent transition-opacity duration-1000 ease-in-out"></div>
             </button>
           </>
         )}
       </div>
     </div>
+
   
 
 
