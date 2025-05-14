@@ -738,7 +738,7 @@ export default function ServicePage() {
       {service?.run_time !== undefined && (
         <div className="text-xs bg-black/30 p-2 rounded">
           <span className="block text-white/70">Avg. Run Time</span>
-          <span className="text-white font-medium">{Math.round(service.run_time)}s</span>
+          <span className="text-white font-medium">{Math.round(service.run_time)}</span>
         </div>
       )}
       {service?.average_token_usage && (

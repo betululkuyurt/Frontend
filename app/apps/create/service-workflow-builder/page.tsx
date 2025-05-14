@@ -100,16 +100,17 @@ interface WorkflowStep {
 const inputTypes = [
   { value: "text", label: "Text Input", icon: MessageSquare },
   { value: "image", label: "Image Upload", icon: ImageIcon },
- // { value: "video", label: "Video Upload", icon: Video },
- // { value: "document", label: "Document Upload", icon: FileText },
   { value: "sound", label: "Sound Upload", icon: Headphones },
+  { value: "video", label: "Video Upload", icon: Video },
+ { value: "document", label: "Document Upload", icon: FileText },
 ]
 
 const outputTypes = [
   { value: "text", label: "Text Output", icon: MessageSquare },
   { value: "image", label: "Image Output", icon: ImageIcon },
   { value: "sound", label: "Sound Output", icon: Headphones },
-  //{ value: "video", label: "Video Output", icon: Video },
+  { value: "video", label: "Video Output", icon: Video },
+  { value: "document", label: "Document Output", icon: FileText },
   
 ]
 
@@ -149,6 +150,12 @@ interface ApiKeyData {
   provider?: string;
 }
 
+interface AgentType {
+  type: string;
+  input_type: string;
+  output_type: string;
+}
+
 export default function ServiceWorkflowBuilder() {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
@@ -175,7 +182,6 @@ export default function ServiceWorkflowBuilder() {
     placeholder: "",
     buttonText: "Generate",
     isPublic: false,
-    enhancePrompt: false,
   })
 
   // Add new state for filtering
@@ -194,11 +200,12 @@ export default function ServiceWorkflowBuilder() {
     config: {} as Record<string, any>,
     isPublic: false,
     agentType: "", // Boş bırakıyoruz, kullanıcı seçmek zorunda
+    enhancePrompt: false, //Add enhance prompt to agent data
   })
 
   const { toast } = useToast()
 
-  const [agentTypes, setAgentTypes] = useState<string[]>([]);
+  const [agentTypes, setAgentTypes] = useState<AgentType[]>([]);
   const [isLoadingAgentTypes, setIsLoadingAgentTypes] = useState(false);
 
   useEffect(() => {
@@ -716,7 +723,8 @@ export default function ServiceWorkflowBuilder() {
         is_public: newAgentData.isPublic,
         agent_type: newAgentData.agentType,
         api_key: useCustomApiKey ? customApiKey : null,
-        api_key_id: useCustomApiKey ? null : selectedApiKey
+        api_key_id: useCustomApiKey ? null : selectedApiKey,
+        enhance_prompt: newAgentData.enhancePrompt ? 1 : 0 // Add enhance_prompt parameter
       }
 
       console.log("Creating agent with data:", {
@@ -730,8 +738,11 @@ export default function ServiceWorkflowBuilder() {
         useCustomApiKey,
         customKeyProvided: !!customApiKey
       });
+      //Agent create endpoint
+      const enhancePrompt = newAgentData.enhancePrompt ? 1 : 0;
+      const apiUrl = `http://127.0.0.1:8000/api/v1/agents/?enhance_prompt=${enhancePrompt}&current_user_id=${userId}`;
 
-      const response = await fetch(`http://127.0.0.1:8000/api/v1/agents/?current_user_id=${userId}`, {
+      const response = await fetch(apiUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -762,6 +773,7 @@ export default function ServiceWorkflowBuilder() {
         inputType: "text",
         outputType: "text",
         systemInstruction: "",
+        enhancePrompt: false,
         config: {},
         isPublic: false,
         agentType: "text"
@@ -875,7 +887,6 @@ const handleSubmit = async () => {
       input_type: serviceData.inputType,
       output_type: serviceData.outputType,
       workflow: formattedWorkflow,
-      enhance_prompt: serviceData.enhancePrompt,
       icon: serviceData.icon,
       color: serviceData.color,
       placeholder: serviceData.placeholder,
@@ -1138,20 +1149,6 @@ const handleSubmit = async () => {
                       placeholder="E.g., Generate"
                       className="bg-black/40 border-purple-900/30 text-white"
                     />
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label htmlFor="enhancePrompt" className="text-white">
-                        Enhance Prompt
-                      </Label>
-                      <Switch
-                        id="enhancePrompt"
-                        checked={serviceData.enhancePrompt}
-                        onCheckedChange={(checked) => handleChange("enhancePrompt", checked)}
-                      />
-                    </div>
-                    <p className="text-gray-400 text-sm">Automatically improve prompts using AI</p>
                   </div>
 
                   <div className="flex justify-end">
@@ -1589,38 +1586,15 @@ const handleSubmit = async () => {
                           <Select
                             value={newAgentData.agentType}
                             onValueChange={(value) => {
-                              // Set input and output types based on agent type
-                              let inputType = "text";
-                              let outputType = "text";
-                              
-                              switch(value) {
-                                case "gemini":
-                                case "openai":
-                                  inputType = "text";
-                                  outputType = "text";
-                                  break;
-                                case "edge_tts":
-                                case "bark_tts":
-                                  inputType = "text";
-                                  outputType = "sound";
-                                  break;
-                                case "transcribe":
-                                  inputType = "sound";
-                                  outputType = "text";
-                                  break;
-                                case "image_generation":
-                                  inputType = "text";
-                                  outputType = "image";
-                                  break;
-                                
+                              const selectedType = agentTypes.find(type => type.type === value);
+                              if (selectedType) {
+                                setNewAgentData({ 
+                                  ...newAgentData, 
+                                  agentType: value,
+                                  inputType: selectedType.input_type,
+                                  outputType: selectedType.output_type
+                                });
                               }
-                              
-                              setNewAgentData({ 
-                                ...newAgentData, 
-                                agentType: value,
-                                inputType,
-                                outputType
-                              });
                             }}
                           >
                             <SelectTrigger id="agentType" className="bg-black/40 border-purple-900/30 text-white">
@@ -1632,8 +1606,8 @@ const handleSubmit = async () => {
                                   <div className="p-2 text-center text-sm text-gray-400">Loading...</div>
                                 ) : agentTypes.length > 0 ? (
                                   agentTypes.map((type) => (
-                                    <SelectItem key={type} value={type}>
-                                      {type}
+                                    <SelectItem key={type.type} value={type.type}>
+                                      {type.type}
                                     </SelectItem>
                                   ))
                                 ) : (
@@ -1878,16 +1852,21 @@ const handleSubmit = async () => {
                           </div>
                         </div>
 
-                        <div className="flex items-center space-x-2">
-                          <Switch
-                            id="isPublic"
-                            checked={newAgentData.isPublic}
-                            onCheckedChange={(checked) => setNewAgentData({ ...newAgentData, isPublic: checked })}
-                          />
-                          <Label htmlFor="isPublic" className="text-white">
-                            Make this agent public
-                          </Label>
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <Label htmlFor="enhancePrompt" className="text-white">
+                              Enhance Prompt
+                            </Label>
+                            <Switch
+                              id="enhancePrompt"
+                              checked={newAgentData.enhancePrompt}
+                              onCheckedChange={(checked) => setNewAgentData({ ...newAgentData, enhancePrompt: checked })}
+                            />
+                          </div>
+                          <p className="text-gray-400 text-xs">Automatically improve prompts using AI before processing</p>
                         </div>
+
+                        
 
                         <div className="flex justify-end pt-2">
                           <Button
@@ -2174,12 +2153,6 @@ const handleSubmit = async () => {
                               <span className="text-gray-500 text-sm">Visibility:</span>
                               <span className="text-white text-sm font-medium">
                                 {serviceData.isPublic ? "Public" : "Private"}
-                              </span>
-                            </li>
-                            <li className="flex justify-between">
-                              <span className="text-gray-500 text-sm">Enhance Prompt:</span>
-                              <span className="text-white text-sm font-medium">
-                                {serviceData.enhancePrompt ? "Enabled" : "Disabled"}
                               </span>
                             </li>
                           </ul>
