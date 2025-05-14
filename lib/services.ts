@@ -1,21 +1,40 @@
-/**
- * Deletes a custom mini service by ID
- * 
- * @param service_id - The ID of the custom service to delete
- * @returns Promise<boolean> - True if deletion was successful
- */
-
 import Cookies from "js-cookie"
-export async function deleteMiniService(service_id: number): Promise<boolean> {
+import { toast } from "@/components/ui/use-toast"
+
+export interface DeleteServiceOptions {
+  showToast?: boolean;
+  onSuccess?: () => void;
+  toastTitle?: string;
+  toastMessage?: string;
+}
+
+/**
+ * Merkezi mini servis silme fonksiyonu
+ * 
+ * @param service_id - Silinecek servisin ID'si
+ * @param options - Opsiyonel ayarlar (toast mesajları, başarı callback'i)
+ * @returns Promise<boolean> - Silme işlemi başarılı ise true
+ */
+export async function deleteMiniService(
+  service_id: number, 
+  options: DeleteServiceOptions = {}
+): Promise<boolean> {
+  const { 
+    showToast = false, 
+    onSuccess,
+    toastTitle = "Success",
+    toastMessage = "Service deleted successfully."
+  } = options;
+  
+  // Daha belirgin bir log mesajı ekleyelim
+  console.log(`[DELETE] Attempting to delete service with ID: ${service_id}`, new Date().toISOString());
+  
   try {
-    console.log(`Attempting to delete service with ID: ${service_id}`);
-    
-    // Prepare headers with authentication
+    // API silme işlemi
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
     
-    // Try to get the auth token - adjust key name as needed for your application
     const token = Cookies.get("accessToken");
     const currentUserId = Cookies.get("user_id") || "0";
                   
@@ -23,54 +42,110 @@ export async function deleteMiniService(service_id: number): Promise<boolean> {
       headers['Authorization'] = `Bearer ${token}`;
     }
     
-    // Call your API endpoint to delete the service
     const response = await fetch(`http://127.0.0.1:8000/api/v1/mini-services/${service_id}?current_user_id=${currentUserId}`, {
       method: 'DELETE',
       headers,
-      credentials: 'include', // Include cookies for session-based auth
+      credentials: 'include',
     });
     
-    console.log(`Delete response status: ${response.status}`);
-    
-    // For 204 No Content responses (success with no body)
-    if (response.status === 204) {
-      console.log('Service deleted successfully (204 No Content)');
-      return true;
-    }
-    
-    // Check if the request was successful but not 204
-    if (response.ok) {
+    // Başarılı silme işlemi (204 No Content veya 200 OK)
+    if (response.status === 204 || response.ok) {
       console.log('Service deleted successfully');
+      
+      if (showToast) {
+        toast({
+          title: toastTitle,
+          description: toastMessage,
+        });
+      }
+      
+      if (onSuccess) {
+        onSuccess();
+      }
+      
       return true;
     }
     
-    // Handle error responses
-    if (response.status === 401) {
-      console.error('Authentication failed. Please log in again.');
-      // You might want to redirect to login page or refresh token here
-      return false;
+    // 404 - Not Found durumunda, servisi bulamadı ama işlem "başarılı" kabul edebiliriz
+    // Çünkü silmek istediğimiz servis zaten yok
+    if (response.status === 404) {
+      const errorMsg = 'Service not found or already deleted';
+      console.error(errorMsg);
+      
+      if (showToast) {
+        toast({
+          // Kullanıcıya başarılı gibi gösterilsin çünkü sonuç olarak servis artık yok
+          title: "Success",
+          description: "The service has been removed.",
+        });
+      }
+      
+      // 404 durumunda da onSuccess çağrılsın, böylece UI kendini güncelleyebilir
+      if (onSuccess) {
+        onSuccess();
+      }
+      
+      return true; // 404 durumunda bile true dönelim çünkü amaç servisi kaldırmaktı
     }
     
-    try {
-      const errorData = await response.json();
-      console.error('Delete service failed:', errorData);
+    // 401 - Unauthorized durumu
+    if (response.status === 401) {
+      const errorMsg = 'Authentication failed. Please log in again.';
+      console.error(errorMsg);
       
-      // If we have specific error handling logic based on error types:
-      if (response.status === 404) {
-        console.error('Service not found or already deleted');
-      } else if (response.status === 403) {
-        console.error('Not authorized to delete this service');
+      if (showToast) {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: errorMsg,
+        });
       }
       
       return false;
-    } catch (parseError) {
-      // Error response had no valid JSON body
-      console.error(`Delete service failed with status ${response.status}`, parseError);
+    }
+    
+    // 403 - Forbidden durumu
+    if (response.status === 403) {
+      const errorMsg = 'Not authorized to delete this service';
+      console.error(errorMsg);
+      
+      if (showToast) {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: errorMsg,
+        });
+      }
+      
       return false;
     }
-  } catch (networkError) {
-    // Network error when trying to make the request
-    console.error('Network error when deleting service:', networkError);
+    
+    // Diğer hatalar
+    let errorMsg = 'Service deletion failed.';
+    console.error(`Delete service failed with status ${response.status}`);
+    
+    if (showToast) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: errorMsg,
+      });
+    }
+    
+    return false;
+  } catch (error) {
+    // Ağ hatası veya diğer hatalar
+    const errorMsg = 'An error occurred while deleting the service';
+    console.error(errorMsg, error);
+    
+    if (showToast) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: errorMsg,
+      });
+    }
+    
     return false;
   }
 }

@@ -4,7 +4,7 @@ import type React from "react"
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { ArrowRight, Trash2, Loader2, Clock, Cpu } from "lucide-react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { deleteMiniService } from "@/lib/services"
 import Cookies from "js-cookie"
 import {
@@ -64,42 +64,37 @@ export function MiniAppCard({
   const [serviceStats, setServiceStats] = useState<UsageStats | null>(usageStats || null)
   const [isLoading, setIsLoading] = useState(false)
 
-  // Fetch usage stats if they aren't provided and if card is hovered
-  useEffect(() => {
-    const fetchServiceStats = async () => {
-      if (!id || !isHovering || serviceStats || isAddCard || isLoading) return;
+  const handleClick = async () => {
+    if (isAddCard) {
+      router.push("/apps/create/service-workflow-builder")
+      return
+    }
 
+    if (isCustom && id) {
       try {
-        setIsLoading(true);
-        const currentUserId = Cookies.get("user_id") || "0";
+        setIsLoading(true)
+        const currentUserId = Cookies.get("user_id") || "0"
         const response = await fetch(
           `http://127.0.0.1:8000/api/v1/mini-services/${id}?current_user_id=${currentUserId}`
-        );
+        )
 
         if (response.ok) {
-          const data = await response.json();
+          const data = await response.json()
           setServiceStats({
             average_token_usage: data.average_token_usage,
             run_time: data.run_time,
             input_type: data.input_type,
             output_type: data.output_type
-          });
+          })
         }
+        router.push(`/apps/service/${id}`)
       } catch (error) {
-        console.error("Error fetching service stats:", error);
+        console.error("Error fetching service stats:", error)
+        // Hata durumunda da yönlendirme yap
+        router.push(`/apps/service/${id}`)
       } finally {
-        setIsLoading(false);
+        setIsLoading(false)
       }
-    };
-
-    fetchServiceStats();
-  }, [id, isHovering, serviceStats, isAddCard, isLoading]);
-
-  const handleClick = () => {
-    if (isAddCard) {
-      router.push("/apps/create/service-workflow-builder")
-    } else if (isCustom && id) {
-      router.push(`/apps/service/${id}`)
     } else {
       const serviceId = getServiceIdByType(serviceType)
       router.push(`/apps/service/${serviceId}`)
@@ -129,60 +124,51 @@ export function MiniAppCard({
 
   // Handle confirm delete
   const handleConfirmDelete = async () => {
-    if (!id) return
+    if (!id) return;
 
-    setIsDeleting(true)
+    setIsDeleting(true);
 
     try {
-      // Call the deleteMiniService function
-      const deleteResult = await deleteMiniService(id)
-
-      if (deleteResult) {
-        // Close dialog first
-        setShowDeleteDialog(false)
-
-        // Show success message
-        toast({
-          title: "Success",
-          description: `"${title}" has been deleted successfully.`,
-        })
-
-        // If parent component provided a callback, call it
-        if (onDelete) {
-          try {
-            await Promise.resolve(onDelete(id))
-          } catch (callbackError) {
-            console.error("Error in onDelete callback:", callbackError)
-            // Continue execution even if callback fails
-          }
+      // Silme işlemini merkezi fonksiyon ile gerçekleştir
+      const success = await deleteMiniService(id, {
+        showToast: true,
+        toastMessage: `"${title}" has been deleted successfully.`,
+        onSuccess: () => {
+          setShowDeleteDialog(false);
         }
+      });
 
-        // Redirect after a short delay to ensure state updates complete
+      // Silme işlemi başarılı olduysa UI güncellemesi için callback'i çağır
+      // Ancak burada silme işlemi YAPMA, sadece UI güncellemesi yap
+      if (success && onDelete) {
+        try {
+          // Callback'e silme işlemi sonucunu parametre olarak aktar
+          // Böylece callback içinde tekrar silme işlemi yapmaya gerek kalmaz
+          onDelete(id);
+        } catch (callbackError) {
+          console.error("Error in onDelete callback:", callbackError);
+        }
+      }
+      
+      // İşlem başarıyla tamamlandıktan sonra yönlendirme
+      if (success) {
         setTimeout(() => {
-          try {
-            router.refresh() // Refresh the current route data
-            router.push("/apps") // Navigate to apps page
-          } catch (navError) {
-            console.error("Navigation error:", navError)
-            // Fallback to window.location if Next.js router fails
-            window.location.href = "/apps"
-          }
-        }, 500) // Increased delay for more reliable state updates
-      } else {
-        throw new Error("Service deletion failed")
+          router.refresh();
+          router.push("/apps");
+        }, 300);
       }
     } catch (error) {
-      console.error("Error deleting service:", error)
+      console.error("Error deleting service:", error);
       toast({
         variant: "destructive",
         title: "Deletion Failed",
         description: "There was a problem deleting this service. Please try again.",
-      })
-      setShowDeleteDialog(false) // Close dialog on error
+      });
+      setShowDeleteDialog(false);
     } finally {
-      setIsDeleting(false)
+      setIsDeleting(false);
     }
-  }
+  };
 
   return (
     <>
@@ -190,7 +176,7 @@ export function MiniAppCard({
         onClick={handleClick}
         onMouseEnter={() => setIsHovering(true)}
         onMouseLeave={() => setIsHovering(false)}
-        className="cursor-pointer group relative h-[240px] transform transition-all duration-300" // Increased height from 220px to 240px
+        className="cursor-pointer group relative h-[220px] transform transition-all duration-300"
       >
         <div
           className={cn(
@@ -202,7 +188,7 @@ export function MiniAppCard({
           className={cn(
             "h-full bg-black/40 backdrop-blur-sm rounded-xl border border-purple-900/30 flex flex-col transition-all duration-300",
             isHovering && "scale-105 z-10",
-            isAddCard ? "p-5 justify-center items-center" : "p-4 pb-14" // Adjusted padding for better spacing
+            isAddCard ? "p-5 justify-center items-center" : "p-4 pb-14"
           )}
         >
           {isAddCard ? (

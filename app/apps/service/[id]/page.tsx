@@ -308,22 +308,13 @@ export default function ServicePage() {
   const handleDelete = async () => {
     if (!service?.id) return;
     
-    try {
-      const success = await deleteMiniService(service.id);
-      if (success) {
-        // Clear router cache for this page and apps page
+    await deleteMiniService(service.id, {
+      showToast: true,
+      onSuccess: () => {
         router.refresh();
-        // Navigate to apps page
         router.push("/apps");
       }
-    } catch (error) {
-      console.error("Error deleting service:", error);
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Failed to delete service. Please try again.",
-      });
-    }
+    });
   };
 
   // Get color based on input/output type

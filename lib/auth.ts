@@ -1,27 +1,66 @@
+/**
+ * Auth Yardımcı Fonksiyonları (Authentication Utility Functions)
+ * 
+ * Bu modül kimlik doğrulama ile ilgili tüm temel işlevleri içerir:
+ * - Token yönetimi (set, get, validate)
+ * - Oturum durumu kontrolü
+ * - JWT çözümleme ve doğrulama
+ * - Çerez (cookie) yönetimi
+ * 
+ * Diğer bileşenler ve hook'lar tarafından kullanılır.
+ * useAuth.ts hook'u bu modüldeki fonksiyonların React entegrasyonunu sağlar.
+ */
 import Cookies from "js-cookie"
 
-export function setAuthTokens(accessToken: string, refreshToken?: string) {
+// Token yenilemesi için gecikme süresi - 5 dakika
+export const TOKEN_REFRESH_INTERVAL = 5 * 60 * 1000;
+// Token geçerlilik süresi bitimine kalan süre için eşik değeri - 15 dakika
+export const TOKEN_EXPIRY_THRESHOLD = 15 * 60;
+
+export function setAuthTokens(accessToken: string, refreshToken?: string, userId?: string, email?: string) {
   Cookies.set("accessToken", accessToken, { secure: true, sameSite: "Strict" })
   if (refreshToken) {
     Cookies.set("refreshToken", refreshToken, { secure: true, sameSite: "Strict" })
+  }
+  if (userId) {
+    Cookies.set("user_id", userId, { secure: true, sameSite: "Strict" })
+  }
+  if (email) {
+    Cookies.set("user_email", email, { secure: true, sameSite: "Strict" })
   }
 
   // Dispatch event to notify components about auth change
   window.dispatchEvent(new Event("authChange"))
 }
 
-export function clearAuthTokens() {
-  Cookies.remove("accessToken")
-  Cookies.remove("refreshToken")
-  Cookies.remove("user_id")
-  Cookies.remove("user_email")
+export function clearAuthData() {
+  // Clear cookies
+  Cookies.remove("accessToken");
+  Cookies.remove("user_id");
+  Cookies.remove("user_email");
+  Cookies.remove("refreshToken");
+
+  // Clear localStorage - tüm olası auth verilerini temizle
+  const authKeys = [
+    "token", "accessToken", "userId", "userData", "user", 
+    "userInfo", "auth", "authentication", "session"
+  ];
+  
+  authKeys.forEach(key => {
+    try {
+      localStorage.removeItem(key);
+    } catch (e) {
+      // localStorage erişimi olmayan ortamlarda hata önleme
+      console.error(`Failed to remove ${key} from localStorage`, e);
+    }
+  });
 
   // Dispatch event to notify components about auth change
   window.dispatchEvent(new Event("authChange"))
 }
 
 export function getAccessToken() {
-  return Cookies.get("accessToken")
+  return Cookies.get("accessToken");
 }
 
 export const authConfig = {
@@ -43,6 +82,77 @@ export function decodeJWT(token: string) {
   }
 }
 
+// Token doğrulama fonksiyonu - daha güçlü ve yeniden kullanılabilir
+export function validateToken(token: string | undefined): { 
+  isValid: boolean; 
+  decodedToken?: any; 
+  error?: string;
+  expiryTime?: number;
+} {
+  try {
+    // Token yoksa geçersiz
+    if (!token) {
+      return { isValid: false, error: "No token found" };
+    }
+
+    // JWT formatı kontrolü (basit)
+    const tokenParts = token.split('.');
+    if (tokenParts.length !== 3) {
+      return { isValid: false, error: "Invalid JWT format" };
+    }
+
+    // Token decode
+    const decodedToken = decodeJWT(token);
+    
+    // Decode başarısız olduysa geçersiz
+    if (!decodedToken) {
+      return { isValid: false, error: "Failed to decode token" };
+    }
+    
+    // Önemli alanlar eksikse geçersiz
+    if (!decodedToken.sub || !decodedToken.email) {
+      return { isValid: false, error: "Token missing required fields" };
+    }
+    
+    // Token süresi kontrolü
+    const currentTime = Math.floor(Date.now() / 1000);
+    
+    // exp değeri yoksa veya geçmişse geçersiz
+    if (!decodedToken.exp) {
+      return { isValid: false, error: "Token missing expiry" };
+    }
+    
+    if (decodedToken.exp < currentTime) {
+      return { 
+        isValid: false, 
+        error: "Token expired", 
+        decodedToken,
+        expiryTime: decodedToken.exp
+      };
+    }
+    
+    // Tüm kontrollerden geçtiyse token geçerli
+    return { 
+      isValid: true, 
+      decodedToken,
+      expiryTime: decodedToken.exp
+    };
+  } catch (error) {
+    console.error("Token validation error:", error);
+    return { isValid: false, error: "Token validation error" };
+  }
+}
+
+
+// Add or export the refreshAccessToken function if missing
+export async function refreshAccessToken(refreshToken: string): Promise<{ accessToken: string, expiryTime: number }> {
+  // implementation here
+  // Example:
+  // const response = await fetch('/api/refresh', { method: 'POST', body: JSON.stringify({ refreshToken }) });
+  // const data = await response.json();
+  // return { accessToken: data.accessToken, expiryTime: data.expiryTime };
+  throw new Error("refreshAccessToken not implemented");
+}
 export function getUserId() {
   // First try to get from cookie directly
   const userId = Cookies.get("user_id")
@@ -62,12 +172,16 @@ export function getUserId() {
 }
 
 export const logout = () => {
-  clearAuthTokens()
-  console.log("✅ User has logged out (Cookies cleared)")
+  clearAuthData()
 }
 
-export const isAuth = () => {
+export const isAuthenticated = () => {
   if (typeof window === "undefined") return false
-  return !!Cookies.get("accessToken")
+  
+  const token = getAccessToken();
+  if (!token) return false;
+  
+  const validation = validateToken(token);
+  return validation.isValid;
 }
 

@@ -1,82 +1,50 @@
+/**
+ * React Authentication Hook (React Kimlik Doğrulama Hook'u)
+ * 
+ * Bu hook, auth.ts'deki temel kimlik doğrulama işlevlerini React bileşenlerinde
+ * kullanılabilir hale getirir. Sağladığı işlevler:
+ * 
+ * - Kimlik doğrulama durumunu state olarak yönetme
+ * - Token süre kontrolü ve yenileme mekanizması
+ * - Otomatik oturum kontrolü (periyodik ve sayfa yüklendiğinde)
+ * - Güvenli oturum kapatma
+ * - UI entegrasyonu için gerekli loading state'leri
+ * 
+ * Bu hook, auth.ts'deki temel fonksiyonları kullanarak React tarafında
+ * kimlik doğrulama mantığını yönetir.
+ */
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import Cookies from "js-cookie"
-import { decodeJWT } from "@/lib/auth"
+import { 
+  validateToken, 
+  getUserId, 
+  getAccessToken,
+  TOKEN_EXPIRY_THRESHOLD,
+  TOKEN_REFRESH_INTERVAL
+} from "@/lib/auth"
 
-// Token yenilemesi için gecikme süresi - 5 dakika
-const TOKEN_REFRESH_INTERVAL = 5 * 60 * 1000;
-// Token geçerlilik süresi bitimine kalan süre için eşik değeri - 10 dakika
-const TOKEN_EXPIRY_THRESHOLD = 10 * 60;
+// Auth verilerini temizleme fonksiyonu
+export function clearAuthData() {
+  // Cookie'leri temizle
+  const cookieOptions = { path: '/', domain: window.location.hostname };
+  Cookies.remove("accessToken", cookieOptions);
+  Cookies.remove("user_id", cookieOptions);
+  Cookies.remove("user_email", cookieOptions);
+  Cookies.remove("refreshToken", cookieOptions);
+  
+}
 
 export const useAuth = () => {
+  // State tanımlamaları
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [userId, setUserId] = useState<string | null>(null)
   const [tokenExpiryTime, setTokenExpiryTime] = useState<number | null>(null)
+  const [isLoggingOut, setIsLoggingOut] = useState(false) // Çıkış yapma durumu için flag
   const router = useRouter()
-
-  // Token doğrulama fonksiyonu - daha güçlü ve yeniden kullanılabilir
-  const validateToken = useCallback((token: string | undefined): { 
-    isValid: boolean; 
-    decodedToken?: any; 
-    error?: string;
-    expiryTime?: number;
-  } => {
-    try {
-      // Token yoksa geçersiz
-      if (!token) {
-        return { isValid: false, error: "No token found" };
-      }
-
-      // JWT formatı kontrolü (basit)
-      const tokenParts = token.split('.');
-      if (tokenParts.length !== 3) {
-        return { isValid: false, error: "Invalid JWT format" };
-      }
-
-      // Token decode
-      const decodedToken = decodeJWT(token);
-      
-      // Decode başarısız olduysa geçersiz
-      if (!decodedToken) {
-        return { isValid: false, error: "Failed to decode token" };
-      }
-      
-      // Önemli alanlar eksikse geçersiz
-      if (!decodedToken.sub || !decodedToken.email) {
-        return { isValid: false, error: "Token missing required fields" };
-      }
-      
-      // Token süresi kontrolü
-      const currentTime = Math.floor(Date.now() / 1000);
-      
-      // exp değeri yoksa veya geçmişse geçersiz
-      if (!decodedToken.exp) {
-        return { isValid: false, error: "Token missing expiry" };
-      }
-      
-      if (decodedToken.exp < currentTime) {
-        return { 
-          isValid: false, 
-          error: "Token expired", 
-          decodedToken,
-          expiryTime: decodedToken.exp
-        };
-      }
-      
-      // Tüm kontrollerden geçtiyse token geçerli
-      return { 
-        isValid: true, 
-        decodedToken,
-        expiryTime: decodedToken.exp
-      };
-    } catch (error) {
-      console.error("Token validation error:", error);
-      return { isValid: false, error: "Token validation error" };
-    }
-  }, []);
 
   // Token bitimine yakın olduğunda yenileme kontrolü
   useEffect(() => {
@@ -84,20 +52,27 @@ export const useAuth = () => {
       const currentTime = Math.floor(Date.now() / 1000);
       const timeToExpiry = tokenExpiryTime - currentTime;
       
-      // Token bitimine 10 dakikadan az kaldıysa yenileme girişimi yap
+      // Token bitimine 10 dakikadan az kaldıysa kullanıcıyı uyar
       if (timeToExpiry < TOKEN_EXPIRY_THRESHOLD && timeToExpiry > 0) {
-        console.log("Token should be refreshed soon");
-        // Burada token yenileme API'si çağrılabilir (varsa)
-        // refreshToken();
+        console.log(`Oturum ${Math.floor(timeToExpiry / 60)} dakika içinde sona erecek`);
+        // Not: Refresh token implementasyonu daha sonra eklenecek
+        // Şimdilik sadece konsolda bilgilendirme yapıyoruz
       }
     }
   }, [tokenExpiryTime]);
 
+  // Kimlik doğrulama kontrolü
   const checkAuth = useCallback(() => {
     try {
-      // Get token from cookies (primary source)
-      const cookieToken = Cookies.get("accessToken")
-      const cookieUserId = Cookies.get("user_id")
+      // Çıkış yapma işlemi sırasında auth kontrolünü atla
+      if (isLoggingOut) {
+        setIsLoading(false);
+        return;
+      }
+      
+      // Get token from cookies
+      const cookieToken = getAccessToken();
+      const cookieUserId = getUserId();
 
       // Gelişmiş token doğrulama
       const validation = validateToken(cookieToken);
@@ -121,12 +96,14 @@ export const useAuth = () => {
       setUserId(null);
       setTokenExpiryTime(null);
       
-      // Clean up any invalid auth data
-      clearAuthData();
+      // Clean up any invalid auth data - çıkış işlemi sırasında gereksiz temizlik yapmayı önle
+      if (!isLoggingOut) {
+        clearAuthData();
+      }
     } finally {
       setIsLoading(false);
     }
-  }, [validateToken]);
+  }, [isLoggingOut]);
 
   // Periyodik token kontrolü ve authChange olayına abone ol
   useEffect(() => {
@@ -136,7 +113,7 @@ export const useAuth = () => {
       // İlk kontrol
       checkAuth();
       
-      // Periyodik kontrol (5 dakikada bir)
+      // Periyodik kontrol 
       intervalId = setInterval(() => {
         checkAuth();
       }, TOKEN_REFRESH_INTERVAL);
@@ -146,7 +123,7 @@ export const useAuth = () => {
     
     // Event listener'lar
     window.addEventListener("authChange", checkAuth);
-    window.addEventListener("focus", checkAuth); // Sekme tekrar aktif olduğunda kontrol et
+    window.addEventListener("focus", checkAuth); 
     
     return () => {
       clearInterval(intervalId);
@@ -155,36 +132,25 @@ export const useAuth = () => {
     };
   }, [checkAuth]);
 
-  const clearAuthData = () => {
-    // Clear cookies
-    Cookies.remove("accessToken");
-    Cookies.remove("user_id");
-    Cookies.remove("user_email");
-    Cookies.remove("refreshToken");
-
-    // Clear localStorage - tüm olası auth verilerini temizle
-    const authKeys = [
-      "token", "accessToken", "userId", "userData", "user", 
-      "userInfo", "auth", "authentication", "session"
-    ];
+  // Güvenli çıkış işlemi
+  const signOut = useCallback(() => {
+    // Çıkış işlemi başlarken flag'i aktif et
+    setIsLoggingOut(true);
     
-    authKeys.forEach(key => {
-      try {
-        localStorage.removeItem(key);
-      } catch (e) {
-        // localStorage erişimi olmayan ortamlarda hata önleme
-        console.error(`Failed to remove ${key} from localStorage`, e);
-      }
-    });
-  }
-
-  const signOut = () => {
-    clearAuthData();
-    setIsAuthenticated(false);
-    setUserId(null);
-    setTokenExpiryTime(null);
-    router.push("/auth/login");
-  }
+    // Küçük bir gecikme ekleyerek event'lerin önüne geç
+    setTimeout(() => {
+      // Auth verilerini temizle
+      clearAuthData();
+      
+      // State'leri temizle
+      setIsAuthenticated(false);
+      setUserId(null);
+      setTokenExpiryTime(null);
+      
+      // Login sayfasına yönlendir
+      router.push("/auth/login");
+    }, 10);
+  }, [router]);
 
   return { isAuthenticated, isLoading, signOut, userId };
 }

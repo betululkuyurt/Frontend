@@ -21,6 +21,7 @@ import {
 } from "lucide-react"
 import { toast } from "@/components/ui/use-toast"
 import { decodeJWT } from "@/lib/auth"
+import { deleteMiniService } from "@/lib/services"
 
 // Define the service type
 interface Service {
@@ -264,86 +265,15 @@ export default function DashboardPage() {
 
   // Handle mini service deletion
   const handleMiniServiceDelete = async (id: number): Promise<boolean> => {
-    try {
-      // Get the authentication token
-      const token = localStorage.getItem("token") || localStorage.getItem("accessToken")
-
-      // Check cookies as fallback
-      const cookieToken = Cookies.get("accessToken")
-
-      const authToken = token || cookieToken
-
-      if (!authToken) {
-        toast({
-          title: "Hata",
-          description: "Oturum bilgisi bulunamadı. Lütfen tekrar giriş yapın.",
-          variant: "destructive",
-        })
-        return false
-      }
-
-      // Get user ID if not already set
-      const currentUserId = user_id || getUserId()
-
-      if (!currentUserId) {
-        toast({
-          title: "Hata",
-          description: "Kullanıcı kimliği bulunamadı. Lütfen tekrar giriş yapın.",
-          variant: "destructive",
-        })
-        return false
-      }
-
-      const response = await fetch(
-        `http://127.0.0.1:8000/api/v1/mini-services/${id}?current_user_id=${currentUserId}`,
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${authToken}`,
-            "Content-Type": "application/json"
-          }
-        }
-      )
-
-      if (!response.ok) {
-        let errorMessage = "Mini servis silinemedi."
-        try {
-          const errorData = await response.json()
-          errorMessage = errorData.detail || errorMessage
-        } catch (e) {
-          console.error("Error parsing error response:", e)
-        }
-
-        toast({
-          title: "Hata",
-          description: errorMessage,
-          variant: "destructive",
-        })
-        return false
-      }
-
-      // If successful, remove the mini service from state
-      setMiniServices((prev) => prev.filter((service) => service.id !== id))
-
-      toast({
-        title: "Başarılı",
-        description: "Mini servis başarıyla silindi.",
-      })
-
-      return true
-    } catch (error) {
-      console.error("Error in delete function:", error)
-
-      toast({
-        title: "Hata",
-        description:
-          "Mini servis silinirken bir hata oluştu. Bu servis başka işlemler tarafından kullanılıyor olabilir.",
-        variant: "destructive",
-      })
-
-      return false
-    }
-  }
+    console.log(`[DASHBOARD] Handling mini service delete UI update for ID: ${id}`);
+    
+    // Burada API çağrısı yapmayın, sadece UI güncelleme işlemi yapın
+    // Çünkü silme işlemi zaten MiniAppCard içinde yapıldı
+    setMiniServices((prev) => prev.filter((service) => service.id !== id));
+    
+    // İşlem başarılı olduğu için true döndürün
+    return true;
+  };
 
   // Fetch mini-services from API
   useEffect(() => {
@@ -354,10 +284,7 @@ export default function DashboardPage() {
 
           // Get the authentication token
           const token = localStorage.getItem("token") || localStorage.getItem("accessToken")
-
-          // Check cookies as fallback
           const cookieToken = Cookies.get("accessToken")
-
           const authToken = token || cookieToken
 
           if (!authToken) {
@@ -669,7 +596,7 @@ export default function DashboardPage() {
   
 
   if (isLoading || isAuthenticated === null) {
-    return <div className="min-h-screen flex items-center justify-center text-white">Loading...</div>
+    return <div className="min-h-screen flex items-center justify-center text-white"></div>
   }
 
   if (isAuthenticated === false) {
