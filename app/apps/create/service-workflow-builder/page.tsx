@@ -164,7 +164,10 @@ export default function ServiceWorkflowBuilder() {
   const [isCreatingAgent, setIsCreatingAgent] = useState(false)
   const [activeTab, setActiveTab] = useState("details")
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null)
-  const [agentSettingsOpen, setAgentSettingsOpen] = useState<string | null>(null)
+  //const [agentSettingsOpen, setAgentSettingsOpen] = useState<string | null>(null)
+  const [agentInfoOpen, setAgentInfoOpen] = useState<string | null>(null)
+  const [agentDetails, setAgentDetails] = useState<any>(null)
+  const [isLoadingAgentDetails, setIsLoadingAgentDetails] = useState(false)
   const [availableAgents, setAvailableAgents] = useState<Agent[]>([])
   const [savedApiKeys, setSavedApiKeys] = useState<ApiKey[]>([])
   const [isLoadingApiKeys, setIsLoadingApiKeys] = useState(false)
@@ -1001,6 +1004,32 @@ const handleSubmit = async () => {
     )
   }
 
+  // Add this function after fetchAgents()
+  const fetchAgentDetails = async (agentId: string) => {
+    try {
+      setIsLoadingAgentDetails(true)
+      const response = await fetch(`http://127.0.0.1:8000/api/v1/agents/${agentId}`, {
+        headers: {
+          "Authorization": `Bearer ${Cookies.get("access_token")}`,
+          "Content-Type": "application/json"
+        }
+      })
+      
+      if (!response.ok) throw new Error("Failed to fetch agent details")
+      const data = await response.json()
+      setAgentDetails(data)
+    } catch (error) {
+      console.error("Error fetching agent details:", error)
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to fetch agent details"
+      })
+    } finally {
+      setIsLoadingAgentDetails(false)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-black via-purple-950/20 to-black">
       <NavBar />
@@ -1355,53 +1384,18 @@ const handleSubmit = async () => {
                                               variant="ghost"
                                               size="icon"
                                               className="h-7 w-7 rounded-full hover:bg-gray-800"
-                                              onClick={() =>
-                                                setAgentSettingsOpen(agentSettingsOpen === step.id ? null : step.id)
-                                              }
+                                              onClick={() => {
+                                                setAgentInfoOpen(agentInfoOpen === step.id ? null : step.id)
+                                                if (agentInfoOpen !== step.id) {
+                                                  fetchAgentDetails(step.agentId)
+                                                }
+                                              }}
                                             >
-                                              <Settings className="h-4 w-4 text-gray-400" />
+                                              <BookOpen className="h-4 w-4 text-gray-400" />
                                             </Button>
                                           </TooltipTrigger>
                                           <TooltipContent>
-                                            <p>Agent Settings</p>
-                                          </TooltipContent>
-                                        </Tooltip>
-                                      </TooltipProvider>
-
-                                      <TooltipProvider>
-                                        <Tooltip>
-                                          <TooltipTrigger asChild>
-                                            <Button
-                                              variant="ghost"
-                                              size="icon"
-                                              className="h-7 w-7 rounded-full hover:bg-gray-800"
-                                              onClick={() => moveStepUp(step.id)}
-                                              disabled={index === 0}
-                                            >
-                                              <ChevronUp className="h-4 w-4 text-gray-400" />
-                                            </Button>
-                                          </TooltipTrigger>
-                                          <TooltipContent>
-                                            <p>Move Up</p>
-                                          </TooltipContent>
-                                        </Tooltip>
-                                      </TooltipProvider>
-
-                                      <TooltipProvider>
-                                        <Tooltip>
-                                          <TooltipTrigger asChild>
-                                            <Button
-                                              variant="ghost"
-                                              size="icon"
-                                              className="h-7 w-7 rounded-full hover:bg-gray-800"
-                                              onClick={() => moveStepDown(step.id)}
-                                              disabled={index === orderedWorkflow.length - 1}
-                                            >
-                                              <ChevronDown className="h-4 w-4 text-gray-400" />
-                                            </Button>
-                                          </TooltipTrigger>
-                                          <TooltipContent>
-                                            <p>Move Down</p>
+                                            <p>Agent Info</p>
                                           </TooltipContent>
                                         </Tooltip>
                                       </TooltipProvider>
@@ -1439,84 +1433,28 @@ const handleSubmit = async () => {
                                 </div>
                               </div>
 
-                              {/* Agent Settings */}
-                              {agentSettingsOpen === step.id && agent.settings && agent.settings.length > 0 && (
+                              {/* Agent Info Dialog */}
+                              {agentInfoOpen === step.id && (
                                 <div className="mt-4 pt-4 border-t border-purple-900/30">
-                                  <h5 className="text-white text-sm font-medium mb-3">Agent Settings</h5>
-                                  <div className="space-y-3">
-                                    {agent.settings.map((setting) => (
-                                      <div key={setting.name} className="space-y-1">
-                                        <Label htmlFor={`${step.id}-${setting.name}`} className="text-gray-300 text-xs">
-                                          {setting.label}
-                                        </Label>
-
-                                        {setting.type === "select" && (
-                                          <Select
-                                            value={step.settings[setting.name] || ""}
-                                            onValueChange={(value) => updateAgentSettings(step.id, setting.name, value)}
-                                          >
-                                            <SelectTrigger
-                                              id={`${step.id}-${setting.name}`}
-                                              className="bg-black/40 border-purple-900/30 text-white h-8 text-xs"
-                                            >
-                                              <SelectValue placeholder={`Select ${setting.label}`} />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                              <div className="bg-black/90 border-purple-900/30 text-white">
-                                                {(setting as SelectAgentSetting).options.map((option) => (
-                                                  <SelectItem key={option} value={option} className="text-xs">
-                                                    {option}
-                                                  </SelectItem>
-                                                ))}
-                                              </div>
-                                            </SelectContent>
-                                          </Select>
-                                        )}
-
-                                        {setting.type === "range" && (
-                                          <div className="flex items-center space-x-2">
-                                            <Input
-                                              id={`${step.id}-${setting.name}`}
-                                              type="range"
-                                              min={(setting as RangeAgentSetting).min}
-                                              max={(setting as RangeAgentSetting).max}
-                                              step={(setting as RangeAgentSetting).step}
-                                              value={
-                                                step.settings[setting.name] ||
-                                                ((setting as RangeAgentSetting).min +
-                                                  (setting as RangeAgentSetting).max) /
-                                                  2
-                                              }
-                                              onChange={(e) =>
-                                                updateAgentSettings(
-                                                  step.id,
-                                                  setting.name,
-                                                  Number.parseFloat(e.target.value),
-                                                )
-                                              }
-                                              className="bg-black/40 border-purple-900/30 text-white h-8"
-                                            />
-                                            <span className="text-gray-400 text-xs w-8">
-                                              {step.settings[setting.name] ||
-                                                ((setting as RangeAgentSetting).min +
-                                                  (setting as RangeAgentSetting).max) /
-                                                  2}
-                                            </span>
-                                          </div>
-                                        )}
-
-                                        {setting.type === "textarea" && (
-                                          <Textarea
-                                            id={`${step.id}-${setting.name}`}
-                                            value={step.settings[setting.name] || ""}
-                                            onChange={(e) => updateAgentSettings(step.id, setting.name, e.target.value)}
-                                            placeholder={`Enter ${setting.label.toLowerCase()}`}
-                                            className="bg-black/40 border-purple-900/30 text-white min-h-[60px] text-xs"
-                                          />
-                                        )}
+                                  <h5 className="text-white text-sm font-medium mb-3">Agent Details</h5>
+                                  {isLoadingAgentDetails ? (
+                                    <div className="flex items-center justify-center py-4">
+                                      <Loader2 className="h-6 w-6 animate-spin text-purple-400" />
+                                    </div>
+                                  ) : agentDetails ? (
+                                    <div className="space-y-4">
+                                      <div>
+                                        <Label className="text-gray-300 text-xs">Description</Label>
+                                        <p className="text-white text-sm mt-1">{agentDetails.description}</p>
                                       </div>
-                                    ))}
-                                  </div>
+                                      <div>
+                                        <Label className="text-gray-300 text-xs">System Instruction</Label>
+                                        <p className="text-white text-sm mt-1 whitespace-pre-wrap">{agentDetails.system_instruction}</p>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <p className="text-gray-400 text-sm">Failed to load agent details</p>
+                                  )}
                                 </div>
                               )}
                             </div>
