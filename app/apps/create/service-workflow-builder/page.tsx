@@ -29,6 +29,8 @@ import {
   Trash2,
   Key,
   CheckCircle2,
+  Search,
+  X,
 } from "lucide-react"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
@@ -98,19 +100,19 @@ interface WorkflowStep {
 
 // Define input and output types
 const inputTypes = [
-  { value: "text", label: "Text Input", icon: MessageSquare },
-  { value: "image", label: "Image Upload", icon: ImageIcon },
-  { value: "sound", label: "Sound Upload", icon: Headphones },
-  { value: "video", label: "Video Upload", icon: Video },
- { value: "document", label: "Document Upload", icon: FileText },
+  { value: "text", label: "Text", icon: MessageSquare },
+  { value: "image", label: "Image", icon: ImageIcon },
+  { value: "sound", label: "Sound", icon: Headphones },
+  { value: "video", label: "Video", icon: Video },
+ { value: "document", label: "Document", icon: FileText },
 ]
 
 const outputTypes = [
-  { value: "text", label: "Text Output", icon: MessageSquare },
-  { value: "image", label: "Image Output", icon: ImageIcon },
-  { value: "sound", label: "Sound Output", icon: Headphones },
-  { value: "video", label: "Video Output", icon: Video },
-  { value: "document", label: "Document Output", icon: FileText },
+  { value: "text", label: "Text", icon: MessageSquare },
+  { value: "image", label: "Image", icon: ImageIcon },
+  { value: "sound", label: "Sound", icon: Headphones },
+  { value: "video", label: "Video", icon: Video },
+  { value: "document", label: "Document", icon: FileText },
   
 ]
 
@@ -207,6 +209,9 @@ export default function ServiceWorkflowBuilder() {
 
   const [agentTypes, setAgentTypes] = useState<AgentType[]>([]);
   const [isLoadingAgentTypes, setIsLoadingAgentTypes] = useState(false);
+
+  const [isSearchOpen, setIsSearchOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState("")
 
   useEffect(() => {
     const fetchAgentTypes = async () => {
@@ -976,6 +981,19 @@ const handleSubmit = async () => {
     }));
   };
 
+  const getFilteredAgents = (): Agent[] => {
+    const compatibleAgents = getCompatibleAgents()
+    
+    if (!searchQuery.trim()) {
+      return compatibleAgents
+    }
+    
+    return compatibleAgents.filter(agent => 
+      agent.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      agent.description.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-black via-purple-950/20 to-black">
       <NavBar />
@@ -1170,79 +1188,7 @@ const handleSubmit = async () => {
                     </Badge>
                   </div>
 
-                  {/* Input/Output Type Selection */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 p-4 bg-black/20 rounded-lg border border-purple-900/30">
-                    <div className="space-y-2">
-                      
-                        <span>Filter by Input Type</span>
-                        {getRequiredInputType() && (
-                          <Badge variant="outline" className="bg-purple-900/20">
-                            Required: {getRequiredInputType()}
-                          </Badge>
-                        )}
-                      
-                      <Select 
-                        value={workflow.length > 0 ? getRequiredInputType() || "select" : filterTypes.inputType} 
-                        onValueChange={handleInputTypeChange}
-                        disabled={workflow.length > 0}
-                      >
-                        <SelectTrigger 
-                          id="inputType" 
-                          className={cn(
-                            "bg-black/40 border-purple-900/30 text-white",
-                            workflow.length > 0 && "opacity-50 cursor-not-allowed"
-                          )}
-                        >
-                          <SelectValue placeholder="Select input type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <div className="bg-black/90 border-purple-900/30 text-white">
-                            <SelectItem value="select">All input types</SelectItem>
-                            {inputTypes.map((type) => (
-                              <SelectItem key={type.value} value={type.value}>
-                                <div className="flex items-center">
-                                  <type.icon className="h-4 w-4 mr-2" />
-                                  <span>{type.label}</span>
-                                </div>
-                              </SelectItem>
-                            ))}
-                          </div>
-                        </SelectContent>
-                      </Select>
-                      {workflow.length > 0 && (
-                        <p className="text-xs text-gray-400">
-                          Input type is determined by the previous agent's output type
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="outputType" className="text-white">
-                        Filter by Output Type
-                      </Label>
-                      <Select 
-                        value={filterTypes.outputType} 
-                        onValueChange={handleOutputTypeChange}
-                      >
-                        <SelectTrigger id="outputType" className="bg-black/40 border-purple-900/30 text-white">
-                          <SelectValue placeholder="Select output type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <div className="bg-black/90 border-purple-900/30 text-white">
-                            <SelectItem value="select">All output types</SelectItem>
-                            {outputTypes.map((type) => (
-                              <SelectItem key={type.value} value={type.value}>
-                                <div className="flex items-center">
-                                  <type.icon className="h-4 w-4 mr-2" />
-                                  <span>{type.label}</span>
-                                </div>
-                              </SelectItem>
-                            ))}
-                          </div>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
+                
 
                   {availableAgents.length === 0 && !isLoading && (
                     <div className="bg-red-900/20 border border-purple-900/30 rounded-md p-4 mb-4">
@@ -1269,6 +1215,108 @@ const handleSubmit = async () => {
 
                     {/* Workflow Steps */}
                     <div className="space-y-4 mb-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <h5 className="text-white text-sm font-medium">Workflow Steps</h5>
+                        
+                        {/* Filter Controls - Moved here */}
+                        <div className="flex items-center space-x-2">
+                          {/* Search Button/Input */}
+                          <div className="relative">
+                            {isSearchOpen ? (
+                              <div className="flex items-center bg-black/40 border border-purple-900/30 rounded-md pr-1">
+                                <Input
+                                  type="text"
+                                  placeholder="Search agents..."
+                                  value={searchQuery}
+                                  onChange={(e) => setSearchQuery(e.target.value)}
+                                  className="h-8 text-xs w-[140px] border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 text-white"
+                                  autoFocus
+                                  onBlur={() => {
+                                    if (!searchQuery) {
+                                      setIsSearchOpen(false)
+                                    }
+                                  }}
+                                />
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon"
+                                  className="h-7 w-7 p-0"
+                                  onClick={() => {
+                                    setSearchQuery("")
+                                    setIsSearchOpen(false)
+                                  }}
+                                >
+                                  <X className="h-3 w-3 text-gray-400" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                className="h-8 w-8 bg-black/40 border-purple-900/30 hover:bg-purple-900/20"
+                                onClick={() => setIsSearchOpen(true)}
+                              >
+                                <Search className="h-4 w-4 text-white" />
+                              </Button>
+                            )}
+                          </div>
+                          
+                          <Select 
+                            value={workflow.length > 0 ? getRequiredInputType() || "select" : filterTypes.inputType} 
+                            onValueChange={handleInputTypeChange}
+                            disabled={workflow.length > 0}
+                          >
+                            <SelectTrigger 
+                              id="inputType" 
+                              className={cn(
+                                "bg-black/40 border-purple-900/30 text-white h-8 text-xs w-[140px]",
+                                workflow.length > 0 && "opacity-50 cursor-not-allowed"
+                              )}
+                            >
+                              <SelectValue placeholder="Input Type" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <div className="bg-black/90 border-purple-900/30 text-white">
+                                <SelectItem value="select">All Inputs</SelectItem>
+                                {inputTypes.map((type) => (
+                                  <SelectItem key={type.value} value={type.value}>
+                                    <div className="flex items-center">
+                                      <type.icon className="h-3 w-3 mr-2" />
+                                      <span>{type.label}</span>
+                                    </div>
+                                  </SelectItem>
+                                ))}
+                              </div>
+                            </SelectContent>
+                          </Select>
+                          
+                          <Select 
+                            value={filterTypes.outputType} 
+                            onValueChange={handleOutputTypeChange}
+                          >
+                            <SelectTrigger 
+                              id="outputType" 
+                              className="bg-black/40 border-purple-900/30 text-white h-8 text-xs w-[140px]"
+                            >
+                              <SelectValue placeholder="Output Type" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <div className="bg-black/90 border-purple-900/30 text-white">
+                                <SelectItem value="select">All Outputs</SelectItem>
+                                {outputTypes.map((type) => (
+                                  <SelectItem key={type.value} value={type.value}>
+                                    <div className="flex items-center">
+                                      <type.icon className="h-3 w-3 mr-2" />
+                                      <span>{type.label}</span>
+                                    </div>
+                                  </SelectItem>
+                                ))}
+                              </div>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
                       {orderedWorkflow.map((step, index) => {
                         const agent = availableAgents.find((a) => a.id === step.agentId)
                         if (!agent) return null
@@ -1482,8 +1530,8 @@ const handleSubmit = async () => {
                                 <Loader2 className="h-6 w-6 animate-spin mr-2 text-purple-400" />
                                 <span className="text-gray-400">Loading available agents...</span>
                               </div>
-                            ) : getCompatibleAgents().length > 0 ? (
-                              getCompatibleAgents().map((agent) => (
+                            ) : getFilteredAgents().length > 0 ? (
+                              getFilteredAgents().map((agent) => (
                                 <div
                                   key={agent.id}
                                   className="bg-black/40 rounded-lg border border-purple-900/30 p-3 cursor-pointer hover:border-purple-500/50 transition-colors"
@@ -1508,8 +1556,14 @@ const handleSubmit = async () => {
                               ))
                             ) : (
                               <div className="col-span-full text-center p-6">
-                                <p className="text-gray-400 mb-2">No compatible agents found for this step.</p>
-                                <p className="text-sm text-gray-500">Create a new agent or change the previous step.</p>
+                                {searchQuery ? (
+                                  <p className="text-gray-400 mb-2">No agents found matching "{searchQuery}".</p>
+                                ) : (
+                                  <>
+                                    <p className="text-gray-400 mb-2">No compatible agents found for this step.</p>
+                                    <p className="text-sm text-gray-500">Create a new agent or change the previous step.</p>
+                                  </>
+                                )}
                               </div>
                             )}
                           </div>
