@@ -1598,8 +1598,26 @@ export default function ServiceWorkflowBuilder() {
                           )}
                         </Button>
                       )}
+
+
+                    {/* Output */}
+                    <div className="flex items-center mt-4 pt-4 border-t border-purple-900/30">
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-700 to-purple-900 flex items-center justify-center">
+                        <OutputTypeIcon className="h-5 w-5 text-white" />
+                      </div>
+                      <div className="ml-3">
+                        <h4 className="text-white font-medium">Output</h4>
+                        <p className="text-gray-400 text-sm">
+                          {serviceData.outputType === "select"
+                            ? "Select output type"
+                            : outputTypes.find((type) => type.value === serviceData.outputType)?.label || "Text Output"}
+                        </p>
+                      </div>
+                    </div>
+
                     </div>
                   </div>
+                  
 
                   {/* Create Agent Dialog */}
                   <Dialog open={isAgentDialogOpen} onOpenChange={setIsAgentDialogOpen}>
