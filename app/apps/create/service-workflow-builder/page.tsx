@@ -250,7 +250,6 @@ export default function ServiceWorkflowBuilder() {
     try {
       setIsLoading(true)
       
-
       try {
         const response = await fetch(`http://127.0.0.1:8000/api/v1/agents/?current_user_id=${userId}`, {
           method: "GET",
@@ -274,7 +273,7 @@ export default function ServiceWorkflowBuilder() {
           color: getColorForType(a.input_type),
           settings: getSettingsForAgent(a),
           isPublic: a.is_public || false,
-          userId: a.user_id || "",
+          userId: a.owner_id?.toString() || "", // Use owner_id from backend
           apiKey: a.api_key,
           apiKeyId: a.api_key_id,
           type: a.agent_type,
@@ -991,17 +990,30 @@ const handleSubmit = async () => {
     }));
   };
 
-  const getFilteredAgents = (): Agent[] => {
+  const getFilteredAgents = (): { ownAgents: Agent[], otherAgents: Agent[] } => {
     const compatibleAgents = getCompatibleAgents()
+    const currentUserId = Cookies.get("user_id")
     
-    if (!searchQuery.trim()) {
-      return compatibleAgents
+    // Separate agents into own and other users' agents
+    const ownAgents = compatibleAgents.filter(agent => agent.userId === currentUserId)
+    const otherAgents = compatibleAgents.filter(agent => agent.userId !== currentUserId)
+    
+    // Apply search filter if there's a search query
+    if (searchQuery.trim()) {
+      const searchLower = searchQuery.toLowerCase()
+      return {
+        ownAgents: ownAgents.filter(agent => 
+          agent.name.toLowerCase().includes(searchLower) ||
+          agent.description.toLowerCase().includes(searchLower)
+        ),
+        otherAgents: otherAgents.filter(agent => 
+          agent.name.toLowerCase().includes(searchLower) ||
+          agent.description.toLowerCase().includes(searchLower)
+        )
+      }
     }
     
-    return compatibleAgents.filter(agent => 
-      agent.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      agent.description.toLowerCase().includes(searchQuery.toLowerCase())
-    )
+    return { ownAgents, otherAgents }
   }
 
   // Add this function after fetchAgents()
@@ -1471,47 +1483,82 @@ const handleSubmit = async () => {
 
                       {selectedAgent ? (
                         <div className="bg-gray-900/50 rounded-lg border border-purple-900/30 p-4">
-                          <h4 className="text-white font-medium mb-3">Select an Agent</h4>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                          
+                          <div className="w-full">
                             {isLoading ? (
                               <div className="col-span-full flex items-center justify-center p-6">
                                 <Loader2 className="h-6 w-6 animate-spin mr-2 text-purple-400" />
                                 <span className="text-gray-400">Loading available agents...</span>
                               </div>
-                            ) : getFilteredAgents().length > 0 ? (
-                              getFilteredAgents().map((agent) => (
-                                <div
-                                  key={agent.id}
-                                  className="bg-black/40 rounded-lg border border-purple-900/30 p-3 cursor-pointer hover:border-purple-500/50 transition-colors"
-                                  onClick={() => addAgentToWorkflow(agent.id)}
-                                >
-                                  <div className="flex items-center">
-                                    <div
-                                      className={`w-8 h-8 rounded-full bg-gradient-to-br ${agent.color} flex items-center justify-center flex-shrink-0`}
-                                    >
-                                      {agent.icon && <agent.icon className="h-4 w-4 text-white" />}
-                                    </div>
-                                    <div className="ml-2">
-                                      <h5 className="text-white text-sm font-medium">{agent.name}</h5>
-                                      <div className="flex mt-1 space-x-1">
-                                        <Badge variant="outline" className="bg-purple-900/20 text-[10px] px-1 py-0 h-4">
-                                          {agent.inputType} → {agent.outputType}
-                                        </Badge>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-                              ))
                             ) : (
-                              <div className="col-span-full text-center p-6">
-                                {searchQuery ? (
-                                  <p className="text-gray-400 mb-2">No agents found matching "{searchQuery}".</p>
-                                ) : (
-                                  <>
-                                    <p className="text-gray-400 mb-2">No compatible agents found for this step.</p>
-                                    <p className="text-sm text-gray-500">Create a new agent or change the previous step.</p>
-                                  </>
-                                )}
+                              <div className="space-y-6 w-full">
+                                {/* User's Own Agents */}
+                                <div>
+                                  <h5 className="text-sm font-medium text-gray-400 mb-3">Your Agents</h5>
+                                  {getFilteredAgents().ownAgents.length > 0 ? (
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-3">
+                                      {getFilteredAgents().ownAgents.map((agent) => (
+                                        <div
+                                          key={agent.id}
+                                          className="bg-black/40 rounded-lg border border-purple-900/30 p-3 cursor-pointer hover:border-purple-500/50 transition-colors"
+                                          onClick={() => addAgentToWorkflow(agent.id)}
+                                        >
+                                          <div className="flex items-center">
+                                            <div
+                                              className={`w-8 h-8 rounded-full bg-gradient-to-br ${agent.color} flex items-center justify-center flex-shrink-0`}
+                                            >
+                                              {agent.icon && <agent.icon className="h-4 w-4 text-white" />}
+                                            </div>
+                                            <div className="ml-2 flex-1 min-w-0">
+                                              <h5 className="text-white text-sm font-medium truncate">{agent.name}</h5>
+                                              <div className="flex mt-1 space-x-1">
+                                                <Badge variant="outline" className="bg-purple-900/20 text-[10px] px-1 py-0 h-4">
+                                                  {agent.inputType} → {agent.outputType}
+                                                </Badge>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <p className="text-gray-500 text-sm italic">No agents found in your collection.</p>
+                                  )}
+                                </div>
+
+                                {/* Other Users' Agents */}
+                                <div>
+                                  <h5 className="text-sm font-medium text-gray-400 mb-3">Other Agents</h5>
+                                  {getFilteredAgents().otherAgents.length > 0 ? (
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-3">
+                                      {getFilteredAgents().otherAgents.map((agent) => (
+                                        <div
+                                          key={agent.id}
+                                          className="bg-black/40 rounded-lg border border-purple-900/30 p-3 cursor-pointer hover:border-purple-500/50 transition-colors"
+                                          onClick={() => addAgentToWorkflow(agent.id)}
+                                        >
+                                          <div className="flex items-center">
+                                            <div
+                                              className={`w-8 h-8 rounded-full bg-gradient-to-br ${agent.color} flex items-center justify-center flex-shrink-0`}
+                                            >
+                                              {agent.icon && <agent.icon className="h-4 w-4 text-white" />}
+                                            </div>
+                                            <div className="ml-2 flex-1 min-w-0">
+                                              <h5 className="text-white text-sm font-medium truncate">{agent.name}</h5>
+                                              <div className="flex mt-1 space-x-1">
+                                                <Badge variant="outline" className="bg-purple-900/20 text-[10px] px-1 py-0 h-4">
+                                                  {agent.inputType} → {agent.outputType}
+                                                </Badge>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <p className="text-gray-500 text-sm italic">No other agents found.</p>
+                                  )}
+                                </div>
                               </div>
                             )}
                           </div>
