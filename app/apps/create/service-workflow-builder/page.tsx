@@ -1522,7 +1522,9 @@ export default function ServiceWorkflowBuilder() {
                                       ))}
                                     </div>
                                   ) : (
-                                    <p className="text-gray-500 text-sm italic">No agents found in your collection.</p>
+                                    <p className="text-gray-500 text-sm italic">
+                                      {searchQuery ? `No agents found named "${searchQuery}" in your collection.` : "No agents found in your collection."}
+                                    </p>
                                   )}
                                 </div>
 
@@ -1556,7 +1558,9 @@ export default function ServiceWorkflowBuilder() {
                                       ))}
                                     </div>
                                   ) : (
-                                    <p className="text-gray-500 text-sm italic">No other agents found.</p>
+                                    <p className="text-gray-500 text-sm italic">
+                                      {searchQuery ? `No other agents found named "${searchQuery}".` : "No other agents found."}
+                                    </p>
                                   )}
                                 </div>
                               </div>
