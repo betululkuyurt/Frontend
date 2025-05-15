@@ -1281,107 +1281,6 @@ export default function ServiceWorkflowBuilder() {
                     <div className="space-y-4 mb-4">
                       <div className="flex items-center justify-between mb-2">
                         <h5 className="text-white text-sm font-medium">Workflow Steps</h5>
-
-                        {/* Filter Controls - Responsive Version */}
-                        <div className="flex flex-col md:flex-row md:items-center gap-2 w-full md:w-auto">
-                          {/* Search Button/Input */}
-                          <div className="relative w-full md:w-auto">
-                            {isSearchOpen ? (
-                              <div className="flex items-center bg-black/40 border border-purple-900/30 rounded-md pr-1 w-full">
-                                <Input
-                                  type="text"
-                                  placeholder="Search agents..."
-                                  value={searchQuery}
-                                  onChange={(e) => setSearchQuery(e.target.value)}
-                                  className="h-8 text-xs border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 text-white w-full"
-                                  autoFocus
-                                  onBlur={() => {
-                                    if (!searchQuery) {
-                                      setIsSearchOpen(false)
-                                    }
-                                  }}
-                                />
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7 p-0 flex-shrink-0"
-                                  onClick={() => {
-                                    setSearchQuery("")
-                                    setIsSearchOpen(false)
-                                  }}
-                                >
-                                  <X className="h-3 w-3 text-gray-400" />
-                                </Button>
-                              </div>
-                            ) : (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-8 bg-black/40 border-purple-900/30 hover:bg-purple-900/20 w-full md:w-auto"
-                                onClick={() => setIsSearchOpen(true)}
-                              >
-                                <Search className="h-4 w-4 text-white mr-2" />
-
-                              </Button>
-                            )}
-                          </div>
-
-                          <div className="flex flex-wrap gap-2 w-full md:w-auto">
-                            <Select
-                              value={workflow.length > 0 ? getRequiredInputType() || "select" : filterTypes.inputType}
-                              onValueChange={handleInputTypeChange}
-                              disabled={workflow.length > 0}
-                            >
-                              <SelectTrigger
-                                id="inputType"
-                                className={cn(
-                                  "bg-black/40 border-purple-900/30 text-white h-8 text-xs flex-1 min-w-[120px] md:w-[140px]",
-                                  workflow.length > 0 && "opacity-50 cursor-not-allowed"
-                                )}
-                              >
-                                <SelectValue placeholder="Input Type" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <div className="bg-black/90 border-purple-900/30 text-white">
-                                  <SelectItem value="select">All Inputs</SelectItem>
-                                  {inputTypes.map((type) => (
-                                    <SelectItem key={type.value} value={type.value}>
-                                      <div className="flex items-center">
-                                        <type.icon className="h-3 w-3 mr-2" />
-                                        <span>{type.label}</span>
-                                      </div>
-                                    </SelectItem>
-                                  ))}
-                                </div>
-                              </SelectContent>
-                            </Select>
-
-                            <Select
-                              value={filterTypes.outputType}
-                              onValueChange={handleOutputTypeChange}
-                            >
-                              <SelectTrigger
-                                id="outputType"
-                                className="bg-black/40 border-purple-900/30 text-white h-8 text-xs flex-1 min-w-[120px] md:w-[140px]"
-                              >
-                                <SelectValue placeholder="Output Type" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <div className="bg-black/90 border-purple-900/30 text-white">
-                                  <SelectItem value="select">All Outputs</SelectItem>
-                                  {outputTypes.map((type) => (
-                                    <SelectItem key={type.value} value={type.value}>
-                                      <div className="flex items-center">
-                                        <type.icon className="h-3 w-3 mr-2" />
-                                        <span>{type.label}</span>
-                                      </div>
-                                    </SelectItem>
-                                  ))}
-                                </div>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </div>
                       </div>
 
                       {orderedWorkflow.map((step, index) => {
@@ -1499,6 +1398,91 @@ export default function ServiceWorkflowBuilder() {
 
                       {selectedAgent ? (
                         <div className="bg-gray-900/50 rounded-lg border border-purple-900/30 p-4">
+                          {/* Search and filtering options now appear here when selectedAgent is true */}
+                          <div className="space-y-4 mb-4">
+                            <div className="flex flex-col space-y-3">
+                              {/* Search input */}
+                              <div className="relative w-full">
+                                <div className="flex items-center bg-black/40 border border-purple-900/30 rounded-md pr-1">
+                                  <Input
+                                    type="text"
+                                    placeholder="Search agents..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="h-9 text-sm border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 text-white w-full pl-9"
+                                  />
+                                  <Search className="h-4 w-4 text-gray-400 absolute left-3" />
+                                  {searchQuery && (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-7 w-7 p-0 flex-shrink-0"
+                                      onClick={() => setSearchQuery("")}
+                                    >
+                                      <X className="h-3 w-3 text-gray-400" />
+                                    </Button>
+                                  )}
+                                </div>
+                              </div>
+                              
+                              {/* Filter controls - responsive grid */}
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                <Select
+                                  value={workflow.length > 0 ? getRequiredInputType() || "select" : filterTypes.inputType}
+                                  onValueChange={handleInputTypeChange}
+                                  disabled={workflow.length > 0}
+                                >
+                                  <SelectTrigger
+                                    id="inputType"
+                                    className={cn(
+                                      "bg-black/40 border-purple-900/30 text-white h-9 text-sm",
+                                      workflow.length > 0 && "opacity-50 cursor-not-allowed"
+                                    )}
+                                  >
+                                    <SelectValue placeholder="Input Type" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <div className="bg-black/90 border-purple-900/30 text-white">
+                                      <SelectItem value="select">All Inputs</SelectItem>
+                                      {inputTypes.map((type) => (
+                                        <SelectItem key={type.value} value={type.value}>
+                                          <div className="flex items-center">
+                                            <type.icon className="h-3 w-3 mr-2" />
+                                            <span>{type.label}</span>
+                                          </div>
+                                        </SelectItem>
+                                      ))}
+                                    </div>
+                                  </SelectContent>
+                                </Select>
+
+                                <Select
+                                  value={filterTypes.outputType}
+                                  onValueChange={handleOutputTypeChange}
+                                >
+                                  <SelectTrigger
+                                    id="outputType"
+                                    className="bg-black/40 border-purple-900/30 text-white h-9 text-sm"
+                                  >
+                                    <SelectValue placeholder="Output Type" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <div className="bg-black/90 border-purple-900/30 text-white">
+                                      <SelectItem value="select">All Outputs</SelectItem>
+                                      {outputTypes.map((type) => (
+                                        <SelectItem key={type.value} value={type.value}>
+                                          <div className="flex items-center">
+                                            <type.icon className="h-3 w-3 mr-2" />
+                                            <span>{type.label}</span>
+                                          </div>
+                                        </SelectItem>
+                                      ))}
+                                    </div>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+                          </div>
 
                           <div className="w-full">
                             {isLoading ? (
@@ -1512,7 +1496,7 @@ export default function ServiceWorkflowBuilder() {
                                 <div>
                                   <h5 className="text-sm font-medium text-gray-400 mb-3">My Agents</h5>
                                   {getFilteredAgents().ownAgents.length > 0 ? (
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-3">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                       {getFilteredAgents().ownAgents.map((agent) => (
                                         <div
                                           key={agent.id}
@@ -1546,7 +1530,7 @@ export default function ServiceWorkflowBuilder() {
                                 <div>
                                   <h5 className="text-sm font-medium text-gray-400 mb-3">Other Agents</h5>
                                   {getFilteredAgents().otherAgents.length > 0 ? (
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-3">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                       {getFilteredAgents().otherAgents.map((agent) => (
                                         <div
                                           key={agent.id}
@@ -1582,7 +1566,10 @@ export default function ServiceWorkflowBuilder() {
                             variant="ghost"
                             size="sm"
                             className="mt-3 text-gray-400 hover:text-white"
-                            onClick={() => setSelectedAgent(null)}
+                            onClick={() => {
+                              setSelectedAgent(null);
+                              setSearchQuery("");  // Clear search query when closing
+                            }}
                           >
                             Cancel
                           </Button>
@@ -1607,21 +1594,6 @@ export default function ServiceWorkflowBuilder() {
                           )}
                         </Button>
                       )}
-                    </div>
-
-                    {/* Output */}
-                    <div className="flex items-center mt-4 pt-4 border-t border-purple-900/30">
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-700 to-purple-900 flex items-center justify-center">
-                        <OutputTypeIcon className="h-5 w-5 text-white" />
-                      </div>
-                      <div className="ml-3">
-                        <h4 className="text-white font-medium">Output</h4>
-                        <p className="text-gray-400 text-sm">
-                          {serviceData.outputType === "select"
-                            ? "Select output type"
-                            : outputTypes.find((type) => type.value === serviceData.outputType)?.label || "Text Output"}
-                        </p>
-                      </div>
                     </div>
                   </div>
 
@@ -2202,7 +2174,7 @@ export default function ServiceWorkflowBuilder() {
                           {isLoading ? (
                             <>
                               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                              Creating Service...
+                              Deploy Service
                             </>
                           ) : !serviceData.title ? (
                             <>
