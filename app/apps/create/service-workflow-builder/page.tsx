@@ -179,6 +179,8 @@ export default function ServiceWorkflowBuilder() {
   const [useCustomApiKey, setUseCustomApiKey] = useState<boolean>(false)
   const [error, setError] = useState<string | null>(null) // Add error state
   const userId = Cookies.get("user_id") || "current-user"
+  const [isAgentDialogOpen, setIsAgentDialogOpen] = useState(false)
+
   const [serviceData, setServiceData] = useState({
     title: "",
     description: "",
@@ -1624,21 +1626,37 @@ export default function ServiceWorkflowBuilder() {
                   </div>
 
                   {/* Create Agent Dialog */}
-                  <Dialog>
+                  <Dialog open={isAgentDialogOpen} onOpenChange={setIsAgentDialogOpen}>
                     <DialogTrigger asChild>
-                      <Button className="w-full bg-gradient-to-r from-purple-600 to-purple-800 text-white hover:opacity-90">
+                      <Button className="w-full bg-gradient-to-r from-purple-600 to-purple-800 text-white hover:opacity-90 transition-all duration-300 hover:shadow-purple-500/30">
                         <Plus className="h-4 w-4 mr-2" />
                         Create New Agent
                       </Button>
                     </DialogTrigger>
-                    <DialogContent className="bg-gray-900 border-gray-700 text-white max-w-3xl w-[90vw] max-h-[90vh] overflow-y-auto">
-                      <DialogHeader>
-                        <DialogTitle>Create New Agent</DialogTitle>
+
+                    <DialogContent
+                      className="bg-black/80 backdrop-blur-md border border-purple-700/50 text-white w-[90vw] max-w-3xl  shadow-xl relative rounded-xl z-50"
+                      style={{
+                        top: "50%",
+                        left: "50%",
+                        transform: "translate(-50%, -50%)",
+                        position: "fixed",
+                      }}
+                    >
+                      {/* Glow effects, placed inside and behind content */}
+                      <div className="pointer-events-none absolute inset-0 z-0">
+                        <div className="absolute -top-24 -right-24 w-64 h-64 bg-purple-600/20 rounded-full blur-3xl" />
+                        <div className="absolute -bottom-32 -left-32 w-96 h-96 bg-indigo-600/20 rounded-full blur-3xl" />
+                      </div>
+                      <DialogHeader className="relative z-10">
+                        <DialogTitle className="text-xl font-semibold bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent">Create New Agent</DialogTitle>
+                        <p className="text-gray-400 text-sm mt-1">Configure a new AI agent for your workflow</p>
                       </DialogHeader>
-                      <div className="space-y-4 mt-4">
+
+                      <div className="space-y-4 mt-4 relative z-10">
                         {/* Agent Type Selection */}
                         <div className="space-y-2">
-                          <Label htmlFor="agentType" className="text-white">
+                          <Label htmlFor="agentType" className="text-white font-medium">
                             Agent Type <span className="text-red-500">*</span>
                           </Label>
                           <Select
@@ -1655,16 +1673,16 @@ export default function ServiceWorkflowBuilder() {
                               }
                             }}
                           >
-                            <SelectTrigger id="agentType" className="bg-black/40 border-purple-900/30 text-white">
+                            <SelectTrigger id="agentType" className="bg-black/50 border-purple-900/40 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all">
                               <SelectValue placeholder="Select agent type" />
                             </SelectTrigger>
                             <SelectContent>
-                              <div className="bg-black/90 border-purple-900/30 text-white">
+                              <div className="bg-black/90 border-purple-900/40 text-white">
                                 {isLoadingAgentTypes ? (
                                   <div className="p-2 text-center text-sm text-gray-400">Loading...</div>
                                 ) : agentTypes.length > 0 ? (
                                   agentTypes.map((type) => (
-                                    <SelectItem key={type.type} value={type.type}>
+                                    <SelectItem key={type.type} value={type.type} className="hover:bg-purple-900/20">
                                       {type.type}
                                     </SelectItem>
                                   ))
@@ -1681,24 +1699,24 @@ export default function ServiceWorkflowBuilder() {
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div className="space-y-2">
-                            <Label htmlFor="agentName">Agent Name</Label>
+                            <Label htmlFor="agentName" className="text-white font-medium">Agent Name</Label>
                             <Input
                               id="agentName"
                               value={newAgentData.name}
                               onChange={(e) => setNewAgentData({ ...newAgentData, name: e.target.value })}
                               placeholder="My Custom Agent"
-                              className="bg-black/40 border-purple-900/30 text-white"
+                              className="bg-black/50 border-purple-900/40 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all"
                             />
                           </div>
 
                           <div className="space-y-2">
-                            <Label htmlFor="agentDescription">Description</Label>
+                            <Label htmlFor="agentDescription" className="text-white font-medium">Description</Label>
                             <Input
                               id="agentDescription"
                               value={newAgentData.description}
                               onChange={(e) => setNewAgentData({ ...newAgentData, description: e.target.value })}
                               placeholder="What does this agent do?"
-                              className="bg-black/40 border-purple-900/30 text-white"
+                              className="bg-black/50 border-purple-900/40 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all"
                             />
                           </div>
                         </div>
@@ -1706,8 +1724,8 @@ export default function ServiceWorkflowBuilder() {
                         {/* Replace input/output type dropdowns with text display */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div className="space-y-2">
-                            <Label>Input Type</Label>
-                            <div className="p-2 bg-black/40 border border-purple-900/30 rounded-md">
+                            <Label className="text-white font-medium">Input Type</Label>
+                            <div className="p-2 bg-black/50 border border-purple-900/40 rounded-md">
                               <p className="text-white text-sm">
                                 {newAgentData.inputType || "Will be set based on agent type"}
                               </p>
@@ -1715,8 +1733,8 @@ export default function ServiceWorkflowBuilder() {
                           </div>
 
                           <div className="space-y-2">
-                            <Label>Output Type</Label>
-                            <div className="p-2 bg-black/40 border border-purple-900/30 rounded-md">
+                            <Label className="text-white font-medium">Output Type</Label>
+                            <div className="p-2 bg-black/50 border border-purple-900/40 rounded-md">
                               <p className="text-white text-sm">
                                 {newAgentData.outputType || "Will be set based on agent type"}
                               </p>
@@ -1725,21 +1743,21 @@ export default function ServiceWorkflowBuilder() {
                         </div>
 
                         <div className="space-y-2">
-                          <Label htmlFor="systemInstruction">System Instruction</Label>
+                          <Label htmlFor="systemInstruction" className="text-white font-medium">System Instruction</Label>
                           <Textarea
                             id="systemInstruction"
                             value={newAgentData.systemInstruction}
                             onChange={(e) => setNewAgentData({ ...newAgentData, systemInstruction: e.target.value })}
                             placeholder="Instructions for the agent..."
-                            className="bg-black/40 border-purple-900/30 text-white min-h-[80px]"
+                            className="bg-black/50 border-purple-900/40 text-white min-h-[80px] focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all"
                           />
                           <p className="text-gray-400 text-xs">Provide instructions to guide the agent's behavior</p>
                         </div>
 
                         {/* Agent type specific fields */}
                         {newAgentData.agentType === "gemini" && (
-                          <div className="space-y-2">
-                            <Label htmlFor="model">Model</Label>
+                          <div className="space-y-2 bg-black/40 p-4 rounded-lg border border-purple-900/30">
+                            <Label htmlFor="model" className="text-white font-medium">Model</Label>
                             <Select
                               value={newAgentData.config.model || ""}
                               onValueChange={(value) =>
@@ -1749,13 +1767,13 @@ export default function ServiceWorkflowBuilder() {
                                 })
                               }
                             >
-                              <SelectTrigger className="bg-black/40 border-purple-900/30 text-white">
+                              <SelectTrigger className="bg-black/50 border-purple-900/40 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all">
                                 <SelectValue placeholder="Select model" />
                               </SelectTrigger>
                               <SelectContent>
-                                <div className="bg-black/90 border-purple-900/30 text-white">
-                                  <SelectItem value="gemini-pro">Gemini Pro</SelectItem>
-                                  <SelectItem value="gemini-pro-vision">Gemini Pro Vision</SelectItem>
+                                <div className="bg-black/90 border-purple-900/40 text-white">
+                                  <SelectItem value="gemini-pro" className="hover:bg-purple-900/20">Gemini Pro</SelectItem>
+                                  <SelectItem value="gemini-pro-vision" className="hover:bg-purple-900/20">Gemini Pro Vision</SelectItem>
                                 </div>
                               </SelectContent>
                             </Select>
@@ -1763,70 +1781,73 @@ export default function ServiceWorkflowBuilder() {
                         )}
 
                         {newAgentData.agentType === "text2speech" && (
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <Label htmlFor="voice">Voice</Label>
-                              <Select
-                                value={newAgentData.config.voice || ""}
-                                onValueChange={(value) =>
-                                  setNewAgentData({
-                                    ...newAgentData,
-                                    config: { ...newAgentData.config, voice: value }
-                                  })
-                                }
-                              >
-                                <SelectTrigger className="bg-black/40 border-purple-900/30 text-white">
-                                  <SelectValue placeholder="Select voice" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <div className="bg-black/90 border-purple-900/30 text-white">
-                                    <SelectItem value="en-US-ChristopherNeural">English US - Christopher</SelectItem>
-                                    <SelectItem value="en-US-JennyNeural">English US - Jenny</SelectItem>
-                                    <SelectItem value="en-US-GuyNeural">English US - Guy</SelectItem>
-                                    <SelectItem value="en-US-AriaNeural">English US - Aria</SelectItem>
-                                    <SelectItem value="en-GB-SoniaNeural">English UK - Sonia</SelectItem>
-                                    <SelectItem value="en-GB-RyanNeural">English UK - Ryan</SelectItem>
-                                  </div>
-                                </SelectContent>
-                              </Select>
-                            </div>
+                          <div className="bg-black/40 p-4 rounded-lg border border-purple-900/30">
+                            <h4 className="text-sm font-medium text-purple-200 mb-3">Text to Speech Configuration</h4>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div className="space-y-2">
+                                <Label htmlFor="voice" className="text-white font-medium">Voice</Label>
+                                <Select
+                                  value={newAgentData.config.voice || ""}
+                                  onValueChange={(value) =>
+                                    setNewAgentData({
+                                      ...newAgentData,
+                                      config: { ...newAgentData.config, voice: value }
+                                    })
+                                  }
+                                >
+                                  <SelectTrigger className="bg-black/50 border-purple-900/40 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all">
+                                    <SelectValue placeholder="Select voice" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <div className="bg-black/90 border-purple-900/40 text-white">
+                                      <SelectItem value="en-US-ChristopherNeural" className="hover:bg-purple-900/20">English US - Christopher</SelectItem>
+                                      <SelectItem value="en-US-JennyNeural" className="hover:bg-purple-900/20">English US - Jenny</SelectItem>
+                                      <SelectItem value="en-US-GuyNeural" className="hover:bg-purple-900/20">English US - Guy</SelectItem>
+                                      <SelectItem value="en-US-AriaNeural" className="hover:bg-purple-900/20">English US - Aria</SelectItem>
+                                      <SelectItem value="en-GB-SoniaNeural" className="hover:bg-purple-900/20">English UK - Sonia</SelectItem>
+                                      <SelectItem value="en-GB-RyanNeural" className="hover:bg-purple-900/20">English UK - Ryan</SelectItem>
+                                    </div>
+                                  </SelectContent>
+                                </Select>
+                              </div>
 
-                            <div className="space-y-2">
-                              <Label htmlFor="rate">Speech Rate</Label>
-                              <Select
-                                value={newAgentData.config.rate || "+0%"}
-                                onValueChange={(value) =>
-                                  setNewAgentData({
-                                    ...newAgentData,
-                                    config: { ...newAgentData.config, rate: value }
-                                  })
-                                }
-                              >
-                                <SelectTrigger className="bg-black/40 border-purple-900/30 text-white">
-                                  <SelectValue placeholder="Select rate" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <div className="bg-black/90 border-purple-900/30 text-white">
-                                    <SelectItem value="-50%">Very Slow</SelectItem>
-                                    <SelectItem value="-25%">Slow</SelectItem>
-                                    <SelectItem value="+0%">Normal</SelectItem>
-                                    <SelectItem value="+25%">Fast</SelectItem>
-                                    <SelectItem value="+50%">Very Fast</SelectItem>
-                                  </div>
-                                </SelectContent>
-                              </Select>
+                              <div className="space-y-2">
+                                <Label htmlFor="rate" className="text-white font-medium">Speech Rate</Label>
+                                <Select
+                                  value={newAgentData.config.rate || "+0%"}
+                                  onValueChange={(value) =>
+                                    setNewAgentData({
+                                      ...newAgentData,
+                                      config: { ...newAgentData.config, rate: value }
+                                    })
+                                  }
+                                >
+                                  <SelectTrigger className="bg-black/50 border-purple-900/40 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all">
+                                    <SelectValue placeholder="Select rate" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <div className="bg-black/90 border-purple-900/40 text-white">
+                                      <SelectItem value="-50%" className="hover:bg-purple-900/20">Very Slow</SelectItem>
+                                      <SelectItem value="-25%" className="hover:bg-purple-900/20">Slow</SelectItem>
+                                      <SelectItem value="+0%" className="hover:bg-purple-900/20">Normal</SelectItem>
+                                      <SelectItem value="+25%" className="hover:bg-purple-900/20">Fast</SelectItem>
+                                      <SelectItem value="+50%" className="hover:bg-purple-900/20">Very Fast</SelectItem>
+                                    </div>
+                                  </SelectContent>
+                                </Select>
+                              </div>
                             </div>
                           </div>
                         )}
 
                         {/* API Key Selection for Agent */}
                         <div className="space-y-4 border-t border-purple-900/30 pt-4">
-                          <h3 className="text-lg font-medium text-white flex items-center">
+                          <h3 className="text-lg font-medium bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent flex items-center">
                             <Key className="h-5 w-5 mr-2 text-purple-400" />
                             API Key Configuration
                           </h3>
 
-                          <div className="space-y-3">
+                          <div className="space-y-3 bg-black/40 p-4 rounded-lg border border-purple-900/30">
                             <div className="flex flex-col space-y-2">
                               <div className="flex items-center space-x-2">
                                 <input
@@ -1856,18 +1877,18 @@ export default function ServiceWorkflowBuilder() {
 
                             {!useCustomApiKey ? (
                               <div className="space-y-2">
-                                <Label htmlFor="selectedApiKey" className="text-white">
+                                <Label htmlFor="selectedApiKey" className="text-white font-medium">
                                   Select API Key
                                 </Label>
                                 <Select
                                   value={selectedApiKey}
                                   onValueChange={setSelectedApiKey}
                                 >
-                                  <SelectTrigger id="selectedApiKey" className="bg-black/40 border-purple-900/30 text-white">
+                                  <SelectTrigger id="selectedApiKey" className="bg-black/50 border-purple-900/40 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all">
                                     <SelectValue placeholder="Select a saved API key" />
                                   </SelectTrigger>
                                   <SelectContent>
-                                    <div className="bg-black/90 border-purple-900/30 text-white">
+                                    <div className="bg-black/90 border-purple-900/40 text-white">
                                       {isLoadingApiKeys ? (
                                         <div className="flex items-center justify-center p-2">
                                           <Loader2 className="h-4 w-4 animate-spin mr-2" />
@@ -1875,7 +1896,7 @@ export default function ServiceWorkflowBuilder() {
                                         </div>
                                       ) : savedApiKeys.length > 0 ? (
                                         savedApiKeys.map((key) => (
-                                          <SelectItem key={key.id} value={key.id}>
+                                          <SelectItem key={key.id} value={key.id} className="hover:bg-purple-900/20">
                                             {key.name} ({key.provider})
                                           </SelectItem>
                                         ))
@@ -1891,7 +1912,7 @@ export default function ServiceWorkflowBuilder() {
                               </div>
                             ) : (
                               <div className="space-y-2">
-                                <Label htmlFor="customApiKey" className="text-white">
+                                <Label htmlFor="customApiKey" className="text-white font-medium">
                                   Custom API Key
                                 </Label>
                                 <Input
@@ -1900,7 +1921,7 @@ export default function ServiceWorkflowBuilder() {
                                   value={customApiKey}
                                   onChange={(e) => setCustomApiKey(e.target.value)}
                                   placeholder="Enter API key"
-                                  className="bg-black/40 border-purple-900/30 text-white"
+                                  className="bg-black/50 border-purple-900/40 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all"
                                 />
                                 <p className="text-gray-400 text-xs">
                                   This key will only be used for this agent and won't be saved to your account.
@@ -1910,40 +1931,38 @@ export default function ServiceWorkflowBuilder() {
                           </div>
                         </div>
 
-                        <div className="space-y-2">
+                        <div className="space-y-2 bg-black/40 p-4 rounded-lg border border-purple-900/30">
                           <div className="flex items-center justify-between">
-                            <Label htmlFor="enhancePrompt" className="text-white">
+                            <Label htmlFor="enhancePrompt" className="text-white font-medium">
                               Enhance Prompt
                             </Label>
                             <Switch
                               id="enhancePrompt"
                               checked={newAgentData.enhancePrompt}
                               onCheckedChange={(checked) => setNewAgentData({ ...newAgentData, enhancePrompt: checked })}
+                              className="data-[state=checked]:bg-purple-600"
                             />
                           </div>
                           <p className="text-gray-400 text-xs">Automatically improve prompts using AI before processing</p>
                         </div>
 
-
-
-                        <div className="flex justify-end pt-2">
+                        <div className="flex justify-end pt-4">
                           <Button
                             onClick={async () => {
                               setIsCreatingAgent(true);
                               try {
-                                await createAgent();
-                                // Dialog'u kapat - bunu parent component'te yapmamız gerekiyor
-                                const dialogCloseButton = document.querySelector('[data-state="open"] button[aria-label="Close"], [data-state="open"] button.dialog-close');
-                                if (dialogCloseButton) {
-                                  (dialogCloseButton as HTMLButtonElement).click();
+                                const result = await createAgent();
+                                if (result) {
+                                  // Simply set the dialog state to close
+                                  setIsAgentDialogOpen(false);
                                 }
                               } catch (error) {
-                                console.error("Agent oluşturma hatası:", error);
+                                console.error("Agent creation error:", error);
                               } finally {
                                 setIsCreatingAgent(false);
                               }
                             }}
-                            className="bg-gradient-to-r from-purple-600 to-purple-800 text-white hover:opacity-90"
+                            className="bg-gradient-to-r from-purple-600 to-purple-800 text-white hover:opacity-90 transition-all duration-300 hover:shadow-purple-500/30 hover:scale-105"
                             disabled={isCreatingAgent || !newAgentData.name || !newAgentData.agentType}
                           >
                             {isCreatingAgent ? (
