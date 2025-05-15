@@ -45,6 +45,7 @@ interface Service {
     input_type: string
     output_type: string
   }
+  is_enhanced?: boolean
 }
 
 // Define the mini-service type from API
@@ -58,6 +59,7 @@ interface MiniService {
   owner_id: number
   average_token_usage: any
   run_time: number
+  is_enhanced: boolean
 }
 
 // Define the process type from API
@@ -236,7 +238,8 @@ export default function DashboardPage() {
                 run_time: service.run_time,
                 input_type: service.input_type,
                 output_type: service.output_type
-              }
+              },
+              is_enhanced: service.is_enhanced
             }
           })
 
@@ -365,6 +368,7 @@ export default function DashboardPage() {
               color,
               isCustom: true, // Mark as custom so it can be deleted
               onDelete: handleMiniServiceDelete, // Add delete handler
+              is_enhanced: service.is_enhanced,
               usageStats: {
                 average_token_usage: service.average_token_usage,
                 run_time: service.run_time,
@@ -718,6 +722,7 @@ export default function DashboardPage() {
                       id={service.id}
                       onDelete={service.onDelete}
                       usageStats={service.usageStats}
+                      is_enhanced={service.is_enhanced}
                     />
                   ))
                 )}
