@@ -692,36 +692,38 @@ export default function DashboardPage() {
 
       <main className="pt-24 pb-16 px-4">
         <div className="max-w-6xl mx-auto">
-          {/* User-created Mini-Services Section */}
-          <section className="mb-12">
-            <h2 className="text-2xl md:text-3xl font-bold text-white mb-8">Your AI Workflows</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {miniServicesLoading ? (
-                // Placeholder cards during loading
-                Array.from({ length: 3 }).map((_, index) => (
-                  <div
-                    key={`placeholder-${index}`}
-                    className="h-[220px] bg-black/40 backdrop-blur-sm rounded-xl border border-purple-900/30 animate-pulse"
-                  />
-                ))
-              ) : miniServices.length > 0 ? (
-                miniServices.map((service) => (
-                  <MiniAppCard
-                    key={`mini-service-${service.id}`}
-                    title={service.name}
-                    description={service.description}
-                    icon={service.icon}
-                    serviceType={service.serviceType}
-                    color={service.color}
-                    isCustom={service.isCustom}
-                    id={service.id}
-                    onDelete={service.onDelete}
-                    usageStats={service.usageStats}
-                  />
-                ))
-              ) : null}
-            </div>
-          </section>
+          {/* User-created Mini-Services Section - Only show if there are mini services */}
+          {miniServices.length > 0 && (
+            <section className="mb-12">
+              <h2 className="text-2xl md:text-3xl font-bold text-white mb-8">Your AI Workflows</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {miniServicesLoading ? (
+                  // Placeholder cards during loading
+                  Array.from({ length: 3 }).map((_, index) => (
+                    <div
+                      key={`placeholder-${index}`}
+                      className="h-[220px] bg-black/40 backdrop-blur-sm rounded-xl border border-purple-900/30 animate-pulse"
+                    />
+                  ))
+                ) : (
+                  miniServices.map((service) => (
+                    <MiniAppCard
+                      key={`mini-service-${service.id}`}
+                      title={service.name}
+                      description={service.description}
+                      icon={service.icon}
+                      serviceType={service.serviceType}
+                      color={service.color}
+                      isCustom={service.isCustom}
+                      id={service.id}
+                      onDelete={service.onDelete}
+                      usageStats={service.usageStats}
+                    />
+                  ))
+                )}
+              </div>
+            </section>
+          )}
 
           <div className="mb-8 flex justify-between items-center">
             <div>

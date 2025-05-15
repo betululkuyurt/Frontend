@@ -1494,7 +1494,7 @@ const handleSubmit = async () => {
                               <div className="space-y-6 w-full">
                                 {/* User's Own Agents */}
                                 <div>
-                                  <h5 className="text-sm font-medium text-gray-400 mb-3">Your Agents</h5>
+                                  <h5 className="text-sm font-medium text-gray-400 mb-3">My Agents</h5>
                                   {getFilteredAgents().ownAgents.length > 0 ? (
                                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-3">
                                       {getFilteredAgents().ownAgents.map((agent) => (
