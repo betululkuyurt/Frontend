@@ -253,7 +253,7 @@ export function MiniAppCard({
                 <span className="block text-purple-300/80 text-[10px] font-medium mb-0.5">Run time</span>
                 <span className="text-gray-200 flex items-center font-semibold">
                   {usageStats?.run_time !== undefined ?
-                    `${Math.round(usageStats.run_time)}ms` :
+                    `${Math.round(usageStats.run_time)}` :
                     "—"
                   }
                 </span>
