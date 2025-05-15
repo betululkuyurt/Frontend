@@ -31,6 +31,8 @@ import {
   CheckCircle2,
   Search,
   X,
+  ArrowLeft,
+  AlertCircle,
 } from "lucide-react"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
@@ -104,7 +106,7 @@ const inputTypes = [
   { value: "image", label: "Image", icon: ImageIcon },
   { value: "sound", label: "Sound", icon: Headphones },
   { value: "video", label: "Video", icon: Video },
- { value: "document", label: "Document", icon: FileText },
+  { value: "document", label: "Document", icon: FileText },
 ]
 
 const outputTypes = [
@@ -113,7 +115,7 @@ const outputTypes = [
   { value: "sound", label: "Sound", icon: Headphones },
   { value: "video", label: "Video", icon: Video },
   { value: "document", label: "Document", icon: FileText },
-  
+
 ]
 
 const iconOptions = [
@@ -249,7 +251,7 @@ export default function ServiceWorkflowBuilder() {
   async function fetchAgents() {
     try {
       setIsLoading(true)
-      
+
       try {
         const response = await fetch(`http://127.0.0.1:8000/api/v1/agents/?current_user_id=${userId}`, {
           method: "GET",
@@ -445,7 +447,7 @@ export default function ServiceWorkflowBuilder() {
   // Get the required input type based on the last agent's output
   const getRequiredInputType = (): string | null => {
     if (workflow.length === 0) return null;
-    
+
     const lastStep = workflow.find(step => step.next === null);
     if (!lastStep) return null;
 
@@ -533,8 +535,8 @@ export default function ServiceWorkflowBuilder() {
     setWorkflow((prev) => {
       const newWorkflow = previousStep
         ? prev
-            .map((step) => (step.id === previousStep.id ? { ...step, next: nextStepId } : step))
-            .filter((step) => step.id !== stepId)
+          .map((step) => (step.id === previousStep.id ? { ...step, next: nextStepId } : step))
+          .filter((step) => step.id !== stepId)
         : prev.filter((step) => step.id !== stepId)
 
       if (newWorkflow.length === 0) {
@@ -579,63 +581,63 @@ export default function ServiceWorkflowBuilder() {
   // Ensure getOrderedWorkflow is correctly implemented
   const getOrderedWorkflow = () => {
     if (workflow.length === 0) return [];
-  
+
     // Find the first step (the one that no other step points to)
     const allTargetIds = workflow.map((step) => step.next).filter(Boolean) as string[];
     const firstStepId = workflow.find((step) => !allTargetIds.includes(step.id))?.id;
-  
+
     if (!firstStepId) {
       console.warn("Could not determine first step - workflow might have cycles");
       return workflow; // Fallback if we can't determine the first step
     }
-  
+
     const ordered: WorkflowStep[] = [];
     let currentId = firstStepId;
     const visited = new Set<string>(); // Track visited steps to prevent infinite loops
-  
+
     // Walk through the workflow in order
     while (currentId) {
       if (visited.has(currentId)) {
         console.warn("Cycle detected in workflow", { currentId, visited });
         break; // Prevent infinite loop
       }
-      
+
       const currentStep = workflow.find((step) => step.id === currentId);
       if (!currentStep) break;
-  
+
       visited.add(currentId);
       ordered.push(currentStep);
       currentId = currentStep.next || "";
-      
+
       // Safety check to prevent infinite loops
       if (ordered.length > workflow.length) {
         console.error("Potential infinite loop detected in getOrderedWorkflow");
         break;
       }
     }
-  
+
     return ordered;
   };
-  
+
   // Fix the moveStepUp function
   const moveStepUp = (stepId: string) => {
     const orderedSteps = getOrderedWorkflow();
     const stepIndex = orderedSteps.findIndex((step) => step.id === stepId);
-    
+
     if (stepIndex <= 0) return; // Already at the top or not found
-    
+
     // Create a deep copy of the workflow
     const newWorkflow = JSON.parse(JSON.stringify(workflow));
-    
+
     // Get the steps involved
     const currentStep = orderedSteps[stepIndex];
     const previousStep = orderedSteps[stepIndex - 1];
     const beforePreviousStep = stepIndex > 1 ? orderedSteps[stepIndex - 2] : null;
-    
+
     // Find the actual step objects in the new workflow
     const currentStepInNew = newWorkflow.find((s: any) => s.id === currentStep.id);
     const previousStepInNew = newWorkflow.find((s: any) => s.id === previousStep.id);
-    
+
     // If we're moving the second step up (to first position)
     if (stepIndex === 1) {
       // Current step becomes first (no incoming connection)
@@ -650,35 +652,35 @@ export default function ServiceWorkflowBuilder() {
         // Make it point to the current step instead
         stepPointingToPrevious.next = currentStep.id;
       }
-      
+
       // Make current step point to previous step
       currentStepInNew.next = previousStep.id;
-      
+
       // Make previous step point to what current step was pointing to
       previousStepInNew.next = currentStep.next;
     }
-    
+
     setWorkflow(newWorkflow);
   };
-  
+
   // Fix the moveStepDown function
   const moveStepDown = (stepId: string) => {
     const orderedSteps = getOrderedWorkflow();
     const stepIndex = orderedSteps.findIndex((step) => step.id === stepId);
-    
+
     if (stepIndex === -1 || stepIndex >= orderedSteps.length - 1) return; // Already at the bottom or not found
-    
+
     // Create a deep copy of the workflow
     const newWorkflow = JSON.parse(JSON.stringify(workflow));
-    
+
     // Get the steps involved
     const currentStep = orderedSteps[stepIndex];
     const nextStep = orderedSteps[stepIndex + 1];
-    
+
     // Find the actual step objects in the new workflow
     const currentStepInNew = newWorkflow.find((s: any) => s.id === currentStep.id);
     const nextStepInNew = newWorkflow.find((s: any) => s.id === nextStep.id);
-    
+
     // If we're moving the first step down
     if (stepIndex === 0) {
       // Next step becomes first step (no incoming connections)
@@ -692,14 +694,14 @@ export default function ServiceWorkflowBuilder() {
         // Make it point to the next step instead
         stepPointingToCurrent.next = nextStep.id;
       }
-      
+
       // Make next step point to current step
       nextStepInNew.next = currentStep.id;
-      
+
       // Make current step point to what next step was pointing to
       currentStepInNew.next = nextStep.next;
     }
-    
+
     setWorkflow(newWorkflow);
   };
 
@@ -713,8 +715,8 @@ export default function ServiceWorkflowBuilder() {
       }
 
       // Clone the config object to avoid mutation
-      let config = {...newAgentData.config};
-      
+      let config = { ...newAgentData.config };
+
       // For all agent types, add the custom API key to the config if provided
       if (useCustomApiKey && customApiKey) {
         config = {
@@ -722,7 +724,7 @@ export default function ServiceWorkflowBuilder() {
           api_key: customApiKey
         };
       }
-      
+
       const agentData = {
         name: newAgentData.name,
         description: newAgentData.description,
@@ -791,13 +793,13 @@ export default function ServiceWorkflowBuilder() {
       setSelectedApiKey("")
       setCustomApiKey("")
       setUseCustomApiKey(false)
-      
+
       // Başarı mesajı göster
       toast({
         title: "Agent oluşturuldu",
         description: "Yeni agent başarıyla oluşturuldu ve listeye eklendi.",
       })
-      
+
       return data
     } catch (error: any) {
       console.error("Detailed error in createAgent:", {
@@ -808,14 +810,14 @@ export default function ServiceWorkflowBuilder() {
         selectedApiKey: selectedApiKey ? "PRESENT" : "NOT_PRESENT",
         customApiKey: customApiKey ? "PRESENT" : "NOT_PRESENT"
       });
-      
+
       // Hata mesajı göster
       toast({
         variant: "destructive",
         title: "Agent creation failed",
         description: error.message || "An error occurred while creating the agent.",
       });
-      
+
       throw error
     } finally {
       setIsCreatingAgent(false);
@@ -844,97 +846,97 @@ export default function ServiceWorkflowBuilder() {
   };
 
   // API keys are now handled at the agent level
-  
+
 
 
 
   // Enhanced handleSubmit with more detailed logging
-const handleSubmit = async () => {
-  setIsLoading(true);
- 
-  try {
-    console.log("Current user ID:", userId);
-    console.log("Current serviceData:", serviceData);
-    
-    const formattedWorkflow = formatWorkflowForAPI();
-    console.log("Formatted workflow:", formattedWorkflow);
-    
-    // Log available agents with more detail
-    console.log("Available agents:", availableAgents.map(a => ({
-      id: a.id,
-      name: a.name,
-      type: a.type,
-      userId: a.userId
-    })));
-    
-    // Validate workflow agents - only check if they exist, not ownership
-    const workflowAgentIds = Object.values(formattedWorkflow.nodes).map(node => node.agent_id);
-    console.log("Workflow agent IDs:", workflowAgentIds);
-    
-    const missingAgents = workflowAgentIds.filter(agentId => {
-      const agent = availableAgents.find(a => a.id === agentId.toString());
-      if (!agent) {
-        console.log(`Agent ${agentId} not found in available agents`);
-        return true;
+  const handleSubmit = async () => {
+    setIsLoading(true);
+
+    try {
+      console.log("Current user ID:", userId);
+      console.log("Current serviceData:", serviceData);
+
+      const formattedWorkflow = formatWorkflowForAPI();
+      console.log("Formatted workflow:", formattedWorkflow);
+
+      // Log available agents with more detail
+      console.log("Available agents:", availableAgents.map(a => ({
+        id: a.id,
+        name: a.name,
+        type: a.type,
+        userId: a.userId
+      })));
+
+      // Validate workflow agents - only check if they exist, not ownership
+      const workflowAgentIds = Object.values(formattedWorkflow.nodes).map(node => node.agent_id);
+      console.log("Workflow agent IDs:", workflowAgentIds);
+
+      const missingAgents = workflowAgentIds.filter(agentId => {
+        const agent = availableAgents.find(a => a.id === agentId.toString());
+        if (!agent) {
+          console.log(`Agent ${agentId} not found in available agents`);
+          return true;
+        }
+        return false;
+      });
+
+      if (missingAgents.length > 0) {
+        toast({
+          variant: "destructive",
+          title: "Invalid Agents",
+          description: `Some agents in the workflow (${missingAgents.join(', ')}) were not found.`,
+        });
+        setIsLoading(false);
+        return;
       }
-      return false;
-    });
-    
-    if (missingAgents.length > 0) {
-      toast({
-        variant: "destructive",
-        title: "Invalid Agents",
-        description: `Some agents in the workflow (${missingAgents.join(', ')}) were not found.`,
+
+      const serviceDataToSend = {
+        name: serviceData.title,
+        description: serviceData.description || "",
+        input_type: serviceData.inputType,
+        output_type: serviceData.outputType,
+        workflow: formattedWorkflow,
+        icon: serviceData.icon,
+        color: serviceData.color,
+        placeholder: serviceData.placeholder,
+        button_text: serviceData.buttonText,
+        is_public: serviceData.isPublic
+      };
+
+      console.log("Service data to be sent:", JSON.stringify(serviceDataToSend, null, 2));
+
+      const response = await fetch(`http://127.0.0.1:8000/api/v1/mini-services?current_user_id=${userId}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${Cookies.get("access_token") || ""}`,
+        },
+        body: JSON.stringify(serviceDataToSend),
       });
+
+      const responseBody = await response.text();
+      console.log("Response status:", response.status);
+      console.log("Response body:", responseBody);
+
+      if (!response.ok) {
+        toast({
+          variant: "destructive",
+          title: "Service Creation Failed",
+          description: responseBody,
+        });
+        throw new Error("Failed to create service");
+      }
+
+      router.push("/apps");
+    } catch (error) {
+      console.error("Error in handleSubmit:", error);
+      setError(error instanceof Error ? error.message : "Failed to create service");
+    } finally {
       setIsLoading(false);
-      return;
     }
-    
-    const serviceDataToSend = {
-      name: serviceData.title,
-      description: serviceData.description || "",
-      input_type: serviceData.inputType,
-      output_type: serviceData.outputType,
-      workflow: formattedWorkflow,
-      icon: serviceData.icon,
-      color: serviceData.color,
-      placeholder: serviceData.placeholder,
-      button_text: serviceData.buttonText,
-      is_public: serviceData.isPublic
-    };
-    
-    console.log("Service data to be sent:", JSON.stringify(serviceDataToSend, null, 2));
-    
-    const response = await fetch(`http://127.0.0.1:8000/api/v1/mini-services?current_user_id=${userId}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${Cookies.get("access_token") || ""}`,
-      },
-      body: JSON.stringify(serviceDataToSend),
-    });
-
-    const responseBody = await response.text();
-    console.log("Response status:", response.status);
-    console.log("Response body:", responseBody);
-
-    if (!response.ok) {
-      toast({
-        variant: "destructive",
-        title: "Service Creation Failed",
-        description: responseBody,
-      });
-      throw new Error("Failed to create service");
-    }
-
-    router.push("/apps");
-  } catch (error) {
-    console.error("Error in handleSubmit:", error);
-    setError(error instanceof Error ? error.message : "Failed to create service");
-  } finally {
-    setIsLoading(false);
-  }
-};
+  };
 
   // Get the selected icon component
   const SelectedIcon = iconOptions.find((icon) => icon.value === serviceData.icon)?.icon || Wand2
@@ -975,7 +977,7 @@ const handleSubmit = async () => {
         console.error("Error parsing local API keys:", e)
       }
     }
-    
+
     // Fetch API keys from server for agent creation
     fetchApiKeys();
   }, [])
@@ -993,28 +995,45 @@ const handleSubmit = async () => {
   const getFilteredAgents = (): { ownAgents: Agent[], otherAgents: Agent[] } => {
     const compatibleAgents = getCompatibleAgents()
     const currentUserId = Cookies.get("user_id")
-    
+
     // Separate agents into own and other users' agents
     const ownAgents = compatibleAgents.filter(agent => agent.userId === currentUserId)
     const otherAgents = compatibleAgents.filter(agent => agent.userId !== currentUserId)
-    
+
     // Apply search filter if there's a search query
     if (searchQuery.trim()) {
       const searchLower = searchQuery.toLowerCase()
       return {
-        ownAgents: ownAgents.filter(agent => 
+        ownAgents: ownAgents.filter(agent =>
           agent.name.toLowerCase().includes(searchLower) ||
           agent.description.toLowerCase().includes(searchLower)
         ),
-        otherAgents: otherAgents.filter(agent => 
+        otherAgents: otherAgents.filter(agent =>
           agent.name.toLowerCase().includes(searchLower) ||
           agent.description.toLowerCase().includes(searchLower)
         )
       }
     }
-    
+
     return { ownAgents, otherAgents }
   }
+
+  // Common glow effect styles for all tabs
+  const TabGlowEffects = () => (
+    <>
+      {/* Primary outer glow - consistent across all tabs */}
+      <div className="absolute inset-0 bg-purple-700/30 rounded-xl blur-2xl -z-10 animate-pulse-slow"></div>
+      <div className="absolute inset-10 bg-indigo-500/20 rounded-full blur-3xl -z-10 animate-pulse-slow animation-delay-1000"></div>
+    </>
+  );
+
+  // Inner card glow effects - consistent across all cards
+  const CardGlowEffects = () => (
+    <div className="absolute inset-0 z-0 pointer-events-none">
+      <div className="-top-32 -right-32 absolute w-96 h-96 bg-purple-500/20 rounded-full blur-3xl" />
+      <div className="-bottom-40 -left-40 absolute w-96 h-96 bg-indigo-500/20 rounded-full blur-3xl" />
+    </div>
+  );
 
   // Add this function after fetchAgents()
   const fetchAgentDetails = async (agentId: string) => {
@@ -1026,7 +1045,7 @@ const handleSubmit = async () => {
           "Content-Type": "application/json"
         }
       })
-      
+
       if (!response.ok) throw new Error("Failed to fetch agent details")
       const data = await response.json()
       setAgentDetails(data)
@@ -1106,14 +1125,20 @@ const handleSubmit = async () => {
           </div>
 
           <Tabs defaultValue="details" value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-            
+
+
 
             {/* Service Details Tab */}
-            <TabsContent value="details" className="space-y-6">
-              <Card className="bg-black/40 backdrop-blur-sm border border-purple-900/30 p-6">
-                <div className="space-y-6">
+            <TabsContent value="details" className="space-y-6 relative">
+              {/* Purple glow effect - outer glow */}
+              <TabGlowEffects />
+
+              <Card className="bg-black/60 backdrop-blur-md border border-purple-900/40 p-6 rounded-xl shadow-xl relative overflow-hidden">
+                {/* Inner subtle glow effects */}
+                <CardGlowEffects />
+                <div className="space-y-4 relative z-10">
                   <div className="space-y-2">
-                    <Label htmlFor="title" className="text-white">
+                    <Label htmlFor="title" className="text-white font-medium">
                       Service Title
                     </Label>
                     <Input
@@ -1121,12 +1146,12 @@ const handleSubmit = async () => {
                       value={serviceData.title}
                       onChange={(e) => handleChange("title", e.target.value)}
                       placeholder="E.g., Custom Image Generator"
-                      className="bg-black/40 border-purple-900/30 text-white"
+                      className="bg-black/50 border-purple-900/50 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all"
                     />
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="description" className="text-white">
+                    <Label htmlFor="description" className="text-white font-medium">
                       Description
                     </Label>
                     <Textarea
@@ -1134,23 +1159,23 @@ const handleSubmit = async () => {
                       value={serviceData.description}
                       onChange={(e) => handleChange("description", e.target.value)}
                       placeholder="Describe what your service does..."
-                      className="bg-black/40 border-purple-900/30 text-white min-h-[80px]"
+                      className="bg-black/50 border-purple-900/50 text-white min-h-[80px] focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all"
                     />
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="icon" className="text-white">
+                      <Label htmlFor="icon" className="text-white font-medium">
                         Icon
                       </Label>
                       <Select value={serviceData.icon} onValueChange={(value) => handleChange("icon", value)}>
-                        <SelectTrigger id="icon" className="bg-black/40 border-purple-900/30 text-white">
+                        <SelectTrigger id="icon" className="bg-black/50 border-purple-900/50 text-white">
                           <SelectValue placeholder="Select an icon" />
                         </SelectTrigger>
                         <SelectContent>
-                          <div className="bg-black/90 border-purple-900/30 text-white">
+                          <div className="bg-black/90 border-purple-900/50 text-white">
                             {iconOptions.map((icon) => (
-                              <SelectItem key={icon.value} value={icon.value} className="flex items-center">
+                              <SelectItem key={icon.value} value={icon.value} className="flex items-center hover:bg-purple-900/20">
                                 <div className="flex items-center">
                                   <icon.icon className="h-4 w-4 mr-2" />
                                   <span>{icon.label}</span>
@@ -1161,33 +1186,10 @@ const handleSubmit = async () => {
                         </SelectContent>
                       </Select>
                     </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="color" className="text-white">
-                        Color Theme
-                      </Label>
-                      <Select value={serviceData.color} onValueChange={(value) => handleChange("color", value)}>
-                        <SelectTrigger id="color" className="bg-black/40 border-purple-900/30 text-white">
-                          <SelectValue placeholder="Select a color" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <div className="bg-black/90 border-purple-900/30 text-white">
-                            {colorOptions.map((color) => (
-                              <SelectItem key={color.value} value={color.value}>
-                                <div className="flex items-center">
-                                  <div className={`h-4 w-4 rounded-full bg-gradient-to-r ${color.value} mr-2`}></div>
-                                  <span>{color.label}</span>
-                                </div>
-                              </SelectItem>
-                            ))}
-                          </div>
-                        </SelectContent>
-                      </Select>
-                    </div>
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="placeholder" className="text-white">
+                    <Label htmlFor="placeholder" className="text-white font-medium">
                       Input Placeholder
                     </Label>
                     <Input
@@ -1195,12 +1197,12 @@ const handleSubmit = async () => {
                       value={serviceData.placeholder}
                       onChange={(e) => handleChange("placeholder", e.target.value)}
                       placeholder="E.g., Enter your prompt here..."
-                      className="bg-black/40 border-purple-900/30 text-white"
+                      className="bg-black/50 border-purple-900/50 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all"
                     />
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="buttonText" className="text-white">
+                    <Label htmlFor="buttonText" className="text-white font-medium">
                       Button Text
                     </Label>
                     <Input
@@ -1208,14 +1210,23 @@ const handleSubmit = async () => {
                       value={serviceData.buttonText}
                       onChange={(e) => handleChange("buttonText", e.target.value)}
                       placeholder="E.g., Generate"
-                      className="bg-black/40 border-purple-900/30 text-white"
+                      className="bg-black/50 border-purple-900/50 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all"
                     />
                   </div>
 
-                  <div className="flex justify-end">
+                  <div className="flex justify-between items-center mt-8 gap-4">
+                    <Button
+                      variant="outline"
+                      onClick={() => router.push("/apps")}
+
+                      className="border-purple-700/40 text-white hover:bg-purple-900/30 transition-all duration-300 hover:scale-105 rounded-lg px-5 py-2 flex items-center" >
+                      <ArrowLeft className="mr-2 h-4 w-4" />
+                      Back to Dashboard
+                    </Button>
+
                     <Button
                       onClick={() => setActiveTab("workflow")}
-                      className="bg-gradient-to-r from-purple-600 to-purple-800 text-white hover:opacity-90"
+                      className="bg-gradient-to-r from-purple-600 to-purple-800 text-white rounded-lg px-5 py-2 shadow-lg transition-all duration-300 hover:shadow-purple-500/40 hover:scale-105 hover:from-purple-700 hover:to-purple-900 flex items-center"
                     >
                       Continue to Workflow Builder
                       <ArrowRight className="ml-2 h-4 w-4" />
@@ -1227,7 +1238,10 @@ const handleSubmit = async () => {
 
             {/* Workflow Builder Tab */}
             <TabsContent value="workflow" className="space-y-6">
-              <Card className="bg-black/40 backdrop-blur-sm border border-purple-900/30 p-6">
+
+              <Card className="bg-black/60 backdrop-blur-md border border-purple-900/40 p-6 rounded-xl shadow-xl relative overflow-hidden">
+                {/* Inner subtle glow effects */}
+                <CardGlowEffects />
                 <div className="space-y-6">
                   <div className="flex items-center justify-between">
                     <h3 className="text-xl font-semibold text-white">Workflow Builder</h3>
@@ -1236,7 +1250,7 @@ const handleSubmit = async () => {
                     </Badge>
                   </div>
 
-                
+
 
                   {availableAgents.length === 0 && !isLoading && (
                     <div className="bg-red-900/20 border border-purple-900/30 rounded-md p-4 mb-4">
@@ -1254,8 +1268,8 @@ const handleSubmit = async () => {
                       <div className="ml-3">
                         <h4 className="text-white font-medium">Input</h4>
                         <p className="text-gray-400 text-sm">
-                          {serviceData.inputType === "select" 
-                            ? "Select input type" 
+                          {serviceData.inputType === "select"
+                            ? "Select input type"
                             : inputTypes.find((type) => type.value === serviceData.inputType)?.label || "Text Input"}
                         </p>
                       </div>
@@ -1265,7 +1279,7 @@ const handleSubmit = async () => {
                     <div className="space-y-4 mb-4">
                       <div className="flex items-center justify-between mb-2">
                         <h5 className="text-white text-sm font-medium">Workflow Steps</h5>
-                        
+
                         {/* Filter Controls - Responsive Version */}
                         <div className="flex flex-col md:flex-row md:items-center gap-2 w-full md:w-auto">
                           {/* Search Button/Input */}
@@ -1285,8 +1299,8 @@ const handleSubmit = async () => {
                                     }
                                   }}
                                 />
-                                <Button 
-                                  variant="ghost" 
+                                <Button
+                                  variant="ghost"
                                   size="icon"
                                   className="h-7 w-7 p-0 flex-shrink-0"
                                   onClick={() => {
@@ -1305,19 +1319,19 @@ const handleSubmit = async () => {
                                 onClick={() => setIsSearchOpen(true)}
                               >
                                 <Search className="h-4 w-4 text-white mr-2" />
-                                
+
                               </Button>
                             )}
                           </div>
-                          
+
                           <div className="flex flex-wrap gap-2 w-full md:w-auto">
-                            <Select 
-                              value={workflow.length > 0 ? getRequiredInputType() || "select" : filterTypes.inputType} 
+                            <Select
+                              value={workflow.length > 0 ? getRequiredInputType() || "select" : filterTypes.inputType}
                               onValueChange={handleInputTypeChange}
                               disabled={workflow.length > 0}
                             >
-                              <SelectTrigger 
-                                id="inputType" 
+                              <SelectTrigger
+                                id="inputType"
                                 className={cn(
                                   "bg-black/40 border-purple-900/30 text-white h-8 text-xs flex-1 min-w-[120px] md:w-[140px]",
                                   workflow.length > 0 && "opacity-50 cursor-not-allowed"
@@ -1339,13 +1353,13 @@ const handleSubmit = async () => {
                                 </div>
                               </SelectContent>
                             </Select>
-                            
-                            <Select 
-                              value={filterTypes.outputType} 
+
+                            <Select
+                              value={filterTypes.outputType}
                               onValueChange={handleOutputTypeChange}
                             >
-                              <SelectTrigger 
-                                id="outputType" 
+                              <SelectTrigger
+                                id="outputType"
                                 className="bg-black/40 border-purple-900/30 text-white h-8 text-xs flex-1 min-w-[120px] md:w-[140px]"
                               >
                                 <SelectValue placeholder="Output Type" />
@@ -1483,7 +1497,7 @@ const handleSubmit = async () => {
 
                       {selectedAgent ? (
                         <div className="bg-gray-900/50 rounded-lg border border-purple-900/30 p-4">
-                          
+
                           <div className="w-full">
                             {isLoading ? (
                               <div className="col-span-full flex items-center justify-center p-6">
@@ -1601,8 +1615,8 @@ const handleSubmit = async () => {
                       <div className="ml-3">
                         <h4 className="text-white font-medium">Output</h4>
                         <p className="text-gray-400 text-sm">
-                          {serviceData.outputType === "select" 
-                            ? "Select output type" 
+                          {serviceData.outputType === "select"
+                            ? "Select output type"
                             : outputTypes.find((type) => type.value === serviceData.outputType)?.label || "Text Output"}
                         </p>
                       </div>
@@ -1632,8 +1646,8 @@ const handleSubmit = async () => {
                             onValueChange={(value) => {
                               const selectedType = agentTypes.find(type => type.type === value);
                               if (selectedType) {
-                                setNewAgentData({ 
-                                  ...newAgentData, 
+                                setNewAgentData({
+                                  ...newAgentData,
                                   agentType: value,
                                   inputType: selectedType.input_type,
                                   outputType: selectedType.output_type
@@ -1728,9 +1742,9 @@ const handleSubmit = async () => {
                             <Label htmlFor="model">Model</Label>
                             <Select
                               value={newAgentData.config.model || ""}
-                              onValueChange={(value) => 
-                                setNewAgentData({ 
-                                  ...newAgentData, 
+                              onValueChange={(value) =>
+                                setNewAgentData({
+                                  ...newAgentData,
                                   config: { ...newAgentData.config, model: value }
                                 })
                               }
@@ -1754,9 +1768,9 @@ const handleSubmit = async () => {
                               <Label htmlFor="voice">Voice</Label>
                               <Select
                                 value={newAgentData.config.voice || ""}
-                                onValueChange={(value) => 
-                                  setNewAgentData({ 
-                                    ...newAgentData, 
+                                onValueChange={(value) =>
+                                  setNewAgentData({
+                                    ...newAgentData,
                                     config: { ...newAgentData.config, voice: value }
                                   })
                                 }
@@ -1781,9 +1795,9 @@ const handleSubmit = async () => {
                               <Label htmlFor="rate">Speech Rate</Label>
                               <Select
                                 value={newAgentData.config.rate || "+0%"}
-                                onValueChange={(value) => 
-                                  setNewAgentData({ 
-                                    ...newAgentData, 
+                                onValueChange={(value) =>
+                                  setNewAgentData({
+                                    ...newAgentData,
                                     config: { ...newAgentData.config, rate: value }
                                   })
                                 }
@@ -1910,7 +1924,7 @@ const handleSubmit = async () => {
                           <p className="text-gray-400 text-xs">Automatically improve prompts using AI before processing</p>
                         </div>
 
-                        
+
 
                         <div className="flex justify-end pt-2">
                           <Button
@@ -1952,16 +1966,16 @@ const handleSubmit = async () => {
                     <Button
                       variant="outline"
                       onClick={() => setActiveTab("details")}
-                      className="border-purple-900/30 text-white hover:bg-purple-900/20"
-                    >
+                      className="border-purple-700/40 text-white hover:bg-purple-900/30 transition-all duration-300 hover:scale-105 rounded-lg px-5 py-2 flex items-center">
+                      <ArrowLeft className="mr-2 h-4 w-4" />
                       Back to Details
                     </Button>
 
                     <Button
                       onClick={() => setActiveTab("preview")}
-                      className="bg-gradient-to-r from-purple-600 to-purple-800 text-white hover:opacity-90"
+                      className="bg-gradient-to-r from-purple-600 to-purple-800 text-white rounded-lg px-5 py-2 shadow-lg transition-all duration-300 hover:shadow-purple-500/40 hover:scale-105 hover:from-purple-700 hover:to-purple-900 flex items-center"
                     >
-                      Continue to Preview
+                      Preview
                       <ArrowRight className="ml-2 h-4 w-4" />
                     </Button>
                   </div>
@@ -1970,84 +1984,100 @@ const handleSubmit = async () => {
             </TabsContent>
 
             {/* Preview Tab */}
-            <TabsContent value="preview" className="space-y-6">
+            <TabsContent value="preview" className="space-y-6 relative">
+              {/* Enhanced purple glow effect - larger and more vibrant */}
+              <div className="absolute inset-0 bg-purple-700/30 rounded-xl blur-2xl -z-10 animate-pulse-slow"></div>
+              <div className="absolute inset-10 bg-indigo-500/20 rounded-full blur-3xl -z-10 animate-pulse-slow animation-delay-1000"></div>
+
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 {/* Preview Section */}
                 <div className="lg:col-span-2">
-                  <Card className="bg-black/40 backdrop-blur-sm border border-purple-900/30 p-6">
-                    <div className="space-y-6">
+                  <Card className="bg-black/60 backdrop-blur-md border border-purple-700/50 p-6 rounded-xl shadow-xl relative overflow-hidden">
+                    {/* Inner glow effects - more prominent */}
+                    <div className="absolute -top-32 -right-32 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl"></div>
+                    <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-indigo-500/20 rounded-full blur-3xl"></div>
+
+                    <div className="space-y-6 relative z-10">
                       <div className="flex items-center justify-between">
-                        <h3 className="text-xl font-semibold text-white">Service Preview</h3>
-                        <Badge variant="outline" className="bg-purple-900/20">
+                        <h3 className="text-xl font-semibold bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent">Service Preview</h3>
+                        <Badge variant="outline" className="bg-purple-900/40 border-purple-500/50 text-purple-100 px-3 py-1 rounded-full shadow-sm">
                           {orderedWorkflow.length} {orderedWorkflow.length === 1 ? "Step" : "Steps"}
                         </Badge>
                       </div>
 
                       {/* Service Card Preview */}
-                      <div className="bg-black/40 backdrop-blur-sm rounded-xl border border-purple-900/30 p-6">
+                      <div className="bg-black/60 backdrop-blur-md rounded-xl border border-purple-700/40 p-6 shadow-lg">
                         <div
-                          className={`w-12 h-12 rounded-lg flex items-center justify-center mb-4 bg-gradient-to-br ${serviceData.color}`}
+                          className={`w-12 h-12 rounded-lg flex items-center justify-center mb-4 bg-gradient-to-br ${serviceData.color} shadow-lg`}
                         >
                           <SelectedIcon className="h-6 w-6 text-white" />
                         </div>
                         <h3 className="text-lg font-semibold text-white mb-2">
                           {serviceData.title || "Service Title"}
                         </h3>
-                        <p className="text-gray-400 text-sm">
+                        <p className="text-gray-300 text-sm">
                           {serviceData.description || "Service description will appear here..."}
                         </p>
-                        <div className="mt-4 text-xs font-medium text-purple-400 flex items-center">
+                        <div className="mt-4 text-xs font-medium text-purple-300 flex items-center">
                           <span>{serviceData.buttonText || "Generate"}</span>
                           <ArrowRight className="ml-2 h-4 w-4" />
                         </div>
                       </div>
 
                       {/* Service Interface Preview */}
-                      <div className="bg-black/40 backdrop-blur-sm rounded-xl border border-purple-900/30 p-6">
-                        <h3 className="text-lg font-semibold text-white mb-4">Service Interface</h3>
+                      <div className="bg-black/60 backdrop-blur-md rounded-xl border border-purple-700/40 p-6 shadow-lg">
+                        <h3 className="text-lg font-semibold bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent mb-4">Service Interface</h3>
 
                         <div className="space-y-4">
                           {/* Input Preview */}
                           <div className="space-y-2">
-                            <Label className="text-white">
+                            <Label className="text-white font-medium">
                               {serviceData.inputType === "text" ? "Your Prompt" : "Input"}
                             </Label>
 
                             {serviceData.inputType === "text" && (
                               <Textarea
                                 placeholder={serviceData.placeholder || "Enter your text here..."}
-                                className="bg-black/40 border-purple-900/30 text-white min-h-[100px]"
+                                className="bg-black/60 border-purple-700/40 text-white min-h-[100px] focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all"
                                 disabled
                               />
                             )}
 
                             {serviceData.inputType === "image" && (
-                              <div className="border-2 border-dashed border-purple-900/50 rounded-lg p-6 text-center">
-                                <ImageIcon className="h-8 w-8 mx-auto text-purple-400 mb-2" />
-                                <p className="text-gray-400 text-sm">Drag and drop an image here, or click to select</p>
+                              <div className="border-2 border-dashed border-purple-700/50 rounded-lg p-6 text-center hover:border-purple-500/70 transition-all">
+                                <div className="bg-purple-900/30 rounded-full p-3 mx-auto w-16 h-16 flex items-center justify-center mb-3">
+                                  <ImageIcon className="h-8 w-8 text-purple-300" />
+                                </div>
+                                <p className="text-gray-300 text-sm">Drag and drop an image here, or click to select</p>
                               </div>
                             )}
 
                             {serviceData.inputType === "video" && (
-                              <div className="border-2 border-dashed border-purple-900/50 rounded-lg p-6 text-center">
-                                <Video className="h-8 w-8 mx-auto text-purple-400 mb-2" />
-                                <p className="text-gray-400 text-sm">Drag and drop a video here, or click to select</p>
+                              <div className="border-2 border-dashed border-purple-700/50 rounded-lg p-6 text-center hover:border-purple-500/70 transition-all">
+                                <div className="bg-purple-900/30 rounded-full p-3 mx-auto w-16 h-16 flex items-center justify-center mb-3">
+                                  <Video className="h-8 w-8 text-purple-300" />
+                                </div>
+                                <p className="text-gray-300 text-sm">Drag and drop a video here, or click to select</p>
                               </div>
                             )}
 
                             {serviceData.inputType === "document" && (
-                              <div className="border-2 border-dashed border-purple-900/50 rounded-lg p-6 text-center">
-                                <FileText className="h-8 w-8 mx-auto text-purple-400 mb-2" />
-                                <p className="text-gray-400 text-sm">
+                              <div className="border-2 border-dashed border-purple-700/50 rounded-lg p-6 text-center hover:border-purple-500/70 transition-all">
+                                <div className="bg-purple-900/30 rounded-full p-3 mx-auto w-16 h-16 flex items-center justify-center mb-3">
+                                  <FileText className="h-8 w-8 text-purple-300" />
+                                </div>
+                                <p className="text-gray-300 text-sm">
                                   Drag and drop a document here, or click to select
                                 </p>
                               </div>
                             )}
 
                             {serviceData.inputType === "audio" && (
-                              <div className="border-2 border-dashed border-purple-900/50 rounded-lg p-6 text-center">
-                                <Headphones className="h-8 w-8 mx-auto text-purple-400 mb-2" />
-                                <p className="text-gray-400 text-sm">
+                              <div className="border-2 border-dashed border-purple-700/50 rounded-lg p-6 text-center hover:border-purple-500/70 transition-all">
+                                <div className="bg-purple-900/30 rounded-full p-3 mx-auto w-16 h-16 flex items-center justify-center mb-3">
+                                  <Headphones className="h-8 w-8 text-purple-300" />
+                                </div>
+                                <p className="text-gray-300 text-sm">
                                   Drag and drop an audio file here, or click to select
                                 </p>
                               </div>
@@ -2055,23 +2085,29 @@ const handleSubmit = async () => {
                           </div>
 
                           <Button
-                            className={`bg-gradient-to-r ${serviceData.color} text-white hover:opacity-90`}
+                            className={`bg-gradient-to-r ${serviceData.color} text-white shadow-lg transition-all duration-300 hover:shadow-purple-500/30 hover:scale-105 rounded-lg`}
                             disabled
                           >
                             {serviceData.buttonText || "Generate"}
                           </Button>
+
                           {/* Output Preview */}
-                          <div className="mt-6 pt-6 border-t border-purple-900/30">
-                            <h4 className="text-white font-medium mb-3">Output Preview</h4>
+                          <div className="mt-6 pt-6 border-t border-purple-700/40">
+                            <h4 className="text-white font-medium mb-3 flex items-center">
+                              <span className="bg-purple-900/40 p-1 rounded-md mr-2">
+                                <ArrowRight className="h-4 w-4 text-purple-300" />
+                              </span>
+                              Output Preview
+                            </h4>
 
                             {serviceData.outputType === "text" && (
-                              <div className="bg-black/40 backdrop-blur-sm rounded-xl border border-purple-900/30 p-4">
+                              <div className="bg-black/60 backdrop-blur-md rounded-xl border border-purple-700/40 p-4 shadow-lg">
                                 <p className="text-gray-500 italic">Text output will appear here...</p>
                               </div>
                             )}
 
                             {serviceData.outputType === "image" && (
-                              <div className="bg-black/40 backdrop-blur-sm rounded-xl border border-purple-900/30 p-4 flex items-center justify-center">
+                              <div className="bg-black/60 backdrop-blur-md rounded-xl border border-purple-700/40 p-4 shadow-lg flex items-center justify-center">
                                 <div className="w-full h-48 bg-gray-900/50 rounded-lg flex items-center justify-center">
                                   <ImageIcon className="h-10 w-10 text-gray-700" />
                                 </div>
@@ -2079,16 +2115,18 @@ const handleSubmit = async () => {
                             )}
 
                             {serviceData.outputType === "sound" && (
-                              <div className="bg-black/40 backdrop-blur-sm rounded-xl border border-purple-900/30 p-4">
+                              <div className="bg-black/60 backdrop-blur-md rounded-xl border border-purple-700/40 p-4 shadow-lg">
                                 <div className="w-full h-12 bg-gray-900/50 rounded-lg flex items-center justify-center">
                                   <Headphones className="h-6 w-6 text-gray-700 mr-2" />
-                                  <div className="w-3/4 h-1 bg-gray-800 rounded-full"></div>
+                                  <div className="w-3/4 h-1 bg-gray-800 rounded-full">
+                                    <div className="w-1/3 h-full bg-purple-700/40 rounded-full"></div>
+                                  </div>
                                 </div>
                               </div>
                             )}
 
                             {serviceData.outputType === "video" && (
-                              <div className="bg-black/40 backdrop-blur-sm rounded-xl border border-purple-900/30 p-4">
+                              <div className="bg-black/60 backdrop-blur-md rounded-xl border border-purple-700/40 p-4 shadow-lg">
                                 <div className="w-full h-48 bg-gray-900/50 rounded-lg flex items-center justify-center">
                                   <Video className="h-10 w-10 text-gray-700" />
                                 </div>
@@ -2097,13 +2135,15 @@ const handleSubmit = async () => {
 
                             {serviceData.outputType === "text-audio" && (
                               <div className="space-y-4">
-                                <div className="bg-black/40 backdrop-blur-sm rounded-xl border border-purple-900/30 p-4">
+                                <div className="bg-black/60 backdrop-blur-md rounded-xl border border-purple-700/40 p-4 shadow-lg">
                                   <p className="text-gray-500 italic">Text output will appear here...</p>
                                 </div>
-                                <div className="bg-black/40 backdrop-blur-sm rounded-xl border border-purple-900/30 p-4">
+                                <div className="bg-black/60 backdrop-blur-md rounded-xl border border-purple-700/40 p-4 shadow-lg">
                                   <div className="w-full h-12 bg-gray-900/50 rounded-lg flex items-center justify-center">
                                     <Headphones className="h-6 w-6 text-gray-700 mr-2" />
-                                    <div className="w-3/4 h-1 bg-gray-800 rounded-full"></div>
+                                    <div className="w-3/4 h-1 bg-gray-800 rounded-full">
+                                      <div className="w-1/3 h-full bg-purple-700/40 rounded-full"></div>
+                                    </div>
                                   </div>
                                 </div>
                               </div>
@@ -2111,12 +2151,12 @@ const handleSubmit = async () => {
 
                             {serviceData.outputType === "text-video" && (
                               <div className="space-y-4">
-                                <div className="bg-black/40 backdrop-blur-sm rounded-xl border border-purple-900/30 p-4">
+                                <div className="bg-black/60 backdrop-blur-md rounded-xl border border-purple-700/40 p-4 shadow-lg">
                                   <div className="w-full h-48 bg-gray-900/50 rounded-lg flex items-center justify-center">
                                     <Video className="h-10 w-10 text-gray-700" />
                                   </div>
                                 </div>
-                                <div className="bg-black/40 backdrop-blur-sm rounded-xl border border-purple-900/30 p-4">
+                                <div className="bg-black/60 backdrop-blur-md rounded-xl border border-purple-700/40 p-4 shadow-lg">
                                   <p className="text-gray-500 italic">Text output will appear here...</p>
                                 </div>
                               </div>
@@ -2125,19 +2165,20 @@ const handleSubmit = async () => {
                         </div>
                       </div>
 
-                      <div className="flex justify-between">
+                      <div className="flex justify-between items-center mt-8 gap-4">
                         <Button
                           variant="outline"
                           onClick={() => setActiveTab("workflow")}
-                          className="border-purple-900/30 text-white hover:bg-purple-900/20"
+                          className="border-purple-700/40 text-white hover:bg-purple-900/30 transition-all duration-300 hover:scale-105 rounded-lg px-5 py-2 flex items-center"
                         >
+                          <ArrowLeft className="mr-2 h-4 w-4" />
                           Back to Workflow
                         </Button>
 
                         <Button
                           onClick={handleSubmit}
                           disabled={isLoading || !serviceData.title || orderedWorkflow.length === 0}
-                          className={`bg-gradient-to-r ${serviceData.color} text-white hover:opacity-90`}
+                          className={`bg-gradient-to-r ${serviceData.color} text-white rounded-lg px-5 py-2 shadow-lg transition-all duration-300 hover:shadow-purple-500/40 hover:scale-105 flex items-center`}
                         >
                           {isLoading ? (
                             <>
@@ -2169,86 +2210,99 @@ const handleSubmit = async () => {
                 {/* Summary Section */}
                 <div className="lg:col-span-1">
                   <div className="sticky top-24 space-y-6">
-                    <Card className="bg-black/40 backdrop-blur-sm border border-purple-900/30 p-6">
-                      <h3 className="text-lg font-semibold text-white mb-4">Service Summary</h3>
+                    <Card className="bg-black/60 backdrop-blur-md border border-purple-700/50 p-6 rounded-xl shadow-xl relative overflow-hidden">
+                      {/* Inner glow effect */}
+                      <div className="absolute -top-20 -right-20 w-40 h-40 bg-purple-500/20 rounded-full blur-2xl"></div>
 
-                      <div className="space-y-4">
-                        <div>
-                          <h4 className="text-sm font-medium text-gray-400">Service Details</h4>
-                          <ul className="mt-2 space-y-2">
-                            <li className="flex justify-between">
-                              <span className="text-gray-500 text-sm">Name:</span>
-                              <span className="text-white text-sm font-medium">{serviceData.title || "Untitled"}</span>
-                            </li>
-                            <li className="flex justify-between">
-                              <span className="text-gray-500 text-sm">Input Type:</span>
-                              <span className="text-white text-sm font-medium">
-                                {inputTypes.find((t) => t.value === serviceData.inputType)?.label || "Text Input"}
-                              </span>
-                            </li>
-                            <li className="flex justify-between">
-                              <span className="text-gray-500 text-sm">Output Type:</span>
-                              <span className="text-white text-sm font-medium">
-                                {outputTypes.find((t) => t.value === serviceData.outputType)?.label || "Text Output"}
-                              </span>
-                            </li>
-                            <li className="flex justify-between">
-                              <span className="text-gray-500 text-sm">Visibility:</span>
-                              <span className="text-white text-sm font-medium">
-                                {serviceData.isPublic ? "Public" : "Private"}
-                              </span>
-                            </li>
-                          </ul>
-                        </div>
+                      <div className="relative z-10">
+                        <h3 className="text-lg font-semibold bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent mb-4">Service Summary</h3>
 
-                        <div className="pt-4 border-t border-purple-900/30">
-                          <h4 className="text-sm font-medium text-gray-400">Workflow Steps</h4>
-                          {orderedWorkflow.length === 0 ? (
-                            <p className="mt-2 text-gray-500 text-sm italic">No workflow steps added yet.</p>
-                          ) : (
-                            <ul className="mt-2 space-y-2">
-                              {orderedWorkflow.map((step, index) => {
-                                const agent = availableAgents.find((a) => a.id === step.agentId)
-                                if (!agent) return null
-
-                                return (
-                                  <li key={step.id} className="flex items-center">
-                                    <span className="w-5 h-5 rounded-full bg-purple-900/30 text-white text-xs flex items-center justify-center mr-2">
-                                      {index + 1}
-                                    </span>
-                                    <span className="text-white text-sm">{agent.name}</span>
-                                  </li>
-                                )
-                              })}
+                        <div className="space-y-4">
+                          <div>
+                            <h4 className="text-sm font-medium text-purple-200">Service Details</h4>
+                            <ul className="mt-2 space-y-3">
+                              <li className="flex justify-between items-center bg-black/30 rounded-lg p-2 ">
+                                <span className="text-gray-400 text-sm">Name:</span>
+                                <span className="text-white text-sm font-medium">{serviceData.title || "Untitled"}</span>
+                              </li>
+                              <li className="flex justify-between items-center bg-black/30 rounded-lg p-2 ">
+                                <span className="text-gray-400 text-sm">Input Type:</span>
+                                <span className="text-white text-sm font-medium">
+                                  {inputTypes.find((t) => t.value === serviceData.inputType)?.label || "Text Input"}
+                                </span>
+                              </li>
+                              <li className="flex justify-between items-center bg-black/30 rounded-lg p-2 ">
+                                <span className="text-gray-400 text-sm">Output Type:</span>
+                                <span className="text-white text-sm font-medium">
+                                  {outputTypes.find((t) => t.value === serviceData.outputType)?.label || "Text Output"}
+                                </span>
+                              </li>
+                              <li className="flex justify-between items-center bg-black/30 rounded-lg p-2 ">
+                                <span className="text-gray-400 text-sm">Visibility:</span>
+                                <Badge className={`${serviceData.isPublic ? "bg-green-900/30 text-green-300" : "bg-blue-900/30 text-blue-300"} border-0`}>
+                                  {serviceData.isPublic ? "Public" : "Private"}
+                                </Badge>
+                              </li>
                             </ul>
-                          )}
+                          </div>
+
+                          <div className="pt-4 border-t border-purple-700/40">
+                            <h4 className="text-sm font-medium text-purple-200">Workflow Steps</h4>
+                            {orderedWorkflow.length === 0 ? (
+                              <div className="mt-3 bg-red-900/20 border border-red-900/30 rounded-lg p-3 text-gray-300 text-sm italic flex items-center">
+                                <AlertCircle className="h-4 w-4 text-red-400 mr-2" />
+                                No workflow steps added yet.
+                              </div>
+                            ) : (
+                              <ul className="mt-3 space-y-2">
+                                {orderedWorkflow.map((step, index) => {
+                                  const agent = availableAgents.find((a) => a.id === step.agentId)
+                                  if (!agent) return null
+
+                                  return (
+                                    <li key={step.id} className="flex items-center bg-purple-900/20 rounded-lg p-2 border-l-2 border-purple-500">
+                                      <span className="w-6 h-6 rounded-full bg-purple-700/50 text-white text-xs flex items-center justify-center mr-2 shadow-md">
+                                        {index + 1}
+                                      </span>
+                                      <span className="text-white text-sm">{agent.name}</span>
+                                    </li>
+                                  )
+                                })}
+                              </ul>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </Card>
 
-                    <Card className="bg-black/40 backdrop-blur-sm border border-purple-900/30 p-6">
-                      <h3 className="text-lg font-semibold text-white mb-4">Deployment Info</h3>
-                      <p className="text-gray-400 text-sm">
-                        When you deploy this service, it will be available in your dashboard and can be accessed via its
-                        unique ID.
-                      </p>
+                    <Card className="bg-black/60 backdrop-blur-md border border-purple-700/50 p-6 rounded-xl shadow-xl relative overflow-hidden">
+                      {/* Inner glow effect */}
+                      <div className="absolute -bottom-20 -left-20 w-40 h-40 bg-indigo-500/20 rounded-full blur-2xl"></div>
 
-                      <div className="mt-4 pt-4 border-t border-purple-900/30">
-                        <h4 className="text-sm font-medium text-gray-400">Next Steps</h4>
-                        <ul className="mt-2 space-y-2 text-sm text-gray-400">
-                          <li className="flex items-start">
-                            <span className="text-purple-400 mr-2">1.</span>
-                            <span>Deploy your service to make it available in your dashboard</span>
-                          </li>
-                          <li className="flex items-start">
-                            <span className="text-purple-400 mr-2">2.</span>
-                            <span>Access your service via the dashboard or direct URL</span>
-                          </li>
-                          <li className="flex items-start">
-                            <span className="text-purple-400 mr-2">3.</span>
-                            <span>Share with others if you've made it public</span>
-                          </li>
-                        </ul>
+                      <div className="relative z-10">
+                        <h3 className="text-lg font-semibold bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent mb-4">Deployment Info</h3>
+                        <p className="text-gray-300 text-sm">
+                          When you deploy this service, it will be available in your dashboard and can be accessed via its
+                          unique ID.
+                        </p>
+
+                        <div className="mt-4 pt-4 border-t border-purple-700/40">
+                          <h4 className="text-sm font-medium text-purple-200">Next Steps</h4>
+                          <ul className="mt-3 space-y-3">
+                            <li className="flex items-start bg-black/30 rounded-lg p-3">
+                              <div className="w-6 h-6 rounded-full bg-purple-700/50 text-white text-xs flex items-center justify-center mr-2 flex-shrink-0 shadow-md">1</div>
+                              <span className="text-gray-300 text-sm">Deploy your service to make it available in your dashboard</span>
+                            </li>
+                            <li className="flex items-start bg-black/30 rounded-lg p-3">
+                              <div className="w-6 h-6 rounded-full bg-purple-700/50 text-white text-xs flex items-center justify-center mr-2 flex-shrink-0 shadow-md">2</div>
+                              <span className="text-gray-300 text-sm">Access your service via the dashboard or direct URL</span>
+                            </li>
+                            <li className="flex items-start bg-black/30 rounded-lg p-3">
+                              <div className="w-6 h-6 rounded-full bg-purple-700/50 text-white text-xs flex items-center justify-center mr-2 flex-shrink-0 shadow-md">3</div>
+                              <span className="text-gray-300 text-sm">Share with others if you've made it public</span>
+                            </li>
+                          </ul>
+                        </div>
                       </div>
                     </Card>
                   </div>
