@@ -1216,19 +1216,19 @@ export default function ServiceWorkflowBuilder() {
                     />
                   </div>
 
-                  <div className="flex justify-between items-center mt-8 gap-4">
+                  <div className="flex flex-col sm:flex-row justify-between items-center mt-8 gap-4">
                     <Button
                       variant="outline"
                       onClick={() => router.push("/apps")}
-
-                      className="border-purple-700/40 text-white hover:bg-purple-900/30 transition-all duration-300 hover:scale-105 rounded-lg px-5 py-2 flex items-center" >
+                      className="border-purple-700/40 text-white hover:bg-purple-900/30 transition-all duration-300 hover:scale-105 rounded-lg px-5 py-2 flex items-center w-full sm:w-auto"
+                    >
                       <ArrowLeft className="mr-2 h-4 w-4" />
                       Back to Dashboard
                     </Button>
 
                     <Button
                       onClick={() => setActiveTab("workflow")}
-                      className="bg-gradient-to-r from-purple-600 to-purple-800 text-white rounded-lg px-5 py-2 shadow-lg transition-all duration-300 hover:shadow-purple-500/40 hover:scale-105 hover:from-purple-700 hover:to-purple-900 flex items-center"
+                      className="bg-gradient-to-r from-purple-600 to-purple-800 text-white rounded-lg px-5 py-2 shadow-lg transition-all duration-300 hover:shadow-purple-500/40 hover:scale-105 hover:from-purple-700 hover:to-purple-900 flex items-center w-full sm:w-auto"
                     >
                       Continue to Workflow Builder
                       <ArrowRight className="ml-2 h-4 w-4" />
@@ -2177,11 +2177,11 @@ export default function ServiceWorkflowBuilder() {
                         </div>
                       </div>
 
-                      <div className="flex justify-between items-center mt-8 gap-4">
+                      <div className="flex flex-col sm:flex-row justify-between items-center mt-8 gap-4">
                         <Button
                           variant="outline"
                           onClick={() => setActiveTab("workflow")}
-                          className="border-purple-700/40 text-white hover:bg-purple-900/30 transition-all duration-300 hover:scale-105 rounded-lg px-5 py-2 flex items-center"
+                          className="border-purple-700/40 text-white hover:bg-purple-900/30 transition-all duration-300 hover:scale-105 rounded-lg px-5 py-2 flex items-center w-full sm:w-auto"
                         >
                           <ArrowLeft className="mr-2 h-4 w-4" />
                           Back to Workflow
@@ -2190,7 +2190,7 @@ export default function ServiceWorkflowBuilder() {
                         <Button
                           onClick={handleSubmit}
                           disabled={isLoading || !serviceData.title || orderedWorkflow.length === 0}
-                          className={`bg-gradient-to-r ${serviceData.color} text-white rounded-lg px-5 py-2 shadow-lg transition-all duration-300 hover:shadow-purple-500/40 hover:scale-105 flex items-center`}
+                          className={`bg-gradient-to-r ${serviceData.color} text-white rounded-lg px-5 py-2 shadow-lg transition-all duration-300 hover:shadow-purple-500/40 hover:scale-105 flex items-center w-full sm:w-auto`}
                         >
                           {isLoading ? (
                             <>
