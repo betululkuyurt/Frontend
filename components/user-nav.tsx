@@ -78,11 +78,12 @@ export function UserNav() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="relative h-10 w-10 rounded-full">
-          <Avatar className="h-10 w-10 border border-purple-500/30">
-            <AvatarImage src="/placeholder.svg?height=40&width=40" alt={userData.name} />
-            <AvatarFallback className="bg-purple-900/50">{userData.initials}</AvatarFallback>
-          </Avatar>
+        <Button variant="ghost" className="relative h-12 w-12 rounded-full p-0 hover:bg-transparent">
+          <div className="h-12 w-12 rounded-full bg-gradient-to-br from-purple-600 to-purple-800 flex items-center justify-center border-2 border-purple-500/30 shadow-lg transition-all duration-300 hover:border-purple-500/50">
+            <span className="text-xl font-bold text-white">
+              {userData.initials.charAt(0)}
+            </span>
+          </div>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-56" align="end">

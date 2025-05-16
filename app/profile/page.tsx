@@ -8,24 +8,24 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Separator } from "@/components/ui/separator"
 import { NavBar } from "@/components/nav-bar"
-import { ChevronLeft, Upload, User } from "lucide-react"
+import { ChevronLeft, Upload, User, Copy, Check } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useRouter } from "next/navigation"
 import Cookies from "js-cookie"
 import { getAccessToken, decodeJWT } from "@/lib/auth"
+import { useToast } from "@/components/ui/use-toast"
 
 export default function ProfilePage() {
   const [isLoading, setIsLoading] = useState(false)
   const [isFetching, setIsFetching] = useState(true)
+  const [isCopied, setIsCopied] = useState(false)
   const router = useRouter()
+  const { toast } = useToast()
   const [userData, setUserData] = useState({
     firstName: "",
     lastName: "",
     email: "",
-    bio: "",
-    website: "",
     username: "",
-    memberSince: "March 2024",
     appsCreated: 0,
     generations: 0,
   })
@@ -128,6 +128,27 @@ export default function ProfilePage() {
     }))
   }
 
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setIsCopied(true)
+      toast({
+        title: "Copied to clipboard",
+        description: "Email address has been copied",
+        duration: 2000,
+      })
+      setTimeout(() => setIsCopied(false), 2000)
+    } catch (err) {
+      console.error('Failed to copy text: ', err)
+      toast({
+        title: "Failed to copy",
+        description: "Please try again",
+        variant: "destructive",
+        duration: 2000,
+      })
+    }
+  }
+
   if (isFetching) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-black via-purple-950/20 to-black flex items-center justify-center">
@@ -142,41 +163,32 @@ export default function ProfilePage() {
 
       <main className="pt-24 pb-16 px-4">
         <div className="max-w-4xl mx-auto">
-          <div className="flex items-center h-16 my-2">
+          <div className="flex items-center h-16 my-2 relative">
             <Button
               variant="ghost"
               onClick={() => router.push("/apps")}
-              className="flex items-center text-gray-300 hover:text-white p-0"
+              className="flex items-center text-gray-300 hover:text-white p-0 hover:bg-transparent absolute left-0"
             >
               <ChevronLeft className="h-5 w-5 mr-2" />
-              Back to Dashboard
             </Button>
-            <div className="mx-auto flex items-center">
+            <div className="flex items-center justify-center w-full">
               <User className="h-5 w-5 text-purple-400 mr-2" />
               <span className="text-white font-semibold">Profile</span>
             </div>
-            <div className="w-24"></div> {/* Spacer to center the title */}
           </div>
 
           <div className="grid gap-8">
             {/* Profile Header */}
             <div className="flex flex-col md:flex-row items-start md:items-center gap-6 bg-black/40 backdrop-blur-sm rounded-xl border border-purple-900/30 p-6">
-              <Avatar className="w-24 h-24 border-2 border-purple-500/30">
-                <AvatarImage src="/placeholder.svg" />
-                <AvatarFallback>
-                  {userData.firstName.charAt(0)}
-                  {userData.lastName.charAt(0)}
-                </AvatarFallback>
-              </Avatar>
+              <div className="w-24 h-24 rounded-full bg-gradient-to-br from-purple-600 to-purple-800 flex items-center justify-center border-2 border-purple-500/30 shadow-lg">
+                <span className="text-3xl font-bold text-white">
+                  {userData.firstName.charAt(0).toUpperCase()}
+                </span>
+              </div>
               <div className="flex-grow">
                 <h1 className="text-2xl font-bold text-white mb-2">
                   {userData.username || `${userData.firstName} ${userData.lastName}`.trim()}
                 </h1>
-                <p className="text-gray-400 mb-4">Member since {userData.memberSince}</p>
-                <Button className="bg-purple-600 hover:bg-purple-700">
-                  <Upload className="w-4 h-4 mr-2" />
-                  Change Avatar
-                </Button>
               </div>
               <div className="flex flex-col gap-2 min-w-[150px] text-center bg-purple-900/20 rounded-lg p-4">
                 <div>
@@ -192,78 +204,45 @@ export default function ProfilePage() {
             </div>
 
             {/* Profile Form */}
-            <form
-              onSubmit={handleSubmit}
-              className="bg-black/40 backdrop-blur-sm rounded-xl border border-purple-900/30 p-6"
-            >
+            <div className="bg-black/40 backdrop-blur-sm rounded-xl border border-purple-900/30 p-6">
               <h2 className="text-xl font-semibold text-white mb-6">Profile Information</h2>
               <div className="grid gap-6">
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="firstName">First Name</Label>
-                    <Input
-                      id="firstName"
-                      placeholder="Enter your first name"
-                      className="bg-black/30 border-purple-900/30"
-                      value={userData.firstName}
-                      onChange={handleInputChange}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="lastName">Last Name</Label>
-                    <Input
-                      id="lastName"
-                      placeholder="Enter your last name"
-                      className="bg-black/30 border-purple-900/30"
-                      value={userData.lastName}
-                      onChange={handleInputChange}
-                    />
-                  </div>
-                </div>
-
                 <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
+                  <Label htmlFor="name" className="text-gray-400">Name</Label>
                   <Input
-                    id="email"
-                    type="email"
-                    placeholder="Enter your email"
-                    className="bg-black/30 border-purple-900/30"
-                    value={userData.email}
-                    onChange={handleInputChange}
+                    id="name"
+                    value={`${userData.firstName} ${userData.lastName}`.trim()}
+                    className="bg-black/30 border-purple-900/30 text-gray-300 pointer-events-none select-none cursor-default"
                     readOnly
                   />
                 </div>
-
                 <div className="space-y-2">
-                  <Label htmlFor="bio">Bio</Label>
-                  <Textarea
-                    id="bio"
-                    placeholder="Tell us about yourself"
-                    className="bg-black/30 border-purple-900/30 min-h-[100px]"
-                    value={userData.bio}
-                    onChange={handleInputChange}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="website">Website</Label>
-                  <Input
-                    id="website"
-                    type="url"
-                    placeholder="https://your-website.com"
-                    className="bg-black/30 border-purple-900/30"
-                    value={userData.website}
-                    onChange={handleInputChange}
-                  />
-                </div>
-
-                <div className="flex justify-end">
-                  <Button type="submit" className="bg-purple-600 hover:bg-purple-700" disabled={isLoading}>
-                    {isLoading ? "Saving..." : "Save Changes"}
-                  </Button>
+                  <Label htmlFor="email" className="text-gray-400">Email</Label>
+                  <div className="relative">
+                    <Input
+                      id="email"
+                      type="email"
+                      value={userData.email}
+                      className="bg-black/30 border-purple-900/30 text-gray-300 pr-10 cursor-pointer"
+                      readOnly
+                      onClick={() => copyToClipboard(userData.email)}
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 text-gray-400 hover:text-white hover:bg-transparent"
+                      onClick={() => copyToClipboard(userData.email)}
+                    >
+                      {isCopied ? (
+                        <Check className="h-4 w-4 text-green-500" />
+                      ) : (
+                        <Copy className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
                 </div>
               </div>
-            </form>
+            </div>
 
             {/* API Usage */}
             <div className="bg-black/40 backdrop-blur-sm rounded-xl border border-purple-900/30 p-6">
