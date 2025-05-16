@@ -184,13 +184,13 @@ export default function ServiceWorkflowBuilder() {
   const [serviceData, setServiceData] = useState({
     title: "",
     description: "",
+    inputType: "text",
+    outputType: "text",
     icon: "Wand2",
     color: "from-purple-600 to-purple-800",
-    inputType: "select",  // This will now be the actual workflow input type
-    outputType: "select", // This will now be the actual workflow output type
-    placeholder: "",
+    placeholder: "Enter your text here...",
     buttonText: "Generate",
-    isPublic: false,
+    isPublic: false
   })
 
   // Add new state for filtering
@@ -1139,100 +1139,96 @@ export default function ServiceWorkflowBuilder() {
                 {/* Inner subtle glow effects */}
                 <CardGlowEffects />
                 <div className="space-y-4 relative z-10">
-                  <div className="space-y-2">
-                    <Label htmlFor="title" className="text-white font-medium">
-                      Service Title
-                    </Label>
-                    <Input
-                      id="title"
-                      value={serviceData.title}
-                      onChange={(e) => handleChange("title", e.target.value)}
-                      placeholder="E.g., Custom Image Generator"
-                      className="bg-black/50 border-purple-900/50 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all"
-                    />
-                  </div>
+                  <div className="space-y-6">
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="title">Service Name</Label>
+                        <Input
+                          id="title"
+                          value={serviceData.title}
+                          onChange={(e) => setServiceData({ ...serviceData, title: e.target.value })}
+                          className="bg-black/30 border-purple-900/30"
+                          placeholder="Enter service name"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="description">Description</Label>
+                        <Textarea
+                          id="description"
+                          value={serviceData.description}
+                          onChange={(e) => setServiceData({ ...serviceData, description: e.target.value })}
+                          className="bg-black/30 border-purple-900/30"
+                          placeholder="Describe what your service does"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="icon" className="text-white font-medium">
+                          Icon
+                        </Label>
+                        <Select value={serviceData.icon} onValueChange={(value) => handleChange("icon", value)}>
+                          <SelectTrigger id="icon" className="bg-black/50 border-purple-900/50 text-white">
+                            <SelectValue placeholder="Select an icon" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <div className="bg-black/90 border-purple-900/50 text-white">
+                              {iconOptions.map((icon) => (
+                                <SelectItem key={icon.value} value={icon.value} className="flex items-center hover:bg-purple-900/20">
+                                  <div className="flex items-center">
+                                    <icon.icon className="h-4 w-4 mr-2" />
+                                    <span>{icon.label}</span>
+                                  </div>
+                                </SelectItem>
+                              ))}
+                            </div>
+                          </SelectContent>
+                        </Select>
+                      </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="description" className="text-white font-medium">
-                      Description
-                    </Label>
-                    <Textarea
-                      id="description"
-                      value={serviceData.description}
-                      onChange={(e) => handleChange("description", e.target.value)}
-                      placeholder="Describe what your service does..."
-                      className="bg-black/50 border-purple-900/50 text-white min-h-[80px] focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all"
-                    />
-                  </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="placeholder" className="text-white font-medium">
+                          Input Placeholder
+                        </Label>
+                        <Input
+                          id="placeholder"
+                          value={serviceData.placeholder}
+                          onChange={(e) => handleChange("placeholder", e.target.value)}
+                          placeholder="E.g., Enter your prompt here..."
+                          className="bg-black/50 border-purple-900/50 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all"
+                        />
+                      </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="icon" className="text-white font-medium">
-                        Icon
-                      </Label>
-                      <Select value={serviceData.icon} onValueChange={(value) => handleChange("icon", value)}>
-                        <SelectTrigger id="icon" className="bg-black/50 border-purple-900/50 text-white">
-                          <SelectValue placeholder="Select an icon" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <div className="bg-black/90 border-purple-900/50 text-white">
-                            {iconOptions.map((icon) => (
-                              <SelectItem key={icon.value} value={icon.value} className="flex items-center hover:bg-purple-900/20">
-                                <div className="flex items-center">
-                                  <icon.icon className="h-4 w-4 mr-2" />
-                                  <span>{icon.label}</span>
-                                </div>
-                              </SelectItem>
-                            ))}
-                          </div>
-                        </SelectContent>
-                      </Select>
+                      <div className="space-y-2">
+                        <Label htmlFor="buttonText" className="text-white font-medium">
+                          Button Text
+                        </Label>
+                        <Input
+                          id="buttonText"
+                          value={serviceData.buttonText}
+                          onChange={(e) => handleChange("buttonText", e.target.value)}
+                          placeholder="E.g., Generate"
+                          className="bg-black/50 border-purple-900/50 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all"
+                        />
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="placeholder" className="text-white font-medium">
-                      Input Placeholder
-                    </Label>
-                    <Input
-                      id="placeholder"
-                      value={serviceData.placeholder}
-                      onChange={(e) => handleChange("placeholder", e.target.value)}
-                      placeholder="E.g., Enter your prompt here..."
-                      className="bg-black/50 border-purple-900/50 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all"
-                    />
-                  </div>
+                    <div className="flex flex-col sm:flex-row justify-between items-center mt-8 gap-4">
+                      <Button
+                        variant="outline"
+                        onClick={() => router.push("/apps")}
+                        className="border-purple-700/40 text-white hover:bg-purple-900/30 transition-all duration-300 hover:scale-105 rounded-lg px-5 py-2 flex items-center w-full sm:w-auto"
+                      >
+                        <ArrowLeft className="mr-2 h-4 w-4" />
+                        Back to Dashboard
+                      </Button>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="buttonText" className="text-white font-medium">
-                      Button Text
-                    </Label>
-                    <Input
-                      id="buttonText"
-                      value={serviceData.buttonText}
-                      onChange={(e) => handleChange("buttonText", e.target.value)}
-                      placeholder="E.g., Generate"
-                      className="bg-black/50 border-purple-900/50 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all"
-                    />
-                  </div>
-
-                  <div className="flex flex-col sm:flex-row justify-between items-center mt-8 gap-4">
-                    <Button
-                      variant="outline"
-                      onClick={() => router.push("/apps")}
-                      className="border-purple-700/40 text-white hover:bg-purple-900/30 transition-all duration-300 hover:scale-105 rounded-lg px-5 py-2 flex items-center w-full sm:w-auto"
-                    >
-                      <ArrowLeft className="mr-2 h-4 w-4" />
-                      Back to Dashboard
-                    </Button>
-
-                    <Button
-                      onClick={() => setActiveTab("workflow")}
-                      className="bg-gradient-to-r from-purple-600 to-purple-800 text-white rounded-lg px-5 py-2 shadow-lg transition-all duration-300 hover:shadow-purple-500/40 hover:scale-105 hover:from-purple-700 hover:to-purple-900 flex items-center w-full sm:w-auto"
-                    >
-                      Continue to Workflow Builder
-                      <ArrowRight className="ml-2 h-4 w-4" />
-                    </Button>
+                      <Button
+                        onClick={() => setActiveTab("workflow")}
+                        className="bg-gradient-to-r from-purple-600 to-purple-800 text-white rounded-lg px-5 py-2 shadow-lg transition-all duration-300 hover:shadow-purple-500/40 hover:scale-105 hover:from-purple-700 hover:to-purple-900 flex items-center w-full sm:w-auto"
+                      >
+                        Continue to Workflow Builder
+                        <ArrowRight className="ml-2 h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </Card>
@@ -2019,10 +2015,19 @@ export default function ServiceWorkflowBuilder() {
 
                       {/* Service Card Preview */}
                       <div className="bg-black/60 backdrop-blur-md rounded-xl border border-purple-700/40 p-6 shadow-lg">
-                        <div
-                          className={`w-12 h-12 rounded-lg flex items-center justify-center mb-4 bg-gradient-to-br ${serviceData.color} shadow-lg`}
-                        >
-                          <SelectedIcon className="h-6 w-6 text-white" />
+                        <div className="flex justify-between items-start mb-4">
+                          <div
+                            className={`w-12 h-12 rounded-lg flex items-center justify-center bg-gradient-to-br ${serviceData.color} shadow-lg`}
+                          >
+                            <SelectedIcon className="h-6 w-6 text-white" />
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <Label className="text-sm text-gray-400">Public Service</Label>
+                            <Switch
+                              checked={serviceData.isPublic}
+                              onCheckedChange={(checked) => setServiceData({ ...serviceData, isPublic: checked })}
+                            />
+                          </div>
                         </div>
                         <h3 className="text-lg font-semibold text-white mb-2">
                           {serviceData.title || "Service Title"}
