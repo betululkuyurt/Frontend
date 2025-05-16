@@ -1629,7 +1629,7 @@ export default function ServiceWorkflowBuilder() {
                     </DialogTrigger>
 
                     <DialogContent
-                      className="bg-black/80 backdrop-blur-md border border-purple-700/50 text-white w-[90vw] max-w-3xl  shadow-xl relative rounded-xl z-50"
+                      className="bg-black/80 backdrop-blur-md border border-purple-700/50 text-white w-[95vw] sm:w-[90vw] md:w-[80vw] lg:w-[70vw] xl:w-[60vw] max-w-3xl shadow-xl relative rounded-xl z-50 overflow-y-auto max-h-[90vh]"
                       style={{
                         top: "50%",
                         left: "50%",
@@ -1670,7 +1670,7 @@ export default function ServiceWorkflowBuilder() {
                             <SelectTrigger id="agentType" className="bg-black/50 border-purple-900/40 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all">
                               <SelectValue placeholder="Select agent type" />
                             </SelectTrigger>
-                            <SelectContent>
+                            <SelectContent className="max-h-[200px] overflow-y-auto">
                               <div className="bg-black/90 border-purple-900/40 text-white">
                                 {isLoadingAgentTypes ? (
                                   <div className="p-2 text-center text-sm text-gray-400">Loading...</div>
@@ -1691,7 +1691,7 @@ export default function ServiceWorkflowBuilder() {
                           )}
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           <div className="space-y-2">
                             <Label htmlFor="agentName" className="text-white font-medium">Agent Name</Label>
                             <Input
@@ -1716,7 +1716,7 @@ export default function ServiceWorkflowBuilder() {
                         </div>
 
                         {/* Replace input/output type dropdowns with text display */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           <div className="space-y-2">
                             <Label className="text-white font-medium">Input Type</Label>
                             <div className="p-2 bg-black/50 border border-purple-900/40 rounded-md">
@@ -1764,7 +1764,7 @@ export default function ServiceWorkflowBuilder() {
                               <SelectTrigger className="bg-black/50 border-purple-900/40 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all">
                                 <SelectValue placeholder="Select model" />
                               </SelectTrigger>
-                              <SelectContent>
+                              <SelectContent className="max-h-[200px] overflow-y-auto">
                                 <div className="bg-black/90 border-purple-900/40 text-white">
                                   <SelectItem value="gemini-pro" className="hover:bg-purple-900/20">Gemini Pro</SelectItem>
                                   <SelectItem value="gemini-pro-vision" className="hover:bg-purple-900/20">Gemini Pro Vision</SelectItem>
@@ -1777,7 +1777,7 @@ export default function ServiceWorkflowBuilder() {
                         {newAgentData.agentType === "text2speech" && (
                           <div className="bg-black/40 p-4 rounded-lg border border-purple-900/30">
                             <h4 className="text-sm font-medium text-purple-200 mb-3">Text to Speech Configuration</h4>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                               <div className="space-y-2">
                                 <Label htmlFor="voice" className="text-white font-medium">Voice</Label>
                                 <Select
@@ -1792,7 +1792,7 @@ export default function ServiceWorkflowBuilder() {
                                   <SelectTrigger className="bg-black/50 border-purple-900/40 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all">
                                     <SelectValue placeholder="Select voice" />
                                   </SelectTrigger>
-                                  <SelectContent>
+                                  <SelectContent className="max-h-[200px] overflow-y-auto">
                                     <div className="bg-black/90 border-purple-900/40 text-white">
                                       <SelectItem value="en-US-ChristopherNeural" className="hover:bg-purple-900/20">English US - Christopher</SelectItem>
                                       <SelectItem value="en-US-JennyNeural" className="hover:bg-purple-900/20">English US - Jenny</SelectItem>
@@ -1819,7 +1819,7 @@ export default function ServiceWorkflowBuilder() {
                                   <SelectTrigger className="bg-black/50 border-purple-900/40 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all">
                                     <SelectValue placeholder="Select rate" />
                                   </SelectTrigger>
-                                  <SelectContent>
+                                  <SelectContent className="max-h-[200px] overflow-y-auto">
                                     <div className="bg-black/90 border-purple-900/40 text-white">
                                       <SelectItem value="-50%" className="hover:bg-purple-900/20">Very Slow</SelectItem>
                                       <SelectItem value="-25%" className="hover:bg-purple-900/20">Slow</SelectItem>
@@ -1881,7 +1881,7 @@ export default function ServiceWorkflowBuilder() {
                                   <SelectTrigger id="selectedApiKey" className="bg-black/50 border-purple-900/40 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all">
                                     <SelectValue placeholder="Select a saved API key" />
                                   </SelectTrigger>
-                                  <SelectContent>
+                                  <SelectContent className="max-h-[200px] overflow-y-auto">
                                     <div className="bg-black/90 border-purple-900/40 text-white">
                                       {isLoadingApiKeys ? (
                                         <div className="flex items-center justify-center p-2">
@@ -1947,7 +1947,6 @@ export default function ServiceWorkflowBuilder() {
                               try {
                                 const result = await createAgent();
                                 if (result) {
-                                  // Simply set the dialog state to close
                                   setIsAgentDialogOpen(false);
                                 }
                               } catch (error) {
@@ -1956,7 +1955,7 @@ export default function ServiceWorkflowBuilder() {
                                 setIsCreatingAgent(false);
                               }
                             }}
-                            className="bg-gradient-to-r from-purple-600 to-purple-800 text-white hover:opacity-90 transition-all duration-300 hover:shadow-purple-500/30 hover:scale-105"
+                            className="bg-gradient-to-r from-purple-600 to-purple-800 text-white hover:opacity-90 transition-all duration-300 hover:shadow-purple-500/30 hover:scale-105 w-full sm:w-auto"
                             disabled={isCreatingAgent || !newAgentData.name || !newAgentData.agentType}
                           >
                             {isCreatingAgent ? (
