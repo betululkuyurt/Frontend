@@ -18,10 +18,18 @@ import {
   Wand2,
   Plus,
   Loader2,
+  SquarePlus,
+  Eraser,
+  Check,
+  Bot,
+  Sparkle,
+  Sparkles,
+  BotOff,
 } from "lucide-react"
 import { toast } from "@/components/ui/use-toast"
 import { decodeJWT } from "@/lib/auth"
 import { deleteMiniService } from "@/lib/services"
+import { Play } from "next/font/google"
 
 // Define the service type
 interface Service {
@@ -76,7 +84,10 @@ interface Process {
   created_at: string
   updated_at: string
   description: string | null
+  type: number 
 }
+
+
 
 export default function DashboardPage() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
@@ -476,7 +487,26 @@ export default function DashboardPage() {
   }
 
   // Helper function to get appropriate icon based on service_type
-  const getActivityIcon = (serviceType: string) => {
+  const getActivityIcon = (serviceType: string, activityType?: number) => {
+    // If we have an explicit activity type, use that first
+    if (activityType !== undefined) {
+      switch (activityType) {
+        case 0:  // created a service
+          return <SquarePlus className="h-5 w-5 text-blue-400" />
+        case 1:  // created an agent
+          return <Bot className="h-5 w-5 text-green-400" />
+        case 2:  // enhance  related
+          return <Sparkles className="h-5 w-5 text-orange-400" />
+        case 3:  // delete agent
+          return <BotOff className="h-5 w-5 text-red-400" />
+        case 4:  // delete service
+          return <Eraser className="h-5 w-5 text-emerald-400" />
+        case 5:  // run service/workflow related
+          return <Check className="h-5 w-5 text-indigo-400" />
+      }
+    }
+    
+    // Fallback to service type if activity type is not available
     switch (serviceType) {
       case "text-to-image":
         return <ImageIcon className="h-5 w-5 text-pink-400" />
@@ -498,9 +528,21 @@ export default function DashboardPage() {
         return <Wand2 className="h-5 w-5 text-gray-400" />
     }
   }
-
-  // Helper function to get background color based on service_type
-  const getActivityBgColor = (serviceType: string) => {
+  // Helper function to get background color based on activity type
+  const getActivityBgColor = (serviceType: string, activityType?: number) => {
+    // If we have an explicit activity type, use that first
+    if (activityType !== undefined) {
+      switch (activityType) {
+        case 0:  return "bg-blue-600/20"    // Video related
+        case 1:  return "bg-green-600/20"   // Chat related
+        case 2:  return "bg-orange-600/20"  // Audio related
+        case 3:  return "bg-red-600/20"     // Video captions related
+        case 4:  return "bg-emerald-600/20" // Document related
+        case 5:  return "bg-indigo-600/20"  // Mini service/workflow related
+      }
+    }
+    
+    // Fallback to service type
     switch (serviceType) {
       case "text-to-image":
         return "bg-pink-600/20"
@@ -522,6 +564,42 @@ export default function DashboardPage() {
         return "bg-gray-600/20"
     }
   }
+
+  // Helper function to update the Recent Activity section rendering
+  const renderActivityItem = (activity: Process) => {
+    return (
+      <div key={activity.id} className="flex items-start gap-4 p-4 rounded-lg hover:bg-white/5 transition-colors">
+        <div className={`w-10 h-10 rounded-full ${getActivityBgColor(activity.service_type, activity.type)} flex items-center justify-center flex-shrink-0`}>
+          {getActivityIcon(activity.service_type, activity.type)}
+        </div>
+        <div className="flex-1">
+          <div className="flex justify-between items-start">
+            <h3 className="text-white font-medium">{getActivityTitle(activity)}</h3>
+            <span className="text-gray-500 text-xs">{formatDate(activity.created_at)}</span>
+          </div>
+          <p className="text-gray-400 text-sm mt-1">
+            {activity.description || getActivityDescription(activity)}
+          </p>
+          
+          {/* Status indicator when applicable */}
+          {activity.status && activity.status !== "completed" && (
+            <span className={`inline-flex items-center mt-2 px-2 py-0.5 rounded text-xs font-medium ${
+              activity.status === "in_progress" 
+                ? "bg-blue-900/30 text-blue-300"
+                : activity.status === "failed"
+                ? "bg-red-900/30 text-red-300"
+                : "bg-gray-800 text-gray-300"
+            }`}>
+              {activity.status === "in_progress" ? "In Progress" : 
+               activity.status === "failed" ? "Failed" : 
+               activity.status.charAt(0).toUpperCase() + activity.status.slice(1)}
+            </span>
+          )}
+        </div>
+      </div>
+    )
+  }
+
 
   // Helper function to format date for display
   const formatDate = (dateString: string) => {
@@ -566,21 +644,19 @@ export default function DashboardPage() {
     }
     
     // For built-in services
-    switch (process.service_type) {
-      case "text-to-image":
-        return "Image Generated"
-      case "bedtime-story":
-        return "Bedtime Story Created"
-      case "video-translation":
-        return "Video Translated"
-      case "ai-chat":
-        return "AI Chat Conversation"
-      case "audio-documents":
-        return "Audio Document Created"
-      case "video-captions":
-        return "Video Captioning Complete"
-      case "daily-recap":
-        return "Daily Recap Generated"
+    switch (process.type) {
+      case 0:  // created a service
+          return "Service Created"
+        case 1:  // created an agent
+          return "Agent Created"
+        case 2:  // enhance  related
+          return "Agent Enhanced"
+        case 3:  // delete agent
+          return "Agent Deleted"
+        case 4:  // delete service
+          return "Service Deleted"
+        case 5:  // run service/workflow related
+          return "Service Ran Successfully"
       default:
         return "Process Completed"
     }
@@ -762,6 +838,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Recent Activity Section */}
+                    {/* Recent Activity Section */}
           <section className="mt-16">
             <h2 className="text-2xl md:text-3xl font-bold text-white mb-8">Recent Activity</h2>
             
@@ -771,29 +848,19 @@ export default function DashboardPage() {
                 <span className="text-purple-300">Loading your recent activities...</span>
               </div>
             ) : recentActivities.length > 0 ? (
-              <div className="bg-black/40 backdrop-blur-sm rounded-xl border border-purple-900/30 p-6">
-                <div className="space-y-6">
-                  {recentActivities.map((activity) => (
-                    <div key={activity.id} className="flex items-start gap-4">
-                      <div className={`w-10 h-10 rounded-full ${getActivityBgColor(activity.service_type)} flex items-center justify-center flex-shrink-0`}>
-                        {getActivityIcon(activity.service_type)}
-                      </div>
-                      <div>
-                        <h3 className="text-white font-medium">{getActivityTitle(activity)}</h3>
-                        <p className="text-gray-400 text-sm mt-1">
-                          {getActivityDescription(activity)}
-                        </p>
-                        <p className="text-gray-500 text-xs mt-2">
-                          {formatDate(activity.created_at)}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
+              <div className="bg-black/40 backdrop-blur-sm rounded-xl border border-purple-900/30 overflow-hidden">
+                <div className="divide-y divide-purple-900/30">
+                  {recentActivities.map(renderActivityItem)}
                 </div>
+                
+                
               </div>
             ) : (
-              <div className="bg-black/40 backdrop-blur-sm rounded-xl border border-purple-900/30 p-6 text-center">
-                <p className="text-gray-400">You don't have any recent activities yet.</p>
+              <div className="bg-black/40 backdrop-blur-sm rounded-xl border border-purple-900/30 p-8 text-center">
+                <div className="w-16 h-16 bg-purple-600/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <FileText className="h-8 w-8 text-purple-400 opacity-60" />
+                </div>
+                <p className="text-gray-300 font-medium">You don't have any recent activities yet</p>
                 <p className="text-gray-500 text-sm mt-2">Try out one of our AI services to get started!</p>
               </div>
             )}
