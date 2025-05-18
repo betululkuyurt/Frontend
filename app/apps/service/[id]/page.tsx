@@ -43,7 +43,7 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useRouter, useParams } from "next/navigation"
 import Cookies from "js-cookie"
 import { NavBar } from "@/components/nav-bar"
@@ -51,15 +51,26 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { Loader2, ArrowLeft, Wand2, ImageIcon, Headphones, FileText, Video, Trash2 } from "lucide-react"
+import { Loader2, ArrowLeft, Wand2, ImageIcon, Headphones, FileText, Video, Trash2, ArrowRightIcon } from "lucide-react"
 import { toast } from "@/components/ui/use-toast"
 import { deleteMiniService } from "@/lib/services"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 interface MiniService {
   id: number
   name: string
   description: string
-  workflow: any
+  workflow: {
+    nodes: {
+      [key: string]: {
+        agent_id: number;
+        agent_name?: string;
+        agent_description?: string;
+        agent_type?: string;
+        next: string | null;
+      }
+    }
+  };
   input_type: string
   output_type: string
   api_key?: string
@@ -140,7 +151,9 @@ export default function ServicePage() {
       workflow: data.workflow,
       api_key: data.api_key ? "present" : "not present",
       api_key_id: data.api_key_id,
-       workflow_first_step: data.workflow?.steps?.[0],
+       workflow_first_node: data.workflow?.nodes ? Object.keys(data.workflow.nodes)[0] : null,
+       workflow_nodes_count: data.workflow?.nodes ? Object.keys(data.workflow.nodes).length : 0,
+       workflow_sample_node: data.workflow?.nodes ? data.workflow.nodes[Object.keys(data.workflow.nodes)[0]] : null,
       average_token_usage: data.average_token_usage,
        run_time: data.run_time
       });
@@ -165,6 +178,98 @@ export default function ServicePage() {
     }
   }
 
+  // Add state for API keys
+  const [apiKeys, setApiKeys] = useState<{[agentId: number]: string}>({});
+  const [availableApiKeys, setAvailableApiKeys] = useState<{[provider: string]: {id: string, name: string}[]}>({});
+  
+  // Fetch available API keys
+  useEffect(() => {
+    const fetchApiKeys = async () => {
+      if (!isAuthenticated) return;
+      
+      try {
+        const token = localStorage.getItem("token") || localStorage.getItem("accessToken") || Cookies.get("accessToken");
+        const currentUserId = Cookies.get("user_id");
+        
+        const response = await fetch(
+          `http://127.0.0.1:8000/api/v1/api-keys?current_user_id=${currentUserId}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+        
+        if (!response.ok) throw new Error("Failed to fetch API keys");
+        
+        const data = await response.json();
+        const groupedKeys: {[provider: string]: {id: string, name: string}[]} = {};
+        
+        data.forEach((key: any) => {
+          if (!groupedKeys[key.provider]) {
+            groupedKeys[key.provider] = [];
+          }
+          groupedKeys[key.provider].push({
+            id: key.id,
+            name: key.name || `${key.provider.charAt(0).toUpperCase() + key.provider.slice(1)} Key ${key.id}`
+          });
+        });
+        
+        setAvailableApiKeys(groupedKeys);
+      } catch (error) {
+        console.error("Error fetching API keys:", error);
+      }
+    };
+    
+    fetchApiKeys();
+  }, [isAuthenticated]);
+  
+  // Add a list of agent types that require API keys based on backend data
+  const AGENT_TYPES_REQUIRING_API_KEY = [
+    "gemini",
+    "openai",
+    "gemini_text2image",
+    "custom_endpoint_llm"
+  ];
+
+  // Function to extract agents that require API keys
+  const getAgentsRequiringApiKey = useCallback(() => {
+    if (!service?.workflow?.nodes) return [];
+    
+    const agents: {id: number, name: string, type: string, nodeId: string}[] = [];
+    
+    Object.entries(service.workflow.nodes).forEach(([nodeId, node]) => {
+      // Check if agent type requires API key based on our list from backend
+      if (node.agent_type && AGENT_TYPES_REQUIRING_API_KEY.includes(node.agent_type.toLowerCase())) {
+        agents.push({
+          id: node.agent_id,
+          name: node.agent_name || `Agent ${node.agent_id}`,
+          type: node.agent_type.toLowerCase(),
+          nodeId
+        });
+      }
+    });
+    
+    console.log("Agents requiring API key:", agents);
+    return agents;
+  }, [service?.workflow]);
+  
+  // Check if all required API keys are selected
+  const areAllRequiredApiKeysSelected = useCallback(() => {
+    const requiredAgents = getAgentsRequiringApiKey();
+    if (requiredAgents.length === 0) return true;
+    
+    return requiredAgents.every(agent => apiKeys[agent.id]);
+  }, [apiKeys, getAgentsRequiringApiKey]);
+  
+  // Handle API key selection
+  const handleApiKeyChange = (agentId: number, keyId: string) => {
+    setApiKeys(prev => ({
+      ...prev,
+      [agentId]: keyId
+    }));
+  };
+
   // Handle form submission
   const handleSubmit = async () => {
     if (!service || (!userInput && !uploadedFile)) return;
@@ -184,63 +289,22 @@ export default function ServicePage() {
         throw new Error("User ID not found");
       }
   
-      // Debug log service details
-      console.log("Service details:", {
-        id: service.id,
-        workflow: service.workflow,
-        api_key: service.api_key ? "present" : "not present",
-        api_key_id: service.api_key_id,
-      });
-  
       // Prepare request headers
       const headers: Record<string, string> = {
         "Authorization": `Bearer ${token}`,
       };
-  
-      // Add API key to headers if available
-      if (service.api_key) {
-        // If we have a direct API key, send it
-        headers["X-API-Key"] = service.api_key;
-        console.log("Using direct API key");
-      } else if (service.api_key_id) {
-        // If we have an API key ID, send it to let backend retrieve the actual key
-        headers["X-API-Key-ID"] = service.api_key_id;
-        console.log("Using API key ID:", service.api_key_id);
-        
-        // For Gemini services, we need to explicitly request the key type
-        const workflow = service.workflow;
-        if (workflow && workflow.steps && workflow.steps.length > 0) {
-          const firstStep = workflow.steps[0];
-          if (firstStep.agent_type === "gemini") {
-            headers["X-API-Provider"] = "gemini";
-            console.log("Detected Gemini service, added provider header");
-          }
-        }
-      }
-  
-      // Debug log headers
-      console.log("Request headers:", {
-        ...headers,
-        "Authorization": headers.Authorization ? "present" : "not present",
-        "X-API-Key": headers["X-API-Key"] ? "present" : "not present",
-        "X-API-Key-ID": headers["X-API-Key-ID"],
-        "X-API-Provider": headers["X-API-Provider"],
-      });
   
       // Prepare request body
       let body: FormData | string;
       if (service.input_type === "text") {
         const bodyData = { 
           input: userInput,
-          // Include API key information in the request body as well
-          api_key: service.api_key,
-          api_key_id: service.api_key_id,
-          provider: service.workflow?.steps?.[0]?.agent_type
+          api_keys: apiKeys
         };
         body = JSON.stringify(bodyData);
         console.log("Request body:", {
           ...bodyData,
-          api_key: bodyData.api_key ? "present" : "not present",
+          api_keys: Object.keys(bodyData.api_keys).length > 0 ? "present" : "not present",
         });
         headers["Content-Type"] = "application/json";
       } else if (uploadedFile) {
@@ -249,16 +313,10 @@ export default function ServicePage() {
         if (userInput) {
           body.append("input", userInput);
         }
-        // Include API key information in FormData
-        if (service.api_key) {
-          body.append("api_key", service.api_key);
-        }
-        if (service.api_key_id) {
-          body.append("api_key_id", service.api_key_id);
-        }
-        const provider = service.workflow?.steps?.[0]?.agent_type;
-        if (provider) {
-          body.append("provider", provider);
+        
+        // Add API keys to form data
+        if (Object.keys(apiKeys).length > 0) {
+          body.append("api_keys", JSON.stringify(apiKeys));
         }
       } else {
         throw new Error("No input provided");
@@ -651,6 +709,87 @@ export default function ServicePage() {
     }
   }
 
+  // Render workflow visualization
+  const renderWorkflow = () => {
+    if (!service?.workflow?.nodes) return null;
+    
+    // Function to get nodes in order
+    const getOrderedNodes = () => {
+      const nodes = service.workflow.nodes;
+      const orderedNodes: any[] = [];
+      
+      // Find starting node
+      let currentNodeId = Object.keys(nodes).find(id => {
+        // A starting node is typically not referenced as "next" in any other node
+        return !Object.values(nodes).some(node => node.next === id);
+      });
+      
+      // If no starting node found, just use the first node
+      if (!currentNodeId && Object.keys(nodes).length > 0) {
+        currentNodeId = Object.keys(nodes)[0];
+      }
+      
+      // Traverse the linked nodes
+      while (currentNodeId) {
+        const node = nodes[currentNodeId];
+        if (!node) break;
+        
+        // Log the node structure to debug
+        console.log(`Node ${currentNodeId}:`, node);
+        
+        orderedNodes.push({
+          id: currentNodeId,
+          ...node
+        });
+        
+        currentNodeId = node.next as string | undefined;
+      }
+      
+      return orderedNodes;
+    };
+    
+    const orderedNodes = getOrderedNodes();
+    console.log("Ordered nodes:", orderedNodes);
+    
+    return (
+      <div className="mt-6 overflow-x-auto pb-4">
+        <div className="flex flex-col space-y-8 min-w-fit">
+          {orderedNodes.map((node, index) => (
+            <div key={node.id} className="flex flex-col">
+              <div className="bg-black/40 backdrop-blur-sm rounded-lg border border-purple-900/30 p-4">
+                <h3 className="font-semibold text-white text-sm">
+                  {node.agent_name || `Agent ${node.agent_id}`}
+                </h3>
+                <p className="text-gray-400 text-xs mt-1">
+                  {node.agent_description || "No description available"}
+                </p>
+                <div className="mt-2 flex flex-wrap gap-1">
+                  <span className="text-xs bg-purple-900/40 text-purple-300 px-2 py-1 rounded-full">
+                    Type: {node.agent_type || "Unknown"}
+                  </span>
+                  <span className="text-xs bg-blue-900/40 text-blue-300 px-2 py-1 rounded-full">
+                    ID: {node.agent_id}
+                  </span>
+                  {AGENT_TYPES_REQUIRING_API_KEY.includes(node.agent_type?.toLowerCase() || "") && (
+                    <span className="text-xs bg-amber-900/40 text-amber-300 px-2 py-1 rounded-full">
+                      Requires API Key
+                    </span>
+                  )}
+                </div>
+              </div>
+              
+              {index < orderedNodes.length - 1 && (
+                <div className="flex justify-center my-1">
+                  <ArrowRightIcon className="h-5 w-5 text-purple-400 rotate-90" />
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   if (isServiceLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-black via-purple-950/20 to-black">
@@ -698,7 +837,7 @@ export default function ServicePage() {
       <NavBar />
 
       <main className="pt-24 pb-16 px-4">
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-6xl mx-auto">
           <div className="flex items-center justify-between mb-6">
             <Button
               variant="ghost"
@@ -709,93 +848,158 @@ export default function ServicePage() {
               Back to Dashboard
             </Button>
             
-         
+            <Button
+              variant="outline"
+              className="text-red-400 hover:text-red-300 border-red-900/30 hover:bg-red-950/30"
+              onClick={handleDelete}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete Service
+            </Button>
           </div>
 
           {/* Service header with gradient background */}
-<div className={`bg-gradient-to-r ${getServiceColor()} rounded-xl p-6 mb-8`}>
-  <div className="flex items-start space-x-4">
-    <div className="w-12 h-12 rounded-full bg-black/20 backdrop-blur-sm flex items-center justify-center flex-shrink-0">
-      <Wand2 className="h-6 w-6 text-white" />
-    </div>
-    <div>
-      <h2 className="text-2xl font-bold text-white">{service?.name}</h2>
-      <p className="text-white/80 mt-1">{service?.description}</p>
-      <div className="flex items-center mt-2 space-x-2">
-        <span className="text-xs bg-black/30 text-white px-2 py-1 rounded-full">
-          Input: {service?.input_type}
-        </span>
-        <span className="text-xs bg-black/30 text-white px-2 py-1 rounded-full">
-          Output: {service?.output_type}
-        </span>
-      </div>
+          <div className={`bg-gradient-to-r ${getServiceColor()} rounded-xl p-6 mb-8`}>
+            <div className="flex items-start space-x-4">
+              <div className="w-12 h-12 rounded-full bg-black/20 backdrop-blur-sm flex items-center justify-center flex-shrink-0">
+                <Wand2 className="h-6 w-6 text-white" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-white">{service?.name}</h2>
+                <p className="text-white/80 mt-1">{service?.description}</p>
+                <div className="flex items-center mt-2 space-x-2">
+                  <span className="text-xs bg-black/30 text-white px-2 py-1 rounded-full">
+                    Input: {service?.input_type}
+                  </span>
+                  <span className="text-xs bg-black/30 text-white px-2 py-1 rounded-full">
+                    Output: {service?.output_type}
+                  </span>
+                </div>
 
-      {/* Usage stats */}
-{(service?.average_token_usage || service?.run_time !== undefined) && (
-  <div className="mt-3 pt-2 border-t border-white/20">
-    <h3 className="text-sm text-white/90 mb-1">Service Stats:</h3>
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-      {service?.run_time !== undefined && (
-        <div className="text-xs bg-black/30 p-2 rounded">
-          <span className="block text-white/70">Avg. Run Time</span>
-          <span className="text-white font-medium">{Math.round(service.run_time)}</span>
-        </div>
-      )}
-      {service?.average_token_usage && (
-        <>
-          <div className="text-xs bg-black/30 p-2 rounded">
-            <span className="block text-white/70">Prompt Tokens</span>
-            <span className="text-white font-medium">{Math.round(service.average_token_usage.prompt_tokens)}</span>
+                {/* Usage stats */}
+                {(service?.average_token_usage || service?.run_time !== undefined) && (
+                  <div className="mt-3 pt-2 border-t border-white/20">
+                    <h3 className="text-sm text-white/90 mb-1">Service Stats:</h3>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                      {service?.run_time !== undefined && (
+                        <div className="text-xs bg-black/30 p-2 rounded">
+                          <span className="block text-white/70">Avg. Run Time</span>
+                          <span className="text-white font-medium">{Math.round(service.run_time)}</span>
+                        </div>
+                      )}
+                      {service?.average_token_usage && (
+                        <>
+                          <div className="text-xs bg-black/30 p-2 rounded">
+                            <span className="block text-white/70">Prompt Tokens</span>
+                            <span className="text-white font-medium">{Math.round(service.average_token_usage.prompt_tokens)}</span>
+                          </div>
+                          <div className="text-xs bg-black/30 p-2 rounded">
+                            <span className="block text-white/70">Completion Tokens</span>
+                            <span className="text-white font-medium">{Math.round(service.average_token_usage.completion_tokens)}</span>
+                          </div>
+                          <div className="text-xs bg-black/30 p-2 rounded">
+                            <span className="block text-white/70">Total Tokens</span>
+                            <span className="text-white font-medium">{Math.round(service.average_token_usage.total_tokens)}</span>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
-          <div className="text-xs bg-black/30 p-2 rounded">
-            <span className="block text-white/70">Completion Tokens</span>
-            <span className="text-white font-medium">{Math.round(service.average_token_usage.completion_tokens)}</span>
-          </div>
-          <div className="text-xs bg-black/30 p-2 rounded">
-            <span className="block text-white/70">Total Tokens</span>
-            <span className="text-white font-medium">{Math.round(service.average_token_usage.total_tokens)}</span>
-          </div>
-        </>
-      )}
-    </div>
-  </div>
-)}
-    </div>
-  </div>
-</div>
 
-          {/* Main content card */}
-          <Card className="bg-black/40 backdrop-blur-sm border border-purple-900/30 p-6 md:p-8">
-            {/* Input section */}
-            <div className="space-y-6 mb-8">
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-200">
-                  {service?.input_type === "text"
-                    ? "Your Input"
-                    : `${(service?.input_type || "").charAt(0).toUpperCase() + (service?.input_type || "").slice(1)} Input`}
-                </label>
-                {renderInput()}
+          {/* Main content with workflow visualization */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Input/Output section - 2/3 of the screen on large displays */}
+            <Card className="bg-black/40 backdrop-blur-sm border border-purple-900/30 p-6 md:p-8 lg:col-span-2">
+              {/* Input section */}
+              <div className="space-y-6 mb-8">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-200">
+                    {service?.input_type === "text"
+                      ? "Your Input"
+                      : `${(service?.input_type || "").charAt(0).toUpperCase() + (service?.input_type || "").slice(1)} Input`}
+                  </label>
+                  {renderInput()}
+                </div>
+
+                {/* API Key Selection */}
+                {getAgentsRequiringApiKey().length > 0 && (
+                  <div className="space-y-4 pt-4 border-t border-purple-800/50 mt-6 bg-purple-900/10 p-4 rounded-lg">
+                    <h3 className="text-sm font-medium text-purple-300">Required API Keys</h3>
+                    <p className="text-xs text-gray-400 mb-3">
+                      This service requires API keys for the following agents:
+                    </p>
+                    
+                    {getAgentsRequiringApiKey().map(agent => (
+                      <div key={agent.id} className="space-y-2 bg-black/30 p-3 rounded-lg">
+                        <label className="text-xs font-medium text-purple-200 flex items-center">
+                          <span className="inline-block w-3 h-3 rounded-full bg-purple-500 mr-2"></span>
+                          Select API Key for {agent.name} ({agent.type})
+                        </label>
+                        <Select
+                          value={apiKeys[agent.id] || ""}
+                          onValueChange={(value) => handleApiKeyChange(agent.id, value)}
+                        >
+                          <SelectTrigger className="bg-black/40 border-purple-900/30 text-white">
+                            <SelectValue placeholder={`Select ${agent.type} API Key`} />
+                          </SelectTrigger>
+                          <SelectContent className="bg-zinc-950 border-purple-900/30 text-white">
+                            {availableApiKeys[agent.type]?.length > 0 ? (
+                              availableApiKeys[agent.type]?.map(key => (
+                                <SelectItem key={key.id} value={key.id} className="hover:bg-zinc-800">
+                                  {key.name}
+                                </SelectItem>
+                              ))
+                            ) : (
+                              <SelectItem value="none" disabled>
+                                No {agent.type} API keys available
+                              </SelectItem>
+                            )}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ))}
+                    
+                    {Object.keys(availableApiKeys).length === 0 && (
+                      <div className="text-amber-400 text-xs p-2 bg-amber-900/20 rounded-md">
+                        No API keys available. Please add API keys in your settings.
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <Button
+                  onClick={handleSubmit}
+                  disabled={isLoading || (!userInput && !uploadedFile) || !areAllRequiredApiKeysSelected()}
+                  className={`bg-gradient-to-r ${getServiceColor()} text-white hover:opacity-90`}
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Processing...
+                    </>
+                  ) : (
+                    "Run Service"
+                  )}
+                </Button>
               </div>
 
-              <Button
-                onClick={handleSubmit}
-                disabled={isLoading || (!userInput && !uploadedFile)}
-                className={`bg-gradient-to-r ${getServiceColor()} text-white hover:opacity-90`}
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Processing...
-                  </>
-                ) : (
-                  "Run Service"
-                )}
-              </Button>
-            </div>
+              {/* Output section */}
+              {(result || error) && <div className="mt-8">{renderOutput()}</div>}
+            </Card>
 
-            {/* Output section */}
-            {(result || error) && <div className="mt-8">{renderOutput()}</div>}
-          </Card>
+            {/* Workflow visualization - 1/3 of the screen on large displays */}
+            <Card className="bg-black/40 backdrop-blur-sm border border-purple-900/30 p-6 lg:row-start-1">
+              <h3 className="text-lg font-medium text-white mb-4">Workflow Visualization</h3>
+              <p className="text-gray-400 text-sm mb-4">
+                This diagram shows how agents are connected in this service.
+              </p>
+              {renderWorkflow()}
+            </Card>
+          </div>
         </div>
       </main>
     </div>
