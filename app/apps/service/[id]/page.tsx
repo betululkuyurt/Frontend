@@ -51,7 +51,7 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { Loader2, ArrowLeft, Wand2, ImageIcon, Headphones, FileText, Video, Trash2, ArrowRightIcon } from "lucide-react"
+import { Loader2, ArrowLeft, Wand2, ImageIcon, Headphones, FileText, Video, Trash2, ArrowRightIcon, LucideBrush, LucideBot, LucideVolume2, LucideMic, LucideImage, LucideSearch, LucidePlug, LucideMusic, LucideClapperboard, LucideSparkles } from "lucide-react"
 import { toast } from "@/components/ui/use-toast"
 import { deleteMiniService } from "@/lib/services"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -111,10 +111,10 @@ export default function ServicePage() {
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
   const [audioPlayer, setAudioPlayer] = useState<HTMLAudioElement | null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
-  const [agentDetails, setAgentDetails] = useState<{[id: number]: AgentDetails}>({});
+  const [agentDetails, setAgentDetails] = useState<{ [id: number]: AgentDetails }>({});
   // Add state for expanded descriptions
-  const [expandedDescriptions, setExpandedDescriptions] = useState<{[nodeId: string]: boolean}>({});
-  
+  const [expandedDescriptions, setExpandedDescriptions] = useState<{ [nodeId: string]: boolean }>({});
+
   // Add ref and slider state for workflow visualization
   const workflowScrollRef = useRef<HTMLDivElement>(null);
   const [workflowScroll, setWorkflowScroll] = useState(0);
@@ -127,10 +127,10 @@ export default function ServicePage() {
         localStorage.getItem("token") ||
         localStorage.getItem("accessToken") ||
         Cookies.get("accessToken");
-  
+
       const userId = Cookies.get("user_id"); // Debug: Check if user_id is available
       console.log("Auth check - Token:", !!token, "User ID:", userId); // Debug log
-  
+
       if (token) {
         setIsAuthenticated(true);
       } else {
@@ -138,25 +138,25 @@ export default function ServicePage() {
         router.push("/auth/login");
       }
     };
-  
+
     checkAuth();
   }, [router]);
 
   // Fetch service details
   useEffect(() => {
     if (!serviceId || !isAuthenticated) return;
-  
+
     const fetchService = async () => {
       try {
         setIsServiceLoading(true);
         const currentUserId = Cookies.get("user_id") || "0";
-  
+
         console.log("Fetching service details for ID:", serviceId);
-  
+
         const response = await fetch(
           `http://127.0.0.1:8000/api/v1/mini-services/${serviceId}?current_user_id=${currentUserId}`
         );
-  
+
         if (!response.ok) {
           if (response.status === 404) {
             // Service not found, redirect to apps page
@@ -165,7 +165,7 @@ export default function ServicePage() {
           }
           throw new Error("Service not found");
         }
-  
+
         const data = await response.json();
         console.log("Loaded service data:", {
           id: data.id,
@@ -179,9 +179,9 @@ export default function ServicePage() {
           average_token_usage: data.average_token_usage,
           run_time: data.run_time
         });
-        
+
         setService(data);
-        
+
         // After setting the service, fetch detailed agent information
         if (data.workflow?.nodes) {
           await fetchAgentDetails(data.workflow.nodes);
@@ -193,7 +193,7 @@ export default function ServicePage() {
         setIsServiceLoading(false);
       }
     };
-  
+
     fetchService();
   }, [serviceId, isAuthenticated]);
 
@@ -204,11 +204,11 @@ export default function ServicePage() {
       const uniqueAgentIds = [...new Set(agentIds)];
       const token = localStorage.getItem("token") || localStorage.getItem("accessToken") || Cookies.get("accessToken");
       const currentUserId = Cookies.get("user_id") || "0";
-      
+
       console.log("Fetching details for agents:", uniqueAgentIds);
-      
-      const agentDetailsMap: {[id: number]: AgentDetails} = {};
-      
+
+      const agentDetailsMap: { [id: number]: AgentDetails } = {};
+
       await Promise.all(
         uniqueAgentIds.map(async (agentId: number) => {
           try {
@@ -218,12 +218,12 @@ export default function ServicePage() {
                 headers: token ? { Authorization: `Bearer ${token}` } : {},
               }
             );
-            
+
             if (!response.ok) {
               console.warn(`Could not fetch details for agent ${agentId}: ${response.statusText}`);
               return;
             }
-            
+
             const agentData = await response.json();
             agentDetailsMap[agentId] = agentData;
             console.log(`Fetched details for agent ${agentId}:`, agentData);
@@ -232,30 +232,30 @@ export default function ServicePage() {
           }
         })
       );
-      
+
       setAgentDetails(agentDetailsMap);
-      
+
       // Update API key requirements based on agent types
       updateRequiredApiKeys(agentDetailsMap);
     } catch (error) {
       console.error("Error fetching agent details:", error);
     }
   };
-  
+
   // Function to update required API keys based on agent details
-  const updateRequiredApiKeys = (agents: {[id: number]: AgentDetails}) => {
+  const updateRequiredApiKeys = (agents: { [id: number]: AgentDetails }) => {
     // We'll enhance our API key management based on detailed agent information
-    const initialApiKeyState: {[agentId: number]: string} = {};
-    
+    const initialApiKeyState: { [agentId: number]: string } = {};
+
     Object.entries(agents).forEach(([agentId, details]) => {
       if (AGENT_TYPES_REQUIRING_API_KEY.includes(details.agent_type.toLowerCase())) {
         initialApiKeyState[Number(agentId)] = "";
       }
     });
-    
+
     // Only update if we have new API key requirements
     if (Object.keys(initialApiKeyState).length > 0) {
-      setApiKeys(prev => ({...prev, ...initialApiKeyState}));
+      setApiKeys(prev => ({ ...prev, ...initialApiKeyState }));
     }
   };
 
@@ -268,18 +268,18 @@ export default function ServicePage() {
   }
 
   // Add state for API keys (store key id, not api_key value)
-  const [apiKeys, setApiKeys] = useState<{[agentId: number]: string}>({});
-  const [availableApiKeys, setAvailableApiKeys] = useState<{[provider: string]: {id: string, name: string, api_key: string}[]}>({});
-  
+  const [apiKeys, setApiKeys] = useState<{ [agentId: number]: string }>({});
+  const [availableApiKeys, setAvailableApiKeys] = useState<{ [provider: string]: { id: string, name: string, api_key: string }[] }>({});
+
   // Fetch available API keys
   useEffect(() => {
     const fetchApiKeys = async () => {
       if (!isAuthenticated) return;
-      
+
       try {
         const token = localStorage.getItem("token") || localStorage.getItem("accessToken") || Cookies.get("accessToken");
         const currentUserId = Cookies.get("user_id");
-        
+
         const response = await fetch(
           `http://127.0.0.1:8000/api/v1/api-keys?current_user_id=${currentUserId}`,
           {
@@ -288,12 +288,12 @@ export default function ServicePage() {
             },
           }
         );
-        
+
         if (!response.ok) throw new Error("Failed to fetch API keys");
-        
+
         const data = await response.json();
-        const groupedKeys: {[provider: string]: {id: string, name: string, api_key: string}[]} = {};
-        
+        const groupedKeys: { [provider: string]: { id: string, name: string, api_key: string }[] } = {};
+
         data.forEach((key: any) => {
           if (!groupedKeys[key.provider]) {
             groupedKeys[key.provider] = [];
@@ -304,16 +304,16 @@ export default function ServicePage() {
             api_key: key.api_key // Store the actual API key value
           });
         });
-        
+
         setAvailableApiKeys(groupedKeys);
       } catch (error) {
         console.error("Error fetching API keys:", error);
       }
     };
-    
+
     fetchApiKeys();
   }, [isAuthenticated]);
-  
+
   // Add a list of agent types that require API keys based on backend data
   const AGENT_TYPES_REQUIRING_API_KEY = [
     "gemini",
@@ -325,13 +325,13 @@ export default function ServicePage() {
   // Function to extract agents that require API keys
   const getAgentsRequiringApiKey = useCallback(() => {
     if (!service?.workflow?.nodes) return [];
-    
-    const agents: {id: number, name: string, type: string, nodeId: string}[] = [];
-    
+
+    const agents: { id: number, name: string, type: string, nodeId: string }[] = [];
+
     Object.entries(service.workflow.nodes).forEach(([nodeId, node]) => {
       const agentId = node.agent_id;
       const agentDetail = agentDetails[agentId];
-      
+
       // If we have detailed agent info, use it to determine if API key is required
       if (agentDetail && AGENT_TYPES_REQUIRING_API_KEY.includes(agentDetail.agent_type.toLowerCase())) {
         agents.push({
@@ -340,7 +340,7 @@ export default function ServicePage() {
           type: agentDetail.agent_type.toLowerCase(),
           nodeId
         });
-      } 
+      }
       // Fallback to the basic node info if detailed info not available
       else if (node.agent_type && AGENT_TYPES_REQUIRING_API_KEY.includes(node.agent_type.toLowerCase())) {
         agents.push({
@@ -351,11 +351,11 @@ export default function ServicePage() {
         });
       }
     });
-    
+
     console.log("Agents requiring API key:", agents);
     return agents;
   }, [service?.workflow, agentDetails]);
-  
+
   // Check if all required API keys are selected
   const areAllRequiredApiKeysSelected = useCallback(() => {
     const requiredAgents = getAgentsRequiringApiKey();
@@ -380,7 +380,7 @@ export default function ServicePage() {
     console.log("[DEBUG] All required API keys selected:", allSelected);
     return allSelected;
   }, [apiKeys, getAgentsRequiringApiKey, availableApiKeys]);
-  
+
   // Handle API key selection (store key id)
   const handleApiKeyChange = (agentId: number, keyId: string) => {
     setApiKeys(prev => ({
@@ -391,7 +391,7 @@ export default function ServicePage() {
 
   // Move getApiKeysForBackend inside ServicePage and make it always use latest state
   const getApiKeysForBackend = () => {
-    const result: {[agentId: number]: string} = {};
+    const result: { [agentId: number]: string } = {};
     const requiredAgents = getAgentsRequiringApiKey();
     requiredAgents.forEach(agent => {
       const keyId = apiKeys[agent.id];
@@ -418,27 +418,27 @@ export default function ServicePage() {
     setIsLoading(true);
     setResult(null);
     setError(null);
-  
+
     try {
       const token = localStorage.getItem("token") || localStorage.getItem("accessToken") || Cookies.get("accessToken");
       if (!token) {
         throw new Error("Authentication token not found");
       }
-  
+
       const currentUserId = Cookies.get("user_id");
       if (!currentUserId) {
         throw new Error("User ID not found");
       }
-  
+
       // Prepare request headers
       const headers: Record<string, string> = {
         "Authorization": `Bearer ${token}`,
       };
-  
+
       // Prepare request body
       let body: FormData | string;
       if (service.input_type === "text") {
-        const bodyData = { 
+        const bodyData = {
           input: userInput,
           api_keys: getApiKeysForBackend()
         };
@@ -454,7 +454,7 @@ export default function ServicePage() {
         if (userInput) {
           body.append("input", userInput);
         }
-        
+
         // Add API keys to form data
         const backendKeys = getApiKeysForBackend();
         if (Object.keys(backendKeys).length > 0) {
@@ -463,7 +463,7 @@ export default function ServicePage() {
       } else {
         throw new Error("No input provided");
       }
-  
+
       // Make the API request
       const response = await fetch(
         `http://127.0.0.1:8000/api/v1/mini-services/${serviceId}/run?current_user_id=${currentUserId}`,
@@ -473,7 +473,7 @@ export default function ServicePage() {
           body,
         }
       );
-  
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);
         console.error("Backend error details:", {
@@ -482,21 +482,21 @@ export default function ServicePage() {
           errorData,
           headers: response.headers,
         });
-        
+
         throw new Error(
-          errorData?.detail || 
+          errorData?.detail ||
           `Server error: ${response.status} ${response.statusText}`
         );
       }
-  
+
       const data = await response.json();
       console.log("Service response:", data);
       setResult(data);
     } catch (err) {
       console.error("Error running service:", err);
       setError(
-        err instanceof Error 
-          ? err.message 
+        err instanceof Error
+          ? err.message
           : "An unexpected error occurred while processing your request"
       );
     } finally {
@@ -507,7 +507,7 @@ export default function ServicePage() {
   // Handle service deletion
   const handleDelete = async () => {
     if (!service?.id) return;
-    
+
     await deleteMiniService(service.id, {
       showToast: true,
       onSuccess: () => {
@@ -756,9 +756,9 @@ export default function ServicePage() {
             {audioUrl ? (
               <div>
                 <div className="mt-4">
-                  <audio 
-                    controls 
-                    className="w-full" 
+                  <audio
+                    controls
+                    className="w-full"
                     key={audioUrl}
                     onError={(e) => {
                       console.error("Audio playback error:", e);
@@ -880,7 +880,7 @@ export default function ServicePage() {
       return orderedNodes;
     };
     const orderedNodes = getOrderedNodes();
-    
+
     // Get card color based on agent type
     const getAgentColor = (type: string) => {
       type = type.toLowerCase();
@@ -897,7 +897,7 @@ export default function ServicePage() {
       <div className="relative bg-black/20 border border-purple-900/20 backdrop-blur-sm rounded-xl p-6 mb-2">
         {/* Flow line connector - continuous line through all nodes */}
         <div className="absolute left-0 right-0 top-1/2 h-[2px] -translate-y-1/2 bg-gradient-to-r from-purple-500/10 via-indigo-500/30 to-purple-500/10 z-0"></div>
-        
+
         <div className="overflow-x-auto pb-4 -mx-4 px-4 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-purple-900/30 hover:scrollbar-thumb-purple-600/50">
           <div className="flex items-stretch gap-16 min-w-fit py-4">
             {orderedNodes.map((node, idx) => {
@@ -905,14 +905,12 @@ export default function ServicePage() {
               const isLongDescription = description.length > 100;
               const isExpanded = expandedDescriptions[node.id];
               const agentColor = getAgentColor(node.agent_type);
-              
+              const showArrow = idx < orderedNodes.length - 1;
+
               return (
                 <div key={node.id} className="relative flex flex-col items-center group">
-                  {/* Node number indicator above card */}
-                 
-                  
                   {/* Card */}
-                  <div 
+                  <div
                     className={`
                       transition-all duration-300 bg-gradient-to-br from-zinc-900 to-zinc-950 
                       border-2 border-purple-900/30 rounded-xl shadow-[0_4px_20px_rgba(107,70,193,0.2)]
@@ -932,42 +930,43 @@ export default function ServicePage() {
                       }
                     }}
                   >
-                     <div className="absolute -top-3 bg-gradient-to-br from-purple-6 00 to-indigo-700 h-6 w-6 rounded-full flex items-center justify-center shadow-lg shadow-purple-900/20 z-100">
-                    <span className="text-xs font-bold text-white">{idx + 1}</span>
-                  </div>
+                    <div className="absolute -top-3 bg-gradient-to-br from-purple-600 to-indigo-700 h-6 w-6 rounded-full flex items-center justify-center shadow-lg shadow-purple-900/20 z-100">
+                      <span className="text-xs font-bold text-white">{idx + 1}</span>
+                    </div>
+
+                    {/* Rest of your node card contents - unchanged */}
                     <div className="flex items-center gap-2 mb-3">
                       <div className={`h-8 w-8 rounded-full bg-gradient-to-br from-purple-600 to-indigo-700 
                         flex items-center justify-center shadow-inner text-xs text-white font-bold
                         transition-all group-hover/card:scale-110 group-hover/card:shadow-purple-500/30`}
                       >
+                        {/* Your emoji logic - unchanged */}
                         {(() => {
                           const type = node.agent_type.toLowerCase();
-                          // Select emoji based on agent type
                           if (type.includes('gemini') && type.includes('text2image')) {
-                            return '🎨';
+                            return <LucideBrush className="w-5 h-5" />; // 🎨
                           } else if (type.includes('gemini')) {
-                            return '🤖';
+                            return <LucideBot className="w-5 h-5" />; // 🤖
                           } else if (type.includes('openai')) {
-                            return '🤖';
+                            return <LucideBot className="w-5 h-5" />; // 🤖
                           } else if (type.includes('edge_tts') || type.includes('bark_tts')) {
-                            return '🔊';
+                            return <LucideVolume2 className="w-5 h-5" />; // 🔊
                           } else if (type.includes('transcribe')) {
-                            return '🎤';
+                            return <LucideMic className="w-5 h-5" />; // 🎤
                           } else if (type.includes('text2image') || type.includes('gemini_text2image')) {
-                            return '🖼️';
+                            return <LucideImage className="w-5 h-5" />; // 🖼️
                           } else if (type.includes('internet_research')) {
-                            return '🔍';
+                            return <LucideSearch className="w-5 h-5" />; // 🔍
                           } else if (type.includes('document_parser')) {
-                            return '📄';
+                            return <FileText className="w-5 h-5" />; // 📄
                           } else if (type.includes('custom_endpoint')) {
-                            return '🔌';
-                          } else if (type.includes('audio')) {
-                            return '🎵';
+                            return <LucidePlug className="w-5 h-5" />; // 🔌
+                          } else if (type.includes('audio') || type.includes('text2speech')) {
+                            return <LucideMusic className="w-5 h-5" />; // 🎵
                           } else if (type.includes('video')) {
-                            return '🎬';
+                            return <LucideClapperboard className="w-5 h-5" />; // 🎬
                           } else {
-                            // Fallback emoji
-                            return '✨';
+                            return <LucideSparkles className="w-5 h-5" />; // ✨
                           }
                         })()}
                       </div>
@@ -975,7 +974,7 @@ export default function ServicePage() {
                         {node.agent_name}
                       </h3>
                     </div>
-                    
+
                     <div className="text-gray-300 text-xs mt-1">
                       {isLongDescription ? (
                         <>
@@ -987,9 +986,9 @@ export default function ServicePage() {
                             </p>
                           </div>
                           <button
-                            onClick={e => { 
-                              e.stopPropagation(); 
-                              setExpandedDescriptions(prev => ({ ...prev, [node.id]: !prev[node.id] })); 
+                            onClick={e => {
+                              e.stopPropagation();
+                              setExpandedDescriptions(prev => ({ ...prev, [node.id]: !prev[node.id] }));
                             }}
                             className="text-purple-400 text-xs mt-1 hover:text-purple-300 focus:outline-none focus:text-purple-200 transition-colors"
                             aria-label={isExpanded ? "Show less" : "Show more"}
@@ -1001,7 +1000,7 @@ export default function ServicePage() {
                         <p className="leading-relaxed">{description}</p>
                       )}
                     </div>
-                    
+
                     <div className="mt-4 flex flex-wrap gap-2">
                       <span className="text-xs bg-purple-900/40 text-purple-300 px-2 py-1 rounded-full font-medium border border-purple-800/30">
                         {node.agent_type}
@@ -1020,29 +1019,39 @@ export default function ServicePage() {
                         </span>
                       )}
                     </div>
-                    
+
                     {/* Glow effect on hover */}
                     <div className="absolute inset-0 -z-10 bg-gradient-to-r from-purple-600/0 via-purple-600/10 to-purple-600/0 opacity-0 blur-xl transition-opacity duration-500 group-hover/card:opacity-100"></div>
                   </div>
-                  
-                  {/* Arrow connection using SVG for better animation and style */}
-                  {idx < orderedNodes.length - 1 && (
-                    <div className="absolute right-[-48px] top-1/2 -translate-y-1/2 z-0 pointer-events-none">
-                      <svg width="48" height="2" viewBox="0 0 48 2" className="h-[2px] w-12">
-                        <line 
-                          x1="0" y1="1" x2="38" y2="1" 
-                          stroke="#8b5cf6" 
-                          strokeWidth="2" 
-                          strokeDasharray="4 4"
-                          className="animate-pulse"
-                        />
-                        <polygon points="38,0 48,1 38,2" fill="#8b5cf6" />
-                      </svg>
+
+                  {/* Add the beautifully styled arrow */}
+                  {showArrow && (
+                    <div className="absolute -right-10 top-1/2 transform translate-y-1.5 translate-x-7 z-20">
+                      <div className="flex items-center justify-center">
+                        <div className="relative">
+                          {/* Arrow shaft with animated gradient */}
+                          <div className="h-[3px] w-20 bg-gradient-to-r from-purple-500 to-indigo-500 rounded-full"></div>
+
+                          {/* Arrow head - triangle */}
+                          <div className="absolute -right-1 top-1/2 transform -translate-y-1/2 w-0 h-0 
+                                        border-t-[6px] border-t-transparent 
+                                        border-l-[9px] border-l-indigo-500
+                                        border-b-[6px] border-b-transparent">
+                          </div>
+
+                          {/* Subtle glow effect */}
+                          <div className="absolute inset-0 -z-10 bg-purple-500/30 filter blur-sm rounded-full"></div>
+
+                          {/* Pulsing animated dot in center */}
+                          <div className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2
+                                        h-3 w-3 rounded-full bg-purple-300/80 animate-pulse"></div>
+                        </div>
+                      </div>
                     </div>
                   )}
-                  
-                  {/* Enhanced tooltip on hover with more detail and style */}
-                  <div 
+
+                  {/* Tooltip - unchanged */}
+                  <div
                     className="hidden group-hover/card:flex absolute left-1/2 -translate-x-1/2 top-full mt-4 z-30 
                     w-72 flex-col bg-zinc-900/95 backdrop-blur-md border border-purple-800/40 rounded-xl 
                     shadow-[0_10px_25px_-5px_rgba(0,0,0,0.8)] p-4 text-xs text-gray-200 transition-opacity 
@@ -1066,11 +1075,8 @@ export default function ServicePage() {
             })}
           </div>
         </div>
-        
-        {/* Legend or helper text */}
-        <div className="flex justify-center mt-4 text-xs text-gray-500">
-          <p>Click on any node to see more details or scroll horizontally to view the entire workflow</p>
-        </div>
+
+
       </div>
     );
   };
@@ -1120,7 +1126,7 @@ export default function ServicePage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-black via-purple-950/30 to-black">
       <NavBar />
-      
+
       <main className="pt-24 pb-16 px-2 sm:px-4 flex flex-col items-center">
         <div className="w-full max-w-7xl grid grid-cols-1 lg:grid-cols-8 gap-8">
           {/* Main Content */}
@@ -1137,7 +1143,7 @@ export default function ServicePage() {
                   <ArrowLeft className="mr-2 h-4 w-4" /> Back to Dashboard
                 </Button>
               </div>
-              
+
               <Card className={`bg-gradient-to-r ${getServiceColor()} rounded-2xl p-8 shadow-xl border-0 flex flex-col gap-4`}>
                 <div className="flex flex-col md:flex-row md:items-center gap-4 md:gap-8">
                   <div className="w-16 h-16 rounded-full bg-black/30 flex items-center justify-center shadow-lg">
@@ -1262,7 +1268,7 @@ export default function ServicePage() {
               <div className="flex flex-col md:flex-row md:items-center gap-4 mt-4">
                 <Button
                   onClick={handleSubmit}
-                  disabled={isLoading || !areAllRequiredApiKeysSelected() || 
+                  disabled={isLoading || !areAllRequiredApiKeysSelected() ||
                     (service?.input_type === "text" && !userInput?.trim() && !uploadedFile) ||
                     (service?.input_type !== "text" && !uploadedFile && service?.input_type !== "text")}
                   className={`bg-gradient-to-r ${getServiceColor()} text-white font-bold text-lg px-8 py-3 rounded-xl shadow-lg hover:opacity-90 transition-all relative`}
@@ -1322,9 +1328,9 @@ export default function ServicePage() {
                         workflowScrollRef.current.scrollLeft = value;
                       }
                     }}
-                    className="w-full max-w-2xl accent-purple-600 h-2 rounded-lg appearance-none bg-gradient-to-r from-purple-900/40 to-indigo-900/40 focus:outline-none focus:ring-2 focus:ring-purple-500/40 transition cursor-pointer"
+                    className="w-full max-w-2xl accent-purple-600 h-5 appearance-none focus:outline-none focus:ring-2 focus:ring-purple-500/40 transition cursor-pointer"
                     style={{
-                      background: 'linear-gradient(90deg, #a78bfa 0%, #8b5cf6 100%)',
+                      background: 'linear-gradient(90deg, rgba(167, 139, 250, 0.3) 0%, rgba(139, 92, 246, 0.3) 100%)',
                       height: '6px',
                       borderRadius: '8px',
                       outline: 'none',
@@ -1337,69 +1343,114 @@ export default function ServicePage() {
           </Card>
         </div>
       </main>
-      
+
       {/* Add effect to sync slider with scroll position */}
       <style jsx global>{`
-        .custom-wf-scrollbar::-webkit-scrollbar {
-          height: 10px;
-          background: transparent;
-        }
-        .custom-wf_scrollbar::-webkit-scrollbar-thumb {
-          background: linear-gradient(90deg, #a78bfa 0%, #8b5cf6 100%);
-          border-radius: 8px;
-          min-width: 48px;
-        }
-        .custom-wf_scrollbar::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        .custom-wf_scrollbar {
-          scrollbar-color: #a78bfa #18181b;
-          scrollbar-width: thin;
-        }
-        input[type='range'].accent-purple-600::-webkit-slider-thumb {
-          -webkit-appearance: none;
-          appearance: none;
-          width: 18px;
-          height: 18px;
-          border-radius: 50%;
-          background: linear-gradient(135deg, #a78bfa 60%, #8b5cf6 100%);
-          box-shadow: 0 2px 8px #a78bfa44;
-          border: 2px solid #fff;
-          cursor: pointer;
-          transition: background 0.2s;
-        }
-        input[type='range'].accent-purple-600::-moz-range-thumb {
-          width: 18px;
-          height: 18px;
-          border-radius: 50%;
-          background: linear-gradient(135deg, #a78bfa 60%, #8b5cf6 100%);
-          box-shadow: 0 2px 8px #a78bfa44;
-          border: 2px solid #fff;
-          cursor: pointer;
-        }
-        input[type='range'].accent-purple-600::-ms-thumb {
-          width: 18px;
-          height: 18px;
-          border-radius: 50%;
-          background: linear-gradient(135deg, #a78bfa 60%, #8b5cf6 100%);
-          box-shadow: 0 2px 8px #a78bfa44;
-          border: 2px solid #fff;
-          cursor: pointer;
-        }
-        input[type='range'].accent-purple-600:focus::-webkit-slider-thumb {
-          outline: 2px solid #a78bfa;
-        }
-        input[type='range'].accent-purple-600::-webkit-slider-runnable-track {
-          height: 6px;
-          border-radius: 8px;
-        }
-        input[type='range'].accent-purple-600::-ms-fill-lower {
-          background: #a78bfa;
-        }
-        input[type='range'].accent-purple-600::-ms-fill-upper {
-          background: #8b5cf6;
-        }
-      `}</style>
+  .custom-wf-scrollbar::-webkit-scrollbar {
+    height: 10px;
+    background: transparent;
+  }
+  .custom-wf_scrollbar::-webkit-scrollbar-thumb {
+    background: linear-gradient(90deg, #a78bfa 0%, #8b5cf6 100%);
+    border-radius: 8px;
+    min-width: 48px;
+  }
+  .custom-wf_scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .custom-wf_scrollbar {
+    scrollbar-color: #a78bfa #18181b;
+    scrollbar-width: thin;
+  }
+  
+  /* Improved slider thumb styling */
+  input[type='range'].accent-purple-600::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #c4b5fd 0%, #a78bfa 100%);
+    box-shadow: 0 2px 8px rgba(167, 139, 250, 0.5);
+    border: 2px solid #fff;
+    cursor: pointer;
+    margin-top: -5px; /* This centers the thumb vertically relative to the track */
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  
+  input[type='range'].accent-purple-600::-webkit-slider-thumb:hover {
+    transform: scale(1.1);
+    box-shadow: 0 2px 12px rgba(167, 139, 250, 0.7);
+  }
+  
+  input[type='range'].accent-purple-600::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #c4b5fd 0%, #a78bfa 100%);
+    box-shadow: 0 2px 8px rgba(167, 139, 250, 0.5);
+    border: 2px solid #fff;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  
+  input[type='range'].accent-purple-600::-ms-thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%; 
+    background: linear-gradient(135deg, #c4b5fd 0%, #a78bfa 100%);
+    box-shadow: 0 2px 8px rgba(167, 139, 250, 0.5);
+    border: 2px solid #fff;
+    cursor: pointer;
+    margin-top: 0; /* MS Edge specific adjustment */
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  
+  input[type='range'].accent-purple-600:focus::-webkit-slider-thumb {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.3);
+  }
+  
+  /* Track styling improvements */
+  input[type='range'].accent-purple-600::-webkit-slider-runnable-track {
+    height: 6px;
+    border-radius: 8px;
+    background: linear-gradient(90deg, rgba(167, 139, 250, 0.3) 0%, rgba(139, 92, 246, 0.3) 100%);
+  }
+  
+  input[type='range'].accent-purple-600::-moz-range-track {
+    height: 6px;
+    border-radius: 8px;
+    background: linear-gradient(90deg, rgba(167, 139, 250, 0.3) 0%, rgba(139, 92, 246, 0.3) 100%);
+  }
+  
+  input[type='range'].accent-purple-600::-ms-track {
+    height: 6px;
+    border-radius: 8px;
+    background: transparent;
+    border-color: transparent;
+    color: transparent;
+  }
+  
+  input[type='range'].accent-purple-600::-ms-fill-lower {
+    background: rgba(167, 139, 250, 0.5);
+    border-radius: 8px;
+  }
+  
+  input[type='range'].accent-purple-600::-ms-fill-upper {
+    background: rgba(139, 92, 246, 0.3);
+    border-radius: 8px;
+  }
+
+  /* Add this to your style jsx global section */
+  @keyframes pulse {
+    0%, 100% { opacity: 0.6; transform: scale(1) translate(-50%, -50%); }
+    50% { opacity: 1; transform: scale(1.3) translate(-38%, -38%); }
+  }
+  .animate-pulse {
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+`}</style>
     </div>
   )
 }
