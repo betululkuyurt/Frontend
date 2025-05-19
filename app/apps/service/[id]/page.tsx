@@ -896,7 +896,7 @@ export default function ServicePage() {
     return (
       <div className="relative bg-black/20 border border-purple-900/20 backdrop-blur-sm rounded-xl p-6 mb-2">
         {/* Flow line connector - continuous line through all nodes */}
-        <div className="absolute left-0 right-0 top-1/2 h-1 -translate-y-1/2 bg-gradient-to-r from-purple-500/10 via-indigo-500/30 to-purple-500/10 z-0"></div>
+        <div className="absolute left-0 right-0 top-1/2 h-[2px] -translate-y-1/2 bg-gradient-to-r from-purple-500/10 via-indigo-500/30 to-purple-500/10 z-0"></div>
         
         <div className="overflow-x-auto pb-4 -mx-4 px-4 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-purple-900/30 hover:scrollbar-thumb-purple-600/50">
           <div className="flex items-stretch gap-16 min-w-fit py-4">
@@ -1027,24 +1027,16 @@ export default function ServicePage() {
                   
                   {/* Arrow connection using SVG for better animation and style */}
                   {idx < orderedNodes.length - 1 && (
-                    <div className="absolute right-[-58px] top-1/2 -translate-y-1/2 z-0 pointer-events-none">
-                      <svg width="58" height="40" viewBox="0 0 58 40">
-                        <defs>
-                          <linearGradient id={`arrow-gradient-${idx}`} x1="0%" y1="0%" x2="100%" y2="0%">
-                            <stop offset="0%" stopColor="#a78bfa" stopOpacity="0.4" />
-                            <stop offset="50%" stopColor="#8b5cf6" stopOpacity="0.7" />
-                            <stop offset="100%" stopColor="#a78bfa" stopOpacity="0.4" />
-                          </linearGradient>
-                        </defs>
-                        <path 
-                          d="M2,20 Q30,20 50,20" 
-                          stroke={`url(#arrow-gradient-${idx})`} 
-                          strokeWidth="2.5" 
-                          fill="none"
-                          strokeDasharray="5,3"
-                          className="animate-pulse" 
+                    <div className="absolute right-[-48px] top-1/2 -translate-y-1/2 z-0 pointer-events-none">
+                      <svg width="48" height="2" viewBox="0 0 48 2" className="h-[2px] w-12">
+                        <line 
+                          x1="0" y1="1" x2="38" y2="1" 
+                          stroke="#8b5cf6" 
+                          strokeWidth="2" 
+                          strokeDasharray="4 4"
+                          className="animate-pulse"
                         />
-                        <polygon points="50,20 45,16 45,24" fill="#8b5cf6" />
+                        <polygon points="38,0 48,1 38,2" fill="#8b5cf6" />
                       </svg>
                     </div>
                   )}
@@ -1306,10 +1298,9 @@ export default function ServicePage() {
                 className="overflow-x-auto rounded-xl custom-wf-scrollbar"
                 style={{ WebkitOverflowScrolling: 'touch', minHeight: '220px', width: '100%' }}
                 onScroll={e => {
-                  setWorkflowScroll((e.target as HTMLDivElement).scrollLeft);
-                  setWorkflowMaxScroll(
-                    (e.target as HTMLDivElement).scrollWidth - (e.target as HTMLDivElement).clientWidth
-                  );
+                  const target = e.target as HTMLDivElement;
+                  setWorkflowScroll(target.scrollLeft);
+                  setWorkflowMaxScroll(target.scrollWidth - target.clientWidth);
                 }}
               >
                 <div className="flex justify-center min-w-[min(900px,100%)]" style={{ width: 'fit-content' }}>
@@ -1318,19 +1309,26 @@ export default function ServicePage() {
               </div>
               {/* Themed slider for horizontal scroll */}
               {workflowMaxScroll > 0 && (
-                <div className="w-full flex justify-center mt-4">
+                <div className="w-full flex justify-center mt-4 px-4">
                   <input
                     type="range"
                     min={0}
                     max={workflowMaxScroll}
                     value={workflowScroll}
-                    onChange={e => setWorkflowScroll(Number(e.target.value))}
-                    className="w-full max-w-2xl accent-purple-600 h-2 rounded-lg appearance-none bg-gradient-to-r from-purple-900/40 to-indigo-900/40 focus:outline-none focus:ring-2 focus:ring-purple-500/40 transition"
+                    onChange={e => {
+                      const value = Number(e.target.value);
+                      setWorkflowScroll(value);
+                      if (workflowScrollRef.current) {
+                        workflowScrollRef.current.scrollLeft = value;
+                      }
+                    }}
+                    className="w-full max-w-2xl accent-purple-600 h-2 rounded-lg appearance-none bg-gradient-to-r from-purple-900/40 to-indigo-900/40 focus:outline-none focus:ring-2 focus:ring-purple-500/40 transition cursor-pointer"
                     style={{
                       background: 'linear-gradient(90deg, #a78bfa 0%, #8b5cf6 100%)',
                       height: '6px',
                       borderRadius: '8px',
                       outline: 'none',
+                      WebkitAppearance: 'none',
                     }}
                   />
                 </div>
@@ -1339,7 +1337,8 @@ export default function ServicePage() {
           </Card>
         </div>
       </main>
-      {/* ...existing code... */}
+      
+      {/* Add effect to sync slider with scroll position */}
       <style jsx global>{`
         .custom-wf-scrollbar::-webkit-scrollbar {
           height: 10px;
