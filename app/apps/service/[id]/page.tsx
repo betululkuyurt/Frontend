@@ -43,7 +43,7 @@
 
 import type React from "react"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter, useParams } from "next/navigation"
 import Cookies from "js-cookie"
 import { NavBar } from "@/components/nav-bar"
@@ -115,6 +115,11 @@ export default function ServicePage() {
   // Add state for expanded descriptions
   const [expandedDescriptions, setExpandedDescriptions] = useState<{[nodeId: string]: boolean}>({});
   
+  // Add ref and slider state for workflow visualization
+  const workflowScrollRef = useRef<HTMLDivElement>(null);
+  const [workflowScroll, setWorkflowScroll] = useState(0);
+  const [workflowMaxScroll, setWorkflowMaxScroll] = useState(0);
+
   // Authentication check
   useEffect(() => {
     const checkAuth = () => {
@@ -1289,26 +1294,113 @@ export default function ServicePage() {
             </Card>
           </section>
         </div>
-
-        {/* Workflow Visualization - now below the service, centered and wider */}
+        {/* Workflow Visualization - now below the service, centered and responsive */}
         <div className="w-full flex flex-col items-center mt-12">
           <Card className="bg-zinc-950/90 border-0 rounded-2xl shadow-xl p-6 w-full max-w-[1200px]">
             <h3 className="text-lg font-bold text-white mb-2 text-center">Workflow Visualization</h3>
             <p className="text-gray-400 text-xs mb-4 text-center">This diagram shows how agents are connected in this service.</p>
             <div className="w-full">
-              {/* Fix overflow and improve scrollbar styling */}
+              {/* Responsive overflow and improved scrollbar styling */}
               <div
-                className="overflow-x-auto rounded-xl scrollbar-thin custom-wf-scrollbar"
-                style={{ WebkitOverflowScrolling: 'touch', minHeight: '220px' }}
+                ref={workflowScrollRef}
+                className="overflow-x-auto rounded-xl custom-wf-scrollbar"
+                style={{ WebkitOverflowScrolling: 'touch', minHeight: '220px', width: '100%' }}
+                onScroll={e => {
+                  setWorkflowScroll((e.target as HTMLDivElement).scrollLeft);
+                  setWorkflowMaxScroll(
+                    (e.target as HTMLDivElement).scrollWidth - (e.target as HTMLDivElement).clientWidth
+                  );
+                }}
               >
-                <div className="min-w-[900px] flex justify-center">
+                <div className="flex justify-center min-w-[min(900px,100%)]" style={{ width: 'fit-content' }}>
                   {renderWorkflow()}
                 </div>
               </div>
+              {/* Themed slider for horizontal scroll */}
+              {workflowMaxScroll > 0 && (
+                <div className="w-full flex justify-center mt-4">
+                  <input
+                    type="range"
+                    min={0}
+                    max={workflowMaxScroll}
+                    value={workflowScroll}
+                    onChange={e => setWorkflowScroll(Number(e.target.value))}
+                    className="w-full max-w-2xl accent-purple-600 h-2 rounded-lg appearance-none bg-gradient-to-r from-purple-900/40 to-indigo-900/40 focus:outline-none focus:ring-2 focus:ring-purple-500/40 transition"
+                    style={{
+                      background: 'linear-gradient(90deg, #a78bfa 0%, #8b5cf6 100%)',
+                      height: '6px',
+                      borderRadius: '8px',
+                      outline: 'none',
+                    }}
+                  />
+                </div>
+              )}
             </div>
           </Card>
         </div>
       </main>
+      {/* ...existing code... */}
+      <style jsx global>{`
+        .custom-wf-scrollbar::-webkit-scrollbar {
+          height: 10px;
+          background: transparent;
+        }
+        .custom-wf_scrollbar::-webkit-scrollbar-thumb {
+          background: linear-gradient(90deg, #a78bfa 0%, #8b5cf6 100%);
+          border-radius: 8px;
+          min-width: 48px;
+        }
+        .custom-wf_scrollbar::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .custom-wf_scrollbar {
+          scrollbar-color: #a78bfa #18181b;
+          scrollbar-width: thin;
+        }
+        input[type='range'].accent-purple-600::-webkit-slider-thumb {
+          -webkit-appearance: none;
+          appearance: none;
+          width: 18px;
+          height: 18px;
+          border-radius: 50%;
+          background: linear-gradient(135deg, #a78bfa 60%, #8b5cf6 100%);
+          box-shadow: 0 2px 8px #a78bfa44;
+          border: 2px solid #fff;
+          cursor: pointer;
+          transition: background 0.2s;
+        }
+        input[type='range'].accent-purple-600::-moz-range-thumb {
+          width: 18px;
+          height: 18px;
+          border-radius: 50%;
+          background: linear-gradient(135deg, #a78bfa 60%, #8b5cf6 100%);
+          box-shadow: 0 2px 8px #a78bfa44;
+          border: 2px solid #fff;
+          cursor: pointer;
+        }
+        input[type='range'].accent-purple-600::-ms-thumb {
+          width: 18px;
+          height: 18px;
+          border-radius: 50%;
+          background: linear-gradient(135deg, #a78bfa 60%, #8b5cf6 100%);
+          box-shadow: 0 2px 8px #a78bfa44;
+          border: 2px solid #fff;
+          cursor: pointer;
+        }
+        input[type='range'].accent-purple-600:focus::-webkit-slider-thumb {
+          outline: 2px solid #a78bfa;
+        }
+        input[type='range'].accent-purple-600::-webkit-slider-runnable-track {
+          height: 6px;
+          border-radius: 8px;
+        }
+        input[type='range'].accent-purple-600::-ms-fill-lower {
+          background: #a78bfa;
+        }
+        input[type='range'].accent-purple-600::-ms-fill-upper {
+          background: #8b5cf6;
+        }
+      `}</style>
     </div>
   )
 }
