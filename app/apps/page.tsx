@@ -25,11 +25,16 @@ import {
   Sparkle,
   Sparkles,
   BotOff,
+  Search,
+  Filter,
+  X,
 } from "lucide-react"
 import { toast } from "@/components/ui/use-toast"
 import { decodeJWT } from "@/lib/auth"
 import { deleteMiniService } from "@/lib/services"
 import { Play } from "next/font/google"
+import { Input } from "@/components/ui/input"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 // Define the service type
 interface Service {
@@ -99,6 +104,8 @@ export default function DashboardPage() {
   const [refreshTrigger, setRefreshTrigger] = useState(0)
   const [recentActivities, setRecentActivities] = useState<Process[]>([])
   const [recentActivitiesLoading, setRecentActivitiesLoading] = useState(false)
+  const [activeFilter, setActiveFilter] = useState<"all" | "workflows" | "services">("all")
+  const [searchQuery, setSearchQuery] = useState("")
   const router = useRouter()
 
   useEffect(() => {
@@ -766,16 +773,105 @@ export default function DashboardPage() {
     },
   ]
 
+  // Add this function to filter services based on search and category
+  const filterServices = (services: Service[], type: "workflows" | "services") => {
+    if (activeFilter !== "all" && activeFilter !== type) {
+      return []
+    }
+    
+    if (!searchQuery) {
+      return services
+    }
+    
+    const query = searchQuery.toLowerCase()
+    return services.filter(
+      service => 
+        service.name.toLowerCase().includes(query) || 
+        service.description.toLowerCase().includes(query)
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-black via-purple-950/20 to-black">
       <NavBar />
 
       <main className="pt-24 pb-16 px-4">
         <div className="max-w-6xl mx-auto">
-          {/* User-created Mini-Services Section - Only show if there are mini services */}
-          {miniServices.length > 0 && (
+          {/* Search and Filter Bar */}
+          <div className="mb-8">
+            <div className="flex flex-col lg:flex-row justify-between gap-4">
+              <h1 className="text-3xl font-bold text-white"></h1>
+              
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full lg:w-auto">
+                {/* Search Bar */}
+                <div className="relative flex-grow max-w-md">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <Input 
+                    placeholder="Search services..." 
+                    className="pl-10 bg-black/40 border-purple-900/30 text-white focus:ring-purple-500 focus:border-purple-500"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                  {searchQuery && (
+                    <button 
+                      onClick={() => setSearchQuery("")}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 hover:text-gray-200"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+                
+                {/* Tabs Filter */}
+                <Tabs 
+                  value={activeFilter} 
+                  onValueChange={(v) => setActiveFilter(v as "all" | "workflows" | "services")}
+                  className="w-full sm:w-auto"
+                >
+                  <TabsList className="grid grid-cols-3 h-10 bg-black/40 border border-purple-900/30">
+                    <TabsTrigger 
+                      value="all" 
+                      className="data-[state=active]:bg-purple-600 data-[state=active]:text-white"
+                    >
+                      All
+                    </TabsTrigger>
+                    <TabsTrigger 
+                      value="workflows" 
+                      className="data-[state=active]:bg-purple-600 data-[state=active]:text-white"
+                    >
+                      Created by You
+                    </TabsTrigger>
+                    <TabsTrigger 
+                      value="services" 
+                      className="data-[state=active]:bg-purple-600 data-[state=active]:text-white"
+                    >
+                      Default Services
+                    </TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              </div>
+            </div>
+            
+            {searchQuery && (
+              <div className="mt-2 text-sm text-gray-400">
+                <span>Search results for: <span className="text-purple-400 font-medium">"{searchQuery}"</span></span>
+                {activeFilter !== "all" && (
+                  <span> in <span className="text-purple-400 font-medium">{activeFilter}</span></span>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* User-created Mini-Services Section - Only show if filtered */}
+          {(activeFilter === "all" || activeFilter === "workflows") && 
+            filterServices(miniServices, "workflows").length > 0 && (
             <section className="mb-12">
-              <h2 className="text-2xl md:text-3xl font-bold text-white mb-8">Your AI Workflows</h2>
+              <h2 className="text-2xl md:text-3xl font-bold text-white mb-6 flex items-center">
+                Your AI Workflows
+                <span className="ml-3 text-sm bg-purple-900/40 text-purple-300 px-2 py-1 rounded-full">
+                  {filterServices(miniServices, "workflows").length}
+                </span>
+              </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {miniServicesLoading ? (
                   // Placeholder cards during loading
@@ -786,7 +882,7 @@ export default function DashboardPage() {
                     />
                   ))
                 ) : (
-                  miniServices.map((service) => (
+                  filterServices(miniServices, "workflows").map((service) => (
                     <MiniAppCard
                       key={`mini-service-${service.id}`}
                       title={service.name}
@@ -806,39 +902,66 @@ export default function DashboardPage() {
             </section>
           )}
 
-          <div className="mb-8 flex justify-between items-center">
-            <div>
-              <h1 className="text-3xl font-bold text-white mb-2">AI Services</h1>
+          {/* Built-in Services Section - Only show if filtered */}
+          {(activeFilter === "all" || activeFilter === "services") && (
+            <section className="mb-12">
+              <h2 className="text-2xl md:text-3xl font-bold text-white mb-6 flex items-center">
+                Workflows Created By Our Team
+                <span className="ml-3 text-sm bg-purple-900/40 text-purple-300 px-2 py-1 rounded-full">
+                  {filterServices(builtInServices, "services").length}
+                </span>
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filterServices(builtInServices, "services").map((service) => (
+                  <MiniAppCard
+                    key={service.serviceType}
+                    title={service.name}
+                    description={service.description}
+                    icon={service.icon}
+                    serviceType={service.serviceType}
+                    color={service.color}
+                    id={service.id}
+                  />
+                ))}
+
+                {/* Create New card - always show */}
+                {(activeFilter === "all" ) && (
+                  <MiniAppCard
+                    title="Create New"
+                    description="Create a custom AI service"
+                    icon={<Plus className="h-6 w-6 text-white" />}
+                    serviceType=""
+                    color="from-gray-600 to-gray-800"
+                    isAddCard={true}
+                  />
+                )}
+              </div>
+            </section>
+          )}
+
+          {/* Show No Results Message when necessary */}
+          {searchQuery && 
+           filterServices(miniServices, "workflows").length === 0 && 
+           filterServices(builtInServices, "services").length === 0 && (
+            <div className="bg-black/40 backdrop-blur-sm rounded-xl border border-purple-900/30 p-8 text-center my-12">
+              <div className="w-16 h-16 bg-purple-600/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Search className="h-8 w-8 text-purple-400 opacity-60" />
+              </div>
+              <h3 className="text-white font-medium text-lg mb-1">No matching services found</h3>
+              <p className="text-gray-400">
+                We couldn't find any services matching "{searchQuery}".
+                Try a different search term or clear the search.
+              </p>
+              <button 
+                onClick={() => setSearchQuery("")}
+                className="mt-4 px-4 py-2 bg-purple-600/20 text-purple-300 hover:bg-purple-600/40 transition rounded-md flex items-center mx-auto"
+              >
+                <X className="h-4 w-4 mr-2" /> Clear Search
+              </button>
             </div>
-          </div>
+          )}
 
-          {/* Built-in Services */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {builtInServices.map((service) => (
-              <MiniAppCard
-                key={service.serviceType}
-                title={service.name}
-                description={service.description}
-                icon={service.icon}
-                serviceType={service.serviceType}
-                color={service.color}
-                id={service.id}
-              />
-            ))}
-
-            {/* Create New card */}
-            <MiniAppCard
-              title="Create New"
-              description="Create a custom AI service"
-              icon={<Plus className="h-6 w-6 text-white" />}
-              serviceType=""
-              color="from-gray-600 to-gray-800"
-              isAddCard={true}
-            />
-          </div>
-
-          {/* Recent Activity Section */}
-                    {/* Recent Activity Section */}
+          {/* Recent Activity Section - unchanged */}
           <section className="mt-16">
             <h2 className="text-2xl md:text-3xl font-bold text-white mb-8">Recent Activity</h2>
             
