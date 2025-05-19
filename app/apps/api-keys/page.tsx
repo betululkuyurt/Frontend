@@ -28,12 +28,12 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { 
+import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue 
+  SelectValue
 } from "@/components/ui/select"
 import { ChevronLeft, Key, Plus, Trash2, Eye, EyeOff, Check, X } from "lucide-react"
 import { useRouter } from "next/navigation"
@@ -71,7 +71,7 @@ export default function ApiKeysPage() {
       if (!userId) {
         throw new Error("User not authenticated")
       }
-      
+
       const response = await fetch(`http://127.0.0.1:8000/api/v1/api-keys/${id}?current_user_id=${userId}`, {
         method: "DELETE",
         headers: {
@@ -79,11 +79,11 @@ export default function ApiKeysPage() {
           "Authorization": `Bearer ${Cookies.get("access_token")}`
         }
       })
-      
+
       if (!response.ok) {
         throw new Error("Failed to delete API key")
       }
-      
+
       // Update the local state
       setApiKeys(prev => prev.filter(key => key.id !== id))
     } catch (error: any) {
@@ -122,17 +122,18 @@ export default function ApiKeysPage() {
     fetchApiKeys()
   }, [])
 
-  // Fetch API keys from the backend
+
+  // Updated fetchApiKeys function to handle the new API response format
   const fetchApiKeys = async () => {
     setIsLoading(true)
     setError(null)
-    
+
     try {
       const userId = Cookies.get("user_id")
       if (!userId) {
         throw new Error("User not authenticated")
       }
-      
+
       const response = await fetch(`http://127.0.0.1:8000/api/v1/api-keys?current_user_id=${userId}`, {
         method: "GET",
         headers: {
@@ -140,30 +141,24 @@ export default function ApiKeysPage() {
           "Authorization": `Bearer ${Cookies.get("access_token")}`
         }
       })
-      
+
       if (!response.ok) {
         throw new Error("Failed to fetch API keys")
       }
-      
+
       const data = await response.json()
-      
+
       // Transform the data to match our frontend interface
       const formattedKeys = data.map((key: any) => ({
         id: key.id.toString(),
-        name: key.provider.charAt(0).toUpperCase() + key.provider.slice(1) + " Key",
-        key: "••••••••••••••••••••••",
+        name: key.provider.charAt(0).toUpperCase() + key.provider.slice(1) + " API Key",
+        key: key.api_key, // Store the actual key
+        maskedKey: "•".repeat(24), // Create a masked version
         provider: key.provider,
-        lastUsed: key.last_used || "Never",
-        status: "active" // assuming newly created keys are active; adjust if needed
+        lastUsed: key.last_used || "Never used",
+        status: "active" // Assuming keys are active by default
       }))
 
-        // Gerçek anahtarları actualKeys state'ine kaydedin
-    const keyMap: Record<string, string> = {}
-    formattedKeys.forEach((key: any) => {
-      keyMap[key.id] = key.actualKey
-    })
-    setActualKeys(keyMap)
-      
       setApiKeys(formattedKeys)
     } catch (error: any) {
       console.error("Error fetching API keys:", error)
@@ -180,11 +175,11 @@ export default function ApiKeysPage() {
       if (!userId) {
         throw new Error("User not authenticated")
       }
-      
+
       if (!newApiKey || !newKeyProvider) {
         throw new Error("All fields are required")
       }
-      
+
       const response = await fetch(`http://127.0.0.1:8000/api/v1/api-keys/?current_user_id=${userId}`, {
         method: "POST",
         headers: {
@@ -197,19 +192,19 @@ export default function ApiKeysPage() {
           provider: newKeyProvider
         })
       })
-      
+
       if (!response.ok) {
         throw new Error("Failed to create API key")
       }
-      
+
       // Refresh the API keys list
       await fetchApiKeys()
-      
+
       // Reset form fields
       setNewApiKey("")
       setNewKeyProvider("openai")
       setIsAddKeyDialogOpen(false)
-      
+
     } catch (error: any) {
       console.error("Error creating API key:", error)
       setError(error.message)
@@ -288,7 +283,7 @@ export default function ApiKeysPage() {
                     <Button variant="outline" onClick={() => setIsAddKeyDialogOpen(false)}>
                       Cancel
                     </Button>
-                    <Button 
+                    <Button
                       className="bg-purple-600 hover:bg-purple-700"
                       onClick={createApiKey}
                     >
@@ -311,8 +306,8 @@ export default function ApiKeysPage() {
                   {error && (
                     <div className="mb-4 p-3 bg-red-500/20 border border-red-500/50 rounded-md text-red-200 text-sm">
                       {error}
-                      <Button 
-                        variant="link" 
+                      <Button
+                        variant="link"
                         className="text-red-200 p-0 h-auto text-xs ml-2 underline"
                         onClick={() => fetchApiKeys()}
                       >
@@ -320,7 +315,7 @@ export default function ApiKeysPage() {
                       </Button>
                     </div>
                   )}
-                  
+
                   {isLoading ? (
                     <div className="flex justify-center items-center p-8">
                       <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-purple-500 border-r-2 border-purple-500 border-b-2 border-transparent"></div>
@@ -328,6 +323,7 @@ export default function ApiKeysPage() {
                   ) : (
                     <div className="space-y-4">
                       {apiKeys.map((apiKey) => (
+                        // Update the card component that displays API keys
                         <div
                           key={apiKey.id}
                           className="p-4 rounded-lg border border-purple-900/30 bg-black/20 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
@@ -341,10 +337,25 @@ export default function ApiKeysPage() {
                                 {getStatusIcon(apiKey.status)}
                                 {apiKey.status.charAt(0).toUpperCase() + apiKey.status.slice(1)}
                               </span>
+                              {apiKey.provider === "gemini" && (
+                                <span className="text-xs px-2 py-0.5 rounded-full bg-blue-900/30 text-blue-300 border border-blue-800/50">
+                                  Google
+                                </span>
+                              )}
+                              {apiKey.provider === "openai" && (
+                                <span className="text-xs px-2 py-0.5 rounded-full bg-green-900/30 text-green-300 border border-green-800/50">
+                                  OpenAI
+                                </span>
+                              )}
                             </div>
                             <div className="flex items-center mt-2">
                               <div className="font-mono text-xs text-gray-400 bg-black/30 px-3 py-1 rounded border border-gray-700 flex-1 truncate max-w-[300px]">
-                                {showKey[apiKey.id] ? "API anahtarı şifrelenmiş, yalnızca sistemde kullanılabilir" : apiKey.key.substring(0, 8) + "•".repeat(20)}
+                                {showKey[apiKey.id]
+                                  ? apiKey.key
+                                  : apiKey.key.length > 4
+                                    ? apiKey.key.substring(0, 4) + "•".repeat(apiKey.key.length - 4)
+                                    : "•".repeat(apiKey.key.length)
+                                }
                               </div>
                               <Button
                                 variant="ghost"
@@ -364,15 +375,15 @@ export default function ApiKeysPage() {
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
                               </AlertDialogTrigger>
-                              <AlertDialogContent>
+                              <AlertDialogContent className="bg-gray-900 border-purple-900/50">
                                 <AlertDialogHeader>
                                   <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                                   <AlertDialogDescription>
-                                    This action cannot be undone. This will permanently delete the API key.
+                                    This action cannot be undone. This will permanently delete your {apiKey.provider} API key.
                                   </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogCancel className="bg-gray-800 hover:bg-gray-700 border-0">Cancel</AlertDialogCancel>
                                   <AlertDialogAction
                                     className="bg-red-600 hover:bg-red-700"
                                     onClick={() => deleteKey(apiKey.id)}
@@ -405,68 +416,95 @@ export default function ApiKeysPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-4">
-                    {apiKeys
-                      .filter((key) => key.provider === "openai")
-                      .map((apiKey) => (
-                        <div
-                          key={apiKey.id}
-                          className="p-4 rounded-lg border border-purple-900/30 bg-black/20 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-                        >
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <h3 className="font-medium text-white">{apiKey.name}</h3>
-                              <span
-                                className={`text-xs px-2 py-0.5 rounded-full border ${getStatusColor(apiKey.status)} border-current flex items-center gap-1`}
-                              >
-                                {getStatusIcon(apiKey.status)}
-                                {apiKey.status.charAt(0).toUpperCase() + apiKey.status.slice(1)}
-                              </span>
-                            </div>
-                            <div className="flex items-center mt-2">
-                              <div className="font-mono text-xs text-gray-400 bg-black/30 px-3 py-1 rounded border border-gray-700 flex-1 truncate max-w-[300px]">
-                                {showKey[apiKey.id] ? apiKey.key : apiKey.key.substring(0, 8) + "•".repeat(20)}
+                  {isLoading ? (
+                    <div className="flex justify-center items-center p-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-purple-500 border-r-2 border-purple-500 border-b-2 border-transparent"></div>
+                    </div>
+                  ) : apiKeys.filter((key) => key.provider === "openai").length > 0 ? (
+                    <div className="space-y-4">
+                      {apiKeys
+                        .filter((key) => key.provider === "openai")
+                        .map((apiKey) => (
+                          <div
+                            key={apiKey.id}
+                            className="p-4 rounded-lg border border-purple-900/30 bg-black/20 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                          >
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <h3 className="font-medium text-white">{apiKey.name}</h3>
+                                <span
+                                  className={`text-xs px-2 py-0.5 rounded-full border ${getStatusColor(apiKey.status)} border-current flex items-center gap-1`}
+                                >
+                                  {getStatusIcon(apiKey.status)}
+                                  {apiKey.status.charAt(0).toUpperCase() + apiKey.status.slice(1)}
+                                </span>
                               </div>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => toggleShowKey(apiKey.id)}
-                                className="ml-2 text-gray-400"
-                              >
-                                {showKey[apiKey.id] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                              </Button>
-                            </div>
-                            <p className="text-xs text-gray-500 mt-2">Last used: {apiKey.lastUsed}</p>
-                          </div>
-                          <div className="flex sm:flex-col gap-2 self-end sm:self-center">
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button variant="destructive" size="sm">
-                                  <Trash2 className="h-4 w-4" />
+                              <div className="flex items-center mt-2">
+                                <div className="font-mono text-xs text-gray-400 bg-black/30 px-3 py-1 rounded border border-gray-700 flex-1 truncate max-w-[300px]">
+                                  {showKey[apiKey.id]
+                                    ? apiKey.key
+                                    : apiKey.key.length > 4
+                                      ? apiKey.key.substring(0, 4) + "•".repeat(apiKey.key.length - 4)
+                                      : "•".repeat(apiKey.key.length)
+                                  }
+                                </div>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => toggleShowKey(apiKey.id)}
+                                  className="ml-2 text-gray-400"
+                                >
+                                  {showKey[apiKey.id] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                                 </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    This action cannot be undone. This will permanently delete the API key.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                  <AlertDialogAction
-                                    className="bg-red-600 hover:bg-red-700"
-                                    onClick={() => deleteKey(apiKey.id)}
-                                  >
-                                    Delete
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
+                              </div>
+                              <p className="text-xs text-gray-500 mt-2">Last used: {apiKey.lastUsed}</p>
+                            </div>
+                            <div className="flex sm:flex-col gap-2 self-end sm:self-center">
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button variant="destructive" size="sm">
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent className="bg-gray-900 border-purple-900/50">
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      This action cannot be undone. This will permanently delete the API key.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel className="bg-gray-800 hover:bg-gray-700 border-0">Cancel</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      className="bg-red-600 hover:bg-red-700"
+                                      onClick={() => deleteKey(apiKey.id)}
+                                    >
+                                      Delete
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </div>
                           </div>
+                        ))}
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-center p-8">
+                      <div className="text-center">
+                        <div className="w-16 h-16 rounded-full bg-purple-900/20 flex items-center justify-center mx-auto mb-4">
+                          <Key className="h-8 w-8 text-purple-400" />
                         </div>
-                      ))}
-                  </div>
+                        <h3 className="text-white font-medium mb-2">No OpenAI Keys Yet</h3>
+                        <p className="text-gray-400 text-sm mb-4">
+                          Add an OpenAI API key to use GPT models and other OpenAI services
+                        </p>
+                        <Button className="bg-purple-600 hover:bg-purple-700" onClick={() => setIsAddKeyDialogOpen(true)}>
+                          <Plus className="h-4 w-4 mr-2" />
+                          Add OpenAI Key
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </TabsContent>
@@ -500,7 +538,12 @@ export default function ApiKeysPage() {
                             </div>
                             <div className="flex items-center mt-2">
                               <div className="font-mono text-xs text-gray-400 bg-black/30 px-3 py-1 rounded border border-gray-700 flex-1 truncate max-w-[300px]">
-                                {showKey[apiKey.id] ? apiKey.key : apiKey.key.substring(0, 8) + "•".repeat(20)}
+                                {showKey[apiKey.id]
+                                  ? apiKey.key
+                                  : apiKey.key.length > 4
+                                    ? apiKey.key.substring(0, 4) + "•".repeat(apiKey.key.length - 4)
+                                    : "•".repeat(apiKey.key.length)
+                                }
                               </div>
                               <Button
                                 variant="ghost"
