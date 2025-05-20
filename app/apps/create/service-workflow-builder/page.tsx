@@ -2144,9 +2144,17 @@ export default function ServiceWorkflowBuilder() {
                               </li>
                               <li className="flex justify-between items-center bg-black/30 rounded-lg p-2 ">
                                 <span className="text-gray-400 text-sm">Visibility:</span>
-                                <Badge className={`${serviceData.isPublic ? "bg-green-900/30 text-green-300" : "bg-blue-900/30 text-blue-300"} border-0`}>
-                                  {serviceData.isPublic ? "Public" : "Private"}
-                                </Badge>
+                                <div className="flex items-center gap-2">
+                                  <Switch 
+                                    id="visibility-toggle"
+                                    checked={serviceData.isPublic}
+                                    onCheckedChange={(value) => handleChange("isPublic", value)}
+                                    className="data-[state=checked]:bg-green-600"
+                                  />
+                                  <Badge className={`${serviceData.isPublic ? "bg-green-900/30 text-green-300" : "bg-blue-900/30 text-blue-300"} border-0`}>
+                                    {serviceData.isPublic ? "Public" : "Private"}
+                                  </Badge>
+                                </div>
                               </li>
                             </ul>
                           </div>
@@ -2190,6 +2198,25 @@ export default function ServiceWorkflowBuilder() {
                           When you deploy this service, it will be available in your dashboard and can be accessed via its
                           unique ID.
                         </p>
+
+                        <div className="mt-4 pt-4 border-t border-purple-700/40">
+                          <h4 className="text-sm font-medium text-purple-200">Visibility Settings</h4>
+                          <div className="mt-3 bg-black/30 rounded-lg p-3">
+                            <p className="text-gray-300 text-sm mb-2">
+                              Toggle the visibility switch to make your service public or private:
+                            </p>
+                            <ul className="space-y-2 text-sm">
+                              <li className="flex items-start">
+                                <div className="w-4 h-4 rounded-full bg-green-700/50 text-white text-xs flex items-center justify-center mr-2 flex-shrink-0 shadow-md mt-0.5"></div>
+                                <span className="text-green-300">Public: Other users can discover and use your service</span>
+                              </li>
+                              <li className="flex items-start">
+                                <div className="w-4 h-4 rounded-full bg-blue-700/50 text-white text-xs flex items-center justify-center mr-2 flex-shrink-0 shadow-md mt-0.5"></div>
+                                <span className="text-blue-300">Private: Only you can access this service</span>
+                              </li>
+                            </ul>
+                          </div>
+                        </div>
 
                         <div className="mt-4 pt-4 border-t border-purple-700/40">
                           <h4 className="text-sm font-medium text-purple-200">Next Steps</h4>
