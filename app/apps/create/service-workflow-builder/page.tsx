@@ -730,7 +730,20 @@ export default function ServiceWorkflowBuilder() {
       // Clone the config object to avoid mutation
       let config = { ...newAgentData.config };
 
-      const agentData = {
+      // Interface for agent creation payload
+      interface AgentCreationData {
+        name: string;
+        description: string;
+        input_type: string;
+        output_type: string;
+        system_instruction: string;
+        config: Record<string, any>;
+        is_public: boolean;
+        agent_type: string;
+        enhance_prompt: number; // 1 for true, 0 for false
+      }
+
+      const agentData: AgentCreationData = {
         name: newAgentData.name,
         description: newAgentData.description,
         input_type: newAgentData.inputType,
@@ -741,14 +754,14 @@ export default function ServiceWorkflowBuilder() {
         agent_type: newAgentData.agentType,
         enhance_prompt: newAgentData.enhancePrompt ? 1 : 0 // Add enhance_prompt parameter
       }
-
+      
       console.log("Creating agent with data:", {
         ...agentData,
         config: agentData.config
       });
-      //Agent create endpoint
-      const enhancePrompt = newAgentData.enhancePrompt ? 1 : 0;
-      const apiUrl = `http://127.0.0.1:8000/api/v1/agents/?enhance_prompt=${enhancePrompt}&current_user_id=${userId}`;
+      
+      // Agent create endpoint
+      const apiUrl = `http://127.0.0.1:8000/api/v1/agents/?enhance_prompt=${agentData.enhance_prompt}&current_user_id=${userId}`;
 
       const response = await fetch(apiUrl, {
         method: "POST",
@@ -1900,21 +1913,81 @@ export default function ServiceWorkflowBuilder() {
                                 </Select>                              </div>
                             </div>
                           </div>
-                        )}
-
-                        <div className="space-y-2 bg-black/40 p-4 rounded-lg border border-purple-900/30">
+                        )}                        <div className="space-y-2 bg-black/40 p-4 rounded-lg border border-purple-900/30">
                           <div className="flex items-center justify-between">
-                            <Label htmlFor="enhancePrompt" className="text-white font-medium">
-                              Enhance Prompt
-                            </Label>
-                            <Switch
-                              id="enhancePrompt"
-                              checked={newAgentData.enhancePrompt}
-                              onCheckedChange={(checked) => setNewAgentData({ ...newAgentData, enhancePrompt: checked })}
-                              className="data-[state=checked]:bg-purple-600"
-                            />
+                            <div>
+                              <Label className="text-white font-medium">
+                                Enhance System Prompt
+                              </Label>
+                              <p className="text-gray-400 text-xs">Automatically improve your system instruction using AI</p>
+                            </div>
+                            <Button 
+                              variant="outline"
+                              size="sm"
+                              onClick={async () => {
+                                if (!newAgentData.systemInstruction) {
+                                  toast({
+                                    variant: "destructive",
+                                    title: "System instruction is empty",
+                                    description: "Please add a system instruction first"
+                                  });
+                                  return;
+                                }
+
+                                // Show loading toast
+                                const loadingToast = toast({
+                                  title: "Enhancing system prompt",
+                                  description: "Please wait...",
+                                });                                try {
+                                  const response = await fetch(`http://127.0.0.1:8000/api/v1/agents/enhance_system_prompt?current_user_id=${userId}`, {
+                                    method: "POST",
+                                    headers: {
+                                      "Content-Type": "application/json",
+                                      Authorization: `Bearer ${Cookies.get("access_token")}`,
+                                    },
+                                    body: JSON.stringify({
+                                      system_prompt: newAgentData.systemInstruction,
+                                      name: newAgentData.name || "empty",
+                                  description: newAgentData.description || "empty",
+                                  input_type: newAgentData.inputType || "empty", 
+                                  output_type: newAgentData.outputType || "empty",
+                                  agent_type: newAgentData.agentType || "empty"
+                                    }),
+                                  });if (!response.ok) {
+                                    const errorData = await response.json().catch(() => null);
+                                    throw new Error(errorData?.detail || "Failed to enhance system prompt");
+                                  }
+
+                                  const result = await response.json();
+                                  
+                                  // Update the system instruction with the enhanced version
+                                  setNewAgentData({
+                                    ...newAgentData,
+                                    systemInstruction: result.enhanced_prompt,
+                                    enhancePrompt: true // Keep this flag enabled
+                                  });
+
+                                  // Dismiss loading toast and show success
+                                  loadingToast.dismiss();
+                                  toast({
+                                    title: "System prompt enhanced",
+                                    description: "Your system instruction has been improved"
+                                  });                                } catch (error) {
+                                  console.error("Error enhancing system prompt:", error);
+                                  
+                                  // Dismiss loading toast and show error
+                                  loadingToast.dismiss();
+                                  toast({
+                                    variant: "destructive",
+                                    title: "Enhancement failed",
+                                    description: error instanceof Error ? error.message : "Failed to enhance system prompt. Please try again."
+                                  });
+                                }                              }}
+                              className="bg-gradient-to-r from-purple-600 to-purple-800 text-white border-0 hover:opacity-90"
+                            >
+                              Enhance System Prompt
+                            </Button>
                           </div>
-                          <p className="text-gray-400 text-xs">Automatically improve prompts using AI before processing</p>
                         </div>
 
                         <div className="flex justify-end pt-4">
