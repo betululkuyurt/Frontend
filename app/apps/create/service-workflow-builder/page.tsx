@@ -100,6 +100,12 @@ interface WorkflowStep {
   next?: string | null
 }
 
+// Add these interface and state definitions with the other interfaces
+interface Language {
+  code: string;
+  name: string;
+}
+
 // Define input and output types
 const inputTypes = [
   { value: "text", label: "Text", icon: MessageSquare },
@@ -220,6 +226,10 @@ export default function ServiceWorkflowBuilder() {
 
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
+
+  // Within the ServiceWorkflowBuilder component
+  const [translateLanguages, setTranslateLanguages] = useState<Language[]>([]);
+  const [isLoadingLanguages, setIsLoadingLanguages] = useState(false);
 
   useEffect(() => {
     const fetchAgentTypes = async () => {
@@ -1047,6 +1057,43 @@ export default function ServiceWorkflowBuilder() {
     }
   }
 
+  // Add this function to fetch available translation languages
+  const fetchTranslateLanguages = async () => {
+    try {
+      setIsLoadingLanguages(true);
+      const res = await fetch('http://127.0.0.1:8000/api/v1/agents/languages/translate', {
+        headers: {
+          "Authorization": `Bearer ${Cookies.get("access_token")}`,
+          "Content-Type": "application/json"
+        }
+      });
+
+      if (!res.ok) throw new Error("Failed to fetch translation languages");
+      
+      const languagesData = await res.json();
+      
+      // Convert from object to array format for the dropdown
+      const languagesArray = Object.entries(languagesData).map(([code, name]) => ({
+        code,
+        name: name as string
+      }));
+      
+      setTranslateLanguages(languagesArray);
+    } catch (err) {
+      console.error("Error fetching translation languages:", err);
+      setTranslateLanguages([]);
+    } finally {
+      setIsLoadingLanguages(false);
+    }
+  };
+
+  // Add this useEffect to call fetchTranslateLanguages when agent type is set to google_translate
+  useEffect(() => {
+    if (newAgentData.agentType === "google_translate") {
+      fetchTranslateLanguages();
+    }
+  }, [newAgentData.agentType]);
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-black via-purple-950/20 to-black">
       <NavBar />
@@ -1756,6 +1803,44 @@ export default function ServiceWorkflowBuilder() {
                               </SelectContent>
                             </Select>
                           </div>
+                        )}                        {newAgentData.agentType === "google_translate" && (
+                          <div className="bg-black/40 p-4 rounded-lg border border-purple-900/30">
+                            <h4 className="text-sm font-medium text-purple-200 mb-3">Translation Settings</h4>
+                            <div className="space-y-2">
+                              <Label htmlFor="targetLanguage" className="text-white font-medium">Target Language <span className="text-red-500">*</span></Label>
+                              <Select
+                                value={newAgentData.config.target_language || ""}
+                                onValueChange={(value) =>
+                                  setNewAgentData({
+                                    ...newAgentData,
+                                    config: { ...newAgentData.config, target_language: value }
+                                  })
+                                }
+                              >
+                                <SelectTrigger className="bg-black/50 border-purple-900/40 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all">
+                                  <SelectValue placeholder="Select target language" />
+                                </SelectTrigger>
+                                <SelectContent className="max-h-[200px] overflow-y-auto">
+                                  <div className="bg-black/90 border-purple-900/40 text-white">
+                                    {isLoadingLanguages ? (
+                                      <div className="p-2 text-center text-sm text-gray-400">Loading languages...</div>
+                                    ) : translateLanguages.length > 0 ? (
+                                      translateLanguages.map((language) => (
+                                        <SelectItem key={language.code} value={language.code} className="hover:bg-purple-900/20">
+                                          {language.name}
+                                        </SelectItem>
+                                      ))
+                                    ) : (
+                                      <div className="p-2 text-center text-sm text-gray-400">No languages available</div>
+                                    )}
+                                  </div>
+                                </SelectContent>
+                              </Select>
+                              {(newAgentData.agentType === "google_translate" && !newAgentData.config.target_language) && (
+                                <p className="text-xs text-red-500">Please select a target language</p>
+                              )}
+                            </div>
+                          </div>
                         )}
 
                         {newAgentData.agentType === "text2speech" && (
@@ -1812,8 +1897,7 @@ export default function ServiceWorkflowBuilder() {
                                       <SelectItem value="+50%" className="hover:bg-purple-900/20">Very Fast</SelectItem>
                                     </div>
                                   </SelectContent>
-                                </Select>
-                              </div>
+                                </Select>                              </div>
                             </div>
                           </div>
                         )}
@@ -1847,9 +1931,13 @@ export default function ServiceWorkflowBuilder() {
                               } finally {
                                 setIsCreatingAgent(false);
                               }
-                            }}
-                            className="bg-gradient-to-r from-purple-600 to-purple-800 text-white hover:opacity-90 transition-all duration-300 hover:shadow-purple-500/30 hover:scale-105 w-full sm:w-auto"
-                            disabled={isCreatingAgent || !newAgentData.name || !newAgentData.agentType}
+                            }}                            className="bg-gradient-to-r from-purple-600 to-purple-800 text-white hover:opacity-90 transition-all duration-300 hover:shadow-purple-500/30 hover:scale-105 w-full sm:w-auto"
+                            disabled={
+                              isCreatingAgent || 
+                              !newAgentData.name || 
+                              !newAgentData.agentType ||
+                              (newAgentData.agentType === "google_translate" && !newAgentData.config.target_language)
+                            }
                           >
                             {isCreatingAgent ? (
                               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -1858,6 +1946,8 @@ export default function ServiceWorkflowBuilder() {
                               "Enter agent name"
                             ) : !newAgentData.agentType ? (
                               "Select agent type"
+                            ) : newAgentData.agentType === "google_translate" && !newAgentData.config.target_language ? (
+                              "Select target language"
                             ) : (
                               "Create Agent"
                             )}
