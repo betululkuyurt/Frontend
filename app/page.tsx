@@ -151,21 +151,42 @@ export default function Home() {
                     </div>
                     <div className="text-xs text-gray-400 flex-1 text-center">AI Workflow Builder</div>
                   </div>
-                  <div className="h-64 md:h-80 bg-gradient-to-b from-gray-900 to-black p-4 flex items-center justify-center relative overflow-hidden">
+                    <div className="aspect-video w-full bg-gradient-to-b from-gray-900 to-black p-4 flex items-center justify-center relative overflow-hidden">
                     {/* Interior gradients for depth inside the mockup */}
                     <div className="absolute -top-10 -left-10 w-[20vw] h-[20vw] rounded-full bg-purple-800/10 blur-[50px]"></div>
                     <div className="absolute bottom-0 right-0 w-[25vw] h-[25vw] rounded-full bg-indigo-700/10 blur-[60px]"></div>
                     
-                    <div className="relative text-center z-10">
-                      <div className="flex justify-center mb-4">
-                        <div className="flex items-center justify-center h-16 w-16 rounded-lg bg-purple-600/20 border border-purple-600/30 relative">
-                          <div className="absolute inset-0 bg-gradient-to-br from-purple-500/20 to-indigo-600/10 rounded-lg"></div>
-                          <Workflow className="h-8 w-8 text-purple-400 relative z-10" />
-                        </div>
+                    <div className="relative w-full h-full z-10">
+                      <video 
+                      src="/videos/landing_video.mp4"
+                      autoPlay
+                      muted
+                      loop
+                      playsInline
+                      className="w-full h-full object-cover rounded-md"
+                      >
+                      Your browser does not support the video tag.
+                      </video>
+                      
+                      {/* Custom progress bar */}
+                      <div className="absolute bottom-2 left-0 right-0 mx-auto w-[90%] h-1 bg-gray-800/60 rounded-full overflow-hidden">
+                      <div className="progress-bar h-full w-full bg-gradient-to-r from-purple-500 to-indigo-500 origin-left"></div>
                       </div>
-                      <p className="text-sm text-gray-500">Interactive AI workflow visualization</p>
+                      
+                      {/* Add CSS for progress bar animation */}
+                      <style jsx>{`
+                      @keyframes progress {
+                        0% { transform: scaleX(0); }
+                        100% { transform: scaleX(1); }
+                      }
+                      .progress-bar {
+                        animation: progress linear;
+                        animation-duration: 40s;
+                        animation-iteration-count: infinite;
+                      }
+                      `}</style>
                     </div>
-                  </div>
+                    </div>
                 </div>
               </div>
               
