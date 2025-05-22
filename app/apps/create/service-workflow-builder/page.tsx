@@ -1,7 +1,6 @@
 "use client"
 
-import type React from "react"
-import { useState, useEffect } from "react"
+import React, { useRef, useState, useMemo, useEffect } from 'react';
 import { useRouter } from "next/navigation"
 import Cookies from "js-cookie"
 import { NavBar } from "@/components/nav-bar"
@@ -42,6 +41,19 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/components/ui/use-toast"
+import ReactFlow, {
+  Background,
+  Controls,
+  Panel,
+  ReactFlowProvider,
+  useNodesState,
+  useEdgesState,
+  ConnectionLineType
+} from 'reactflow';
+import 'reactflow/dist/style.css';
+import AgentNode from './nodes/AgentNode';
+import InputNode from './nodes/InputNode';
+import OutputNode from './nodes/OutputNode';
 
 // Type definitions
 interface BaseAgentSetting {
@@ -166,6 +178,19 @@ interface AgentType {
   output_type: string;
   requires_api_key: boolean; // Add this field
 }
+
+// For React Flow node data, allow both inputType and outputType for agent nodes
+// type AgentNodeData = { inputType: string; outputType: string; icon: React.ReactElement; label: string; onDelete: () => void };
+// type InputNodeData = { inputType: string; icon: React.ReactElement };
+// type OutputNodeData = { outputType: string; icon: React.ReactElement };
+// Use a single type for all nodes:
+type WorkflowNodeData = {
+  inputType?: string;
+  outputType?: string;
+  icon: React.ReactElement;
+  label?: string;
+  onDelete?: () => void;
+};
 
 export default function ServiceWorkflowBuilder() {
   const router = useRouter()
@@ -1107,6 +1132,214 @@ export default function ServiceWorkflowBuilder() {
     }
   }, [newAgentData.agentType]);
 
+  // React Flow states and refs
+  const [nodes, setNodes, onNodesChange] = useNodesState<WorkflowNodeData>([
+    {
+      id: 'input-node',
+      type: 'input',
+      position: { x: 250, y: 5 },
+      data: {
+        inputType: serviceData.inputType,
+        icon: <MessageSquare className="h-4 w-4 text-purple-300" />
+      }
+    },
+    {
+      id: 'output-node',
+      type: 'output',
+      position: { x: 250, y: 400 },
+      data: {
+        outputType: serviceData.outputType,
+        icon: <MessageSquare className="h-4 w-4 text-blue-300" />
+      }
+    }
+  ]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  const reactFlowWrapper = useRef<HTMLDivElement>(null);
+  const [reactFlowInstance, setReactFlowInstance] = useState<any>(null);
+
+  // Node types for React Flow
+  const nodeTypes = useMemo(() => ({
+    input: InputNode,
+    output: OutputNode,
+    agent: AgentNode
+  }), []);
+
+  // Helper to mark the last agent node
+  function markLastAgentNode(nodes: any[]) {
+    // Find all agent nodes (exclude input/output)
+    const agentNodes = nodes.filter(n => n.type === 'agent');
+    if (agentNodes.length === 0) return nodes;
+    // Find the one with the largest y position (lowest on canvas)
+    const lastAgentNodeId = agentNodes.reduce((maxId, node) => {
+      if (!maxId) return node.id;
+      const maxNode = agentNodes.find(n => n.id === maxId);
+      return (node.position.y > maxNode.position.y) ? node.id : maxId;
+    }, null);
+    // Set isLast: true for the last agent node, false for others
+    return nodes.map(node => {
+      if (node.type === 'agent') {
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            isLast: node.id === lastAgentNodeId
+          }
+        };
+      }
+      return node;
+    });
+  }
+
+  // Add agent node to workflow (renamed to avoid conflict)
+  const addAgentNodeToFlow = (agentId: string) => {
+    const agent = availableAgents.find(a => a.id === agentId);
+    if (!agent) return;
+    const workflowNodes = nodes.filter(node => node.id !== 'input-node' && node.id !== 'output-node' && node.type === 'agent');
+    const newNodeId = `agent-${Date.now()}`;
+    const stepCount = workflowNodes.length + 1;
+    const totalHeight = 400;
+    const stepSize = totalHeight / (stepCount + 1);
+    const updatedNodes = nodes.map(node => {
+      if (node.id === 'input-node') {
+        return { ...node, position: { x: 250, y: 5 } };
+      } else if (node.id === 'output-node') {
+        return { ...node, position: { x: 250, y: 5 + totalHeight } };
+      } else if (node.type === 'agent') {
+        const index = workflowNodes.findIndex(n => n.id === node.id);
+        return { ...node, position: { x: 250, y: 5 + stepSize * (index + 1) } };
+      }
+      return node;
+    });
+    const Icon = agent.icon || MessageSquare;
+    const newNode = {
+      id: newNodeId,
+      type: 'agent',
+      position: { x: 250, y: 5 + stepSize * stepCount },
+      data: {
+        inputType: agent.inputType,
+        outputType: agent.outputType,
+        icon: <Icon className="h-4 w-4 text-white" />, // Render as element
+        label: agent.name,
+        onDelete: () => removeAgentNode(newNodeId)
+      }
+    };
+    // Mark last agent node
+    const allNodes = markLastAgentNode([...updatedNodes, newNode]);
+    setNodes(allNodes);
+    setTimeout(() => {
+      updateWorkflowConnections(allNodes);
+    }, 10);
+    setSelectedAgent(null);
+  };
+
+  // Remove agent node
+  const removeAgentNode = (nodeId: string) => {
+    const filtered = nodes.filter(node => node.id !== nodeId);
+    const allNodes = markLastAgentNode(filtered);
+    setNodes(allNodes);
+    setTimeout(() => {
+      updateWorkflowConnections(allNodes);
+    }, 10);
+  };
+
+  // Update connections
+  const updateWorkflowConnections = (currentNodes: any[]) => {
+    const sortedNodes = [...currentNodes].sort((a, b) => {
+      if (a.id === 'input-node') return -1;
+      if (b.id === 'input-node') return 1;
+      if (a.id === 'output-node') return 1;
+      if (b.id === 'output-node') return -1;
+      return a.position.y - b.position.y;
+    });
+    const newEdges: any[] = [];
+    for (let i = 0; i < sortedNodes.length - 1; i++) {
+      newEdges.push({
+        id: `e-${sortedNodes[i].id}-${sortedNodes[i + 1].id}`,
+        source: sortedNodes[i].id,
+        target: sortedNodes[i + 1].id,
+        type: 'smoothstep',
+        animated: true,
+        style: { stroke: '#7c3aed', strokeWidth: 2 }
+      });
+    }
+    setEdges(newEdges);
+  };
+
+  // Rearrange nodes after drag
+  const onNodeDragStop = () => {
+    const allNodes = markLastAgentNode(nodes);
+    setNodes(allNodes);
+    updateWorkflowConnections(allNodes);
+  };
+
+  // Open agent selection
+  const handleAddAgent = () => {
+    setSelectedAgent('select');
+  };
+
+  // --- REACT FLOW NODES SYNCED TO WORKFLOW ---
+  useEffect(() => {
+    // Always show input and output nodes
+    const baseX = 40;
+    const stepX = 250;
+    const nodesArr = [];
+    // Input node
+    nodesArr.push({
+      id: 'input-node',
+      type: 'input',
+      position: { x: baseX, y: 250 },
+      data: {
+        inputType: serviceData.inputType,
+        icon: <MessageSquare className="h-4 w-4 text-purple-300" />
+      }
+    });
+    // Agent nodes (from workflow)
+    workflow.forEach((step, idx) => {
+      const agent = availableAgents.find(a => a.id === step.agentId);
+      if (!agent) return;
+      const Icon = agent.icon || MessageSquare;
+      nodesArr.push({
+        id: step.id,
+        type: 'agent',
+        position: { x: baseX + stepX * (idx + 1), y: 250 },
+        data: {
+          inputType: agent.inputType,
+          outputType: agent.outputType,
+          icon: <Icon className="h-4 w-4 text-white" />, // Render as element
+          label: agent.name,
+          description: agent.description,
+          color: agent.color,
+          isLast: idx === workflow.length - 1,
+          onDelete: () => removeWorkflowStep(step.id)
+        }
+      });
+    });
+    // Output node
+    nodesArr.push({
+      id: 'output-node',
+      type: 'output',
+      position: { x: baseX + stepX * (workflow.length + 1), y: 250 },
+      data: {
+        outputType: serviceData.outputType,
+        icon: <MessageSquare className="h-4 w-4 text-blue-300" />
+      }
+    });
+    setNodes(nodesArr);
+    // Edges: connect all in order
+    const edgeArr = [];
+    for (let i = 0; i < nodesArr.length - 1; i++) {
+      edgeArr.push({
+        id: `e-${nodesArr[i].id}-${nodesArr[i + 1].id}`,
+        source: nodesArr[i].id,
+        target: nodesArr[i + 1].id,
+        type: 'smoothstep',
+        animated: true,
+        style: { stroke: '#7c3aed', strokeWidth: 2 }
+      });
+    }
+    setEdges(edgeArr);
+  }, [workflow, availableAgents, serviceData.inputType, serviceData.outputType]);
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-black via-purple-950/20 to-black">
       <NavBar />
@@ -1292,11 +1525,9 @@ export default function ServiceWorkflowBuilder() {
                   <div className="flex items-center justify-between">
                     <h3 className="text-xl font-semibold text-white">Workflow Builder</h3>
                     <Badge variant="outline" className="bg-purple-900/20">
-                      {orderedWorkflow.length} {orderedWorkflow.length === 1 ? "Step" : "Steps"}
+                      {workflow.length} {workflow.length === 1 ? "Step" : "Steps"}
                     </Badge>
                   </div>
-
-
 
                   {availableAgents.length === 0 && !isLoading && (
                     <div className="bg-red-900/20 border border-purple-900/30 rounded-md p-4 mb-4">
@@ -1306,144 +1537,74 @@ export default function ServiceWorkflowBuilder() {
                     </div>
                   )}
 
-                  <div className="bg-black/40 rounded-lg border border-purple-900/30 p-4">
-                    <div className="flex items-center mb-4">
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-700 to-gray-900 flex items-center justify-center">
-                        <InputTypeIcon className="h-5 w-5 text-white" />
-                      </div>
-                      <div className="ml-3">
-                        <h4 className="text-white font-medium">Input</h4>
-                        <p className="text-gray-400 text-sm">
-                          {serviceData.inputType === "select"
-                            ? "Select input type"
-                            : inputTypes.find((type) => type.value === serviceData.inputType)?.label || "Text Input"}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Workflow Steps */}
-                    <div className="space-y-4 mb-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <h5 className="text-white text-sm font-medium">Workflow Steps</h5>
-                      </div>
-
-                      {orderedWorkflow.map((step, index) => {
-                        const agent = availableAgents.find((a) => a.id === step.agentId)
-                        if (!agent) return null
-
-                        return (
-                          <div key={step.id} className="relative">
-                            {/* Connector line */}
-                            {index > 0 && <div className="absolute left-5 -top-4 w-0.5 h-4 bg-purple-500/50"></div>}
-
-                            <div className="bg-gray-900/50 rounded-lg border border-purple-900/30 p-4">
-                              <div className="flex items-start">
-                                <div
-                                  className={`w-10 h-10 rounded-full bg-gradient-to-br ${agent.color} flex items-center justify-center flex-shrink-0`}
-                                >
-                                  {agent.icon && <agent.icon className="h-5 w-5 text-white" />}
-                                </div>
-
-                                <div className="ml-3 flex-grow">
-                                  <div className="flex items-center justify-between">
-                                    <h4 className="text-white font-medium">{agent.name}</h4>
-                                    <div className="flex space-x-1">
-                                      <TooltipProvider>
-                                        <Tooltip>
-                                          <TooltipTrigger asChild>
-                                            <Button
-                                              variant="ghost"
-                                              size="icon"
-                                              className="h-7 w-7 rounded-full hover:bg-gray-800"
-                                              onClick={() => {
-                                                setAgentInfoOpen(agentInfoOpen === step.id ? null : step.id)
-                                                if (agentInfoOpen !== step.id) {
-                                                  fetchAgentDetails(step.agentId)
-                                                }
-                                              }}
-                                            >
-                                              <BookOpen className="h-4 w-4 text-gray-400" />
-                                            </Button>
-                                          </TooltipTrigger>
-                                          <TooltipContent>
-                                            <p>Agent Info</p>
-                                          </TooltipContent>
-                                        </Tooltip>
-                                      </TooltipProvider>
-
-                                      <TooltipProvider>
-                                        <Tooltip>
-                                          <TooltipTrigger asChild>
-                                            <Button
-                                              variant="ghost"
-                                              size="icon"
-                                              className="h-7 w-7 rounded-full hover:bg-gray-800 hover:text-red-400"
-                                              onClick={() => removeWorkflowStep(step.id)}
-                                            >
-                                              <Trash2 className="h-4 w-4 text-gray-400" />
-                                            </Button>
-                                          </TooltipTrigger>
-                                          <TooltipContent>
-                                            <p>Remove Step</p>
-                                          </TooltipContent>
-                                        </Tooltip>
-                                      </TooltipProvider>
-                                    </div>
-                                  </div>
-
-                                  <p className="text-gray-400 text-sm">{agent.description}</p>
-
-                                  <div className="flex mt-2 space-x-2">
-                                    <Badge variant="outline" className="bg-purple-900/20 text-xs">
-                                      Input: {agent.inputType}
-                                    </Badge>
-                                    <Badge variant="outline" className="bg-purple-900/20 text-xs">
-                                      Output: {agent.outputType}
-                                    </Badge>
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* Agent Info Dialog */}
-                              {agentInfoOpen === step.id && (
-                                <div className="mt-4 pt-4 border-t border-purple-900/30">
-                                  <h5 className="text-white text-sm font-medium mb-3">Agent Details</h5>
-                                  {isLoadingAgentDetails ? (
-                                    <div className="flex items-center justify-center py-4">
-                                      <Loader2 className="h-6 w-6 animate-spin text-purple-400" />
-                                    </div>
-                                  ) : agentDetails ? (
-                                    <div className="space-y-4">
-                                      <div>
-                                        <Label className="text-gray-300 text-xs">Description</Label>
-                                        <p className="text-white text-sm mt-1">{agentDetails.description}</p>
-                                      </div>
-                                      <div>
-                                        <Label className="text-gray-300 text-xs">System Instruction</Label>
-                                        <p className="text-white text-sm mt-1 whitespace-pre-wrap">{agentDetails.system_instruction}</p>
-                                      </div>
-                                    </div>
-                                  ) : (
-                                    <p className="text-gray-400 text-sm">Failed to load agent details</p>
-                                  )}
-                                </div>
+                  {/* Workflow Canvas (React Flow) */}
+                  <div className="bg-black/40 rounded-lg border border-purple-900/30 p-4 relative" style={{ height: '500px' }}>
+                    {/* React Flow 2D canvas */}
+                    {/* --- BEGIN REACT FLOW CANVAS --- */}
+                    <ReactFlowProvider>
+                      <div style={{ width: '100%', height: '100%' }}>
+                        <ReactFlow
+                          nodes={nodes}
+                          edges={edges}
+                          onNodesChange={onNodesChange}
+                          onEdgesChange={onEdgesChange}
+                          onNodeDragStop={onNodeDragStop}
+                          onInit={setReactFlowInstance}
+                          nodeTypes={nodeTypes}
+                          fitView
+                          snapToGrid
+                          snapGrid={[20, 20]}
+                          defaultViewport={{ x: 0, y: 0, zoom: 1 }}
+                          minZoom={0.5}
+                          maxZoom={1.5}
+                          connectionLineType={ConnectionLineType.SmoothStep}
+                          connectionLineStyle={{ stroke: '#7c3aed', strokeWidth: 2 }}
+                        >
+                          <Background color="#6366f1" gap={20} size={1} />
+                          <Controls className="bg-gray-900/70 border border-gray-800 rounded-md" />
+                          {/* Add Building Block Button */}
+                          <Panel position="top-center" className="mt-2">
+                            <Button
+                              variant="outline"
+                              className="bg-black/40 border-purple-700/50 text-purple-400 hover:text-purple-300 hover:border-purple-500/50"
+                              onClick={handleAddAgent}
+                              disabled={isLoading}
+                            >
+                              {isLoading ? (
+                                <>
+                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                  Loading Agents...
+                                </>
+                              ) : (
+                                <>
+                                  <Plus className="h-4 w-4 mr-2" />
+                                  Add Building Block
+                                </>
                               )}
-                            </div>
+                            </Button>
+                          </Panel>
+                        </ReactFlow>
+                      </div>
+                    </ReactFlowProvider>
+                    {/* --- END REACT FLOW CANVAS --- */}
+
+                    {/* Agent Selection Panel */}
+                    {selectedAgent && (
+                      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm z-10 p-4 overflow-y-auto">
+                        <div className="bg-gray-900/70 border border-purple-900/30 rounded-md p-4 max-w-3xl mx-auto">
+                          <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-lg font-medium text-white">Select Agent</h3>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="text-gray-400 hover:text-white"
+                              onClick={() => setSelectedAgent(null)}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
                           </div>
-                        )
-                      })}
-                    </div>
-
-                    {/* Add Step Button */}
-                    <div className="relative">
-                      {orderedWorkflow.length > 0 && (
-                        <div className="absolute left-5 -top-4 w-0.5 h-4 bg-purple-500/50"></div>
-                      )}
-
-                      {selectedAgent ? (
-                        <div className="bg-gray-900/50 rounded-lg border border-purple-900/30 p-4">
-                          {/* Search and filtering options now appear here when selectedAgent is true */}
-                          <div className="space-y-4 mb-4">
+                          <div className="space-y-4">
+                            {/* Search and Filter */}
                             <div className="flex flex-col space-y-3">
                               {/* Search input */}
                               <div className="relative w-full">
@@ -1468,20 +1629,15 @@ export default function ServiceWorkflowBuilder() {
                                   )}
                                 </div>
                               </div>
-                              
-                              {/* Filter controls - responsive grid */}
+                              {/* Filter controls */}
                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                 <Select
-                                  value={workflow.length > 0 ? getRequiredInputType() || "select" : filterTypes.inputType}
+                                  value={filterTypes.inputType}
                                   onValueChange={handleInputTypeChange}
-                                  disabled={workflow.length > 0}
                                 >
                                   <SelectTrigger
                                     id="inputType"
-                                    className={cn(
-                                      "bg-black/40 border-purple-900/30 text-white h-9 text-sm",
-                                      workflow.length > 0 && "opacity-50 cursor-not-allowed"
-                                    )}
+                                    className="bg-black/40 border-purple-900/30 text-white h-9 text-sm"
                                   >
                                     <SelectValue placeholder="Input Type" />
                                   </SelectTrigger>
@@ -1499,7 +1655,6 @@ export default function ServiceWorkflowBuilder() {
                                     </div>
                                   </SelectContent>
                                 </Select>
-
                                 <Select
                                   value={filterTypes.outputType}
                                   onValueChange={handleOutputTypeChange}
@@ -1526,509 +1681,93 @@ export default function ServiceWorkflowBuilder() {
                                 </Select>
                               </div>
                             </div>
-                          </div>
-
-                          <div className="w-full">
-                            {isLoading ? (
-                              <div className="col-span-full flex items-center justify-center p-6">
-                                <Loader2 className="h-6 w-6 animate-spin mr-2 text-purple-400" />
-                                <span className="text-gray-400">Loading available agents...</span>
-                              </div>
-                            ) : (
-                              <div className="space-y-6 w-full">
-                                {/* User's Own Agents */}
-                                <div>
-                                  <h5 className="text-sm font-medium text-gray-400 mb-3">My Agents</h5>
-                                  {getFilteredAgents().ownAgents.length > 0 ? (
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                      {getFilteredAgents().ownAgents.map((agent) => (
-                                        <div
-                                          key={agent.id}
-                                          className="bg-black/40 rounded-lg border border-purple-900/30 p-3 cursor-pointer hover:border-purple-500/50 transition-colors"
-                                          onClick={() => addAgentToWorkflow(agent.id)}
-                                        >
-                                          <div className="flex items-center">
-                                            <div
-                                              className={`w-8 h-8 rounded-full bg-gradient-to-br ${agent.color} flex items-center justify-center flex-shrink-0`}
-                                            >
-                                              {agent.icon && <agent.icon className="h-4 w-4 text-white" />}
-                                            </div>
-                                            <div className="ml-2 flex-1 min-w-0">
-                                              <h5 className="text-white text-sm font-medium truncate">{agent.name}</h5>
-                                              <div className="flex mt-1 space-x-1">
-                                                <Badge variant="outline" className="bg-purple-900/20 text-[10px] px-1 py-0 h-4">
-                                                  {agent.inputType} → {agent.outputType}
-                                                </Badge>
+                            {/* Agent List */}
+                            <div className="w-full">
+                              {isLoading ? (
+                                <div className="flex items-center justify-center p-6">
+                                  <Loader2 className="h-6 w-6 animate-spin mr-2 text-purple-400" />
+                                  <span className="text-gray-400">Loading available agents...</span>
+                                </div>
+                              ) : (
+                                <div className="space-y-6 w-full">
+                                  {/* User's Own Agents */}
+                                  <div>
+                                    <h5 className="text-sm font-medium text-gray-400 mb-3">My Agents</h5>
+                                    {getFilteredAgents().ownAgents.length > 0 ? (
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                        {getFilteredAgents().ownAgents.map((agent) => (
+                                          <div
+                                            key={agent.id}
+                                            className="bg-black/40 rounded-lg border border-purple-900/30 p-3 cursor-pointer hover:border-purple-500/50 transition-colors"
+                                            onClick={() => addAgentToWorkflow(agent.id)}
+                                          >
+                                            <div className="flex items-center">
+                                              <div
+                                                className={`w-8 h-8 rounded-full bg-gradient-to-br ${agent.color} flex items-center justify-center flex-shrink-0`}
+                                              >
+                                                {agent.icon && <agent.icon className="h-4 w-4 text-white" />}
+                                              </div>
+                                              <div className="ml-2 flex-1 min-w-0">
+                                                <h5 className="text-white text-sm font-medium truncate">{agent.name}</h5>
+                                                <div className="flex mt-1 space-x-1">
+                                                  <Badge variant="outline" className="bg-purple-900/20 text-[10px] px-1 py-0 h-4">
+                                                    {agent.inputType} → {agent.outputType}
+                                                  </Badge>
+                                                </div>
                                               </div>
                                             </div>
                                           </div>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  ) : (
-                                    <p className="text-gray-500 text-sm italic">
-                                      {searchQuery ? `No agents found named "${searchQuery}" in your collection.` : "No agents found in your collection."}
-                                    </p>
-                                  )}
-                                </div>
-
-                                {/* Other Users' Agents */}
-                                <div>
-                                  <h5 className="text-sm font-medium text-gray-400 mb-3">Other Agents</h5>
-                                  {getFilteredAgents().otherAgents.length > 0 ? (
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                      {getFilteredAgents().otherAgents.map((agent) => (
-                                        <div
-                                          key={agent.id}
-                                          className="bg-black/40 rounded-lg border border-purple-900/30 p-3 cursor-pointer hover:border-purple-500/50 transition-colors"
-                                          onClick={() => addAgentToWorkflow(agent.id)}
-                                        >
-                                          <div className="flex items-center">
-                                            <div
-                                              className={`w-8 h-8 rounded-full bg-gradient-to-br ${agent.color} flex items-center justify-center flex-shrink-0`}
-                                            >
-                                              {agent.icon && <agent.icon className="h-4 w-4 text-white" />}
-                                            </div>
-                                            <div className="ml-2 flex-1 min-w-0">
-                                              <h5 className="text-white text-sm font-medium truncate">{agent.name}</h5>
-                                              <div className="flex mt-1 space-x-1">
-                                                <Badge variant="outline" className="bg-purple-900/20 text-[10px] px-1 py-0 h-4">
-                                                  {agent.inputType} → {agent.outputType}
-                                                </Badge>
-                                              </div>
-                                            </div>
-                                          </div>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  ) : (
-                                    <p className="text-gray-500 text-sm italic">
-                                      {searchQuery ? `No other agents found named "${searchQuery}".` : "No other agents found."}
-                                    </p>
-                                  )}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="mt-3 text-gray-400 hover:text-white"
-                            onClick={() => {
-                              setSelectedAgent(null);
-                              setSearchQuery("");  // Clear search query when closing
-                            }}
-                          >
-                            Cancel
-                          </Button>
-                        </div>
-                      ) : (
-                        <Button
-                          variant="outline"
-                          className="w-full border-dashed border-purple-900/50 text-purple-400 hover:text-purple-300 hover:border-purple-500/50 bg-black/20"
-                          onClick={() => setSelectedAgent("select")}
-                          disabled={isLoading}
-                        >
-                          {isLoading ? (
-                            <>
-                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                              Loading Agents...
-                            </>
-                          ) : (
-                            <>
-                              <Plus className="h-4 w-4 mr-2" />
-                              Add Processing Step
-                            </>
-                          )}
-                        </Button>
-                      )}
-
-
-                    {/* Output */}
-                    <div className="flex items-center mt-4 pt-4 border-t border-purple-900/30">
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-700 to-purple-900 flex items-center justify-center">
-                        <OutputTypeIcon className="h-5 w-5 text-white" />
-                      </div>
-                      <div className="ml-3">
-                        <h4 className="text-white font-medium">Output</h4>
-                        <p className="text-gray-400 text-sm">
-                          {serviceData.outputType === "select"
-                            ? "Select output type"
-                            : outputTypes.find((type) => type.value === serviceData.outputType)?.label || "Text Output"}
-                        </p>
-                      </div>
-                    </div>
-
-                    </div>
-                  </div>
-                  
-
-                  {/* Create Agent Dialog */}
-                  <Dialog open={isAgentDialogOpen} onOpenChange={setIsAgentDialogOpen}>
-                    <DialogTrigger asChild>
-                      <Button className="w-full bg-gradient-to-r from-purple-600 to-purple-800 text-white hover:opacity-90 transition-all duration-300 hover:shadow-purple-500/30">
-                        <Plus className="h-4 w-4 mr-2" />
-                        Create New Agent
-                      </Button>
-                    </DialogTrigger>
-
-                    <DialogContent
-                      className="bg-black/80 backdrop-blur-md border border-purple-700/50 text-white w-[95vw] sm:w-[90vw] md:w-[80vw] lg:w-[70vw] xl:w-[60vw] max-w-3xl shadow-xl relative rounded-xl z-50 overflow-y-auto max-h-[90vh]"
-                      style={{
-                        top: "50%",
-                        left: "50%",
-                        transform: "translate(-50%, -50%)",
-                        position: "fixed",
-                      }}
-                    >
-                      {/* Glow effects, placed inside and behind content */}
-                      <div className="pointer-events-none absolute inset-0 z-0">
-                        <div className="absolute -top-24 -right-24 w-64 h-64 bg-purple-600/20 rounded-full blur-3xl" />
-                        <div className="absolute -bottom-32 -left-32 w-96 h-96 bg-indigo-600/20 rounded-full blur-3xl" />
-                      </div>
-                      <DialogHeader className="relative z-10">
-                        <DialogTitle className="text-xl font-semibold bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent">Create New Agent</DialogTitle>
-                        <p className="text-gray-400 text-sm mt-1">Configure a new AI agent for your workflow</p>
-                      </DialogHeader>
-
-                      <div className="space-y-4 mt-4 relative z-10">
-                        {/* Agent Type Selection */}
-                        <div className="space-y-2">
-                          <Label htmlFor="agentType" className="text-white font-medium">
-                            Agent Type <span className="text-red-500">*</span>
-                          </Label>
-                          <Select
-                            value={newAgentData.agentType}
-                            onValueChange={(value) => {
-                              const selectedType = agentTypes.find(type => type.type === value);
-                              if (selectedType) {
-                                setNewAgentData({
-                                  ...newAgentData,
-                                  agentType: value,
-                                  inputType: selectedType.input_type,
-                                  outputType: selectedType.output_type
-                                });
-                              }
-                            }}
-                          >
-                            <SelectTrigger id="agentType" className="bg-black/50 border-purple-900/40 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all">
-                              <SelectValue placeholder="Select agent type" />
-                            </SelectTrigger>
-                            <SelectContent className="max-h-[200px] overflow-y-auto">
-                              <div className="bg-black/90 border-purple-900/40 text-white">
-                                {isLoadingAgentTypes ? (
-                                  <div className="p-2 text-center text-sm text-gray-400">Loading...</div>
-                                ) : agentTypes.length > 0 ? (
-                                  agentTypes.map((type) => (
-                                    <SelectItem key={type.type} value={type.type} className="hover:bg-purple-900/20">
-                                      {type.type}
-                                    </SelectItem>
-                                  ))
-                                ) : (
-                                  <div className="p-2 text-center text-sm text-gray-400">No agent types found</div>
-                                )}
-                              </div>
-                            </SelectContent>
-                          </Select>
-                          {!newAgentData.agentType && (
-                            <p className="text-xs text-red-500">Please select an agent type</p>
-                          )}
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="agentName" className="text-white font-medium">Agent Name</Label>
-                            <Input
-                              id="agentName"
-                              value={newAgentData.name}
-                              onChange={(e) => setNewAgentData({ ...newAgentData, name: e.target.value })}
-                              placeholder="My Custom Agent"
-                              className="bg-black/50 border-purple-900/40 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all"
-                            />
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label htmlFor="agentDescription" className="text-white font-medium">Description</Label>
-                            <Input
-                              id="agentDescription"
-                              value={newAgentData.description}
-                              onChange={(e) => setNewAgentData({ ...newAgentData, description: e.target.value })}
-                              placeholder="What does this agent do?"
-                              className="bg-black/50 border-purple-900/40 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all"
-                            />
-                          </div>
-                        </div>
-
-                        {/* Replace input/output type dropdowns with text display */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label className="text-white font-medium">Input Type</Label>
-                            <div className="p-2 bg-black/50 border border-purple-900/40 rounded-md">
-                              <p className="text-white text-sm">
-                                {newAgentData.inputType || "Will be set based on agent type"}
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label className="text-white font-medium">Output Type</Label>
-                            <div className="p-2 bg-black/50 border border-purple-900/40 rounded-md">
-                              <p className="text-white text-sm">
-                                {newAgentData.outputType || "Will be set based on agent type"}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor="systemInstruction" className="text-white font-medium">System Instruction</Label>
-                          <Textarea
-                            id="systemInstruction"
-                            value={newAgentData.systemInstruction}
-                            onChange={(e) => setNewAgentData({ ...newAgentData, systemInstruction: e.target.value })}
-                            placeholder="Instructions for the agent..."
-                            className="bg-black/50 border-purple-900/40 text-white min-h-[80px] focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all"
-                          />
-                          <p className="text-gray-400 text-xs">Provide instructions to guide the agent's behavior</p>
-                        </div>
-
-                        {/* Agent type specific fields */}
-                        {newAgentData.agentType === "gemini" && (
-                          <div className="space-y-2 bg-black/40 p-4 rounded-lg border border-purple-900/30">
-                            <Label htmlFor="model" className="text-white font-medium">Model</Label>
-                            <Select
-                              value={newAgentData.config.model || ""}
-                              onValueChange={(value) =>
-                                setNewAgentData({
-                                  ...newAgentData,
-                                  config: { ...newAgentData.config, model: value }
-                                })
-                              }
-                            >
-                              <SelectTrigger className="bg-black/50 border-purple-900/40 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all">
-                                <SelectValue placeholder="Select model" />
-                              </SelectTrigger>
-                              <SelectContent className="max-h-[200px] overflow-y-auto">
-                                <div className="bg-black/90 border-purple-900/40 text-white">
-                                  <SelectItem value="gemini-pro" className="hover:bg-purple-900/20">Gemini Pro</SelectItem>
-                                  <SelectItem value="gemini-pro-vision" className="hover:bg-purple-900/20">Gemini Pro Vision</SelectItem>
-                                </div>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        )}                        {newAgentData.agentType === "google_translate" && (
-                          <div className="bg-black/40 p-4 rounded-lg border border-purple-900/30">
-                            <h4 className="text-sm font-medium text-purple-200 mb-3">Translation Settings</h4>
-                            <div className="space-y-2">
-                              <Label htmlFor="targetLanguage" className="text-white font-medium">Target Language <span className="text-red-500">*</span></Label>
-                              <Select
-                                value={newAgentData.config.target_language || ""}
-                                onValueChange={(value) =>
-                                  setNewAgentData({
-                                    ...newAgentData,
-                                    config: { ...newAgentData.config, target_language: value }
-                                  })
-                                }
-                              >
-                                <SelectTrigger className="bg-black/50 border-purple-900/40 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all">
-                                  <SelectValue placeholder="Select target language" />
-                                </SelectTrigger>
-                                <SelectContent className="max-h-[200px] overflow-y-auto">
-                                  <div className="bg-black/90 border-purple-900/40 text-white">
-                                    {isLoadingLanguages ? (
-                                      <div className="p-2 text-center text-sm text-gray-400">Loading languages...</div>
-                                    ) : translateLanguages.length > 0 ? (
-                                      translateLanguages.map((language) => (
-                                        <SelectItem key={language.code} value={language.code} className="hover:bg-purple-900/20">
-                                          {language.name}
-                                        </SelectItem>
-                                      ))
+                                        ))}
+                                      </div>
                                     ) : (
-                                      <div className="p-2 text-center text-sm text-gray-400">No languages available</div>
+                                      <p className="text-gray-500 text-sm italic">
+                                        {searchQuery ? `No agents found named "${searchQuery}" in your collection.` : "No agents found in your collection."}
+                                      </p>
                                     )}
                                   </div>
-                                </SelectContent>
-                              </Select>
-                              {(newAgentData.agentType === "google_translate" && !newAgentData.config.target_language) && (
-                                <p className="text-xs text-red-500">Please select a target language</p>
+                                  {/* Other Users' Agents */}
+                                  <div>
+                                    <h5 className="text-sm font-medium text-gray-400 mb-3">Other Agents</h5>
+                                    {getFilteredAgents().otherAgents.length > 0 ? (
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                        {getFilteredAgents().otherAgents.map((agent) => (
+                                          <div
+                                            key={agent.id}
+                                            className="bg-black/40 rounded-lg border border-purple-900/30 p-3 cursor-pointer hover:border-purple-500/50 transition-colors"
+                                            onClick={() => addAgentToWorkflow(agent.id)}
+                                          >
+                                            <div className="flex items-center">
+                                              <div
+                                                className={`w-8 h-8 rounded-full bg-gradient-to-br ${agent.color} flex items-center justify-center flex-shrink-0`}
+                                              >
+                                                {agent.icon && <agent.icon className="h-4 w-4 text-white" />}
+                                              </div>
+                                              <div className="ml-2 flex-1 min-w-0">
+                                                <h5 className="text-white text-sm font-medium truncate">{agent.name}</h5>
+                                                <div className="flex mt-1 space-x-1">
+                                                  <Badge variant="outline" className="bg-purple-900/20 text-[10px] px-1 py-0 h-4">
+                                                    {agent.inputType} → {agent.outputType}
+                                                  </Badge>
+                                                </div>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <p className="text-gray-500 text-sm italic">
+                                        {searchQuery ? `No other agents found named "${searchQuery}".` : "No other agents found."}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
                               )}
                             </div>
                           </div>
-                        )}
-
-                        {newAgentData.agentType === "text2speech" && (
-                          <div className="bg-black/40 p-4 rounded-lg border border-purple-900/30">
-                            <h4 className="text-sm font-medium text-purple-200 mb-3">Text to Speech Configuration</h4>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                              <div className="space-y-2">
-                                <Label htmlFor="voice" className="text-white font-medium">Voice</Label>
-                                <Select
-                                  value={newAgentData.config.voice || ""}
-                                  onValueChange={(value) =>
-                                    setNewAgentData({
-                                      ...newAgentData,
-                                      config: { ...newAgentData.config, voice: value }
-                                    })
-                                  }
-                                >
-                                  <SelectTrigger className="bg-black/50 border-purple-900/40 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all">
-                                    <SelectValue placeholder="Select voice" />
-                                  </SelectTrigger>
-                                  <SelectContent className="max-h-[200px] overflow-y-auto">
-                                    <div className="bg-black/90 border-purple-900/40 text-white">
-                                      <SelectItem value="en-US-ChristopherNeural" className="hover:bg-purple-900/20">English US - Christopher</SelectItem>
-                                      <SelectItem value="en-US-JennyNeural" className="hover:bg-purple-900/20">English US - Jenny</SelectItem>
-                                      <SelectItem value="en-US-GuyNeural" className="hover:bg-purple-900/20">English US - Guy</SelectItem>
-                                      <SelectItem value="en-US-AriaNeural" className="hover:bg-purple-900/20">English US - Aria</SelectItem>
-                                      <SelectItem value="en-GB-SoniaNeural" className="hover:bg-purple-900/20">English UK - Sonia</SelectItem>
-                                      <SelectItem value="en-GB-RyanNeural" className="hover:bg-purple-900/20">English UK - Ryan</SelectItem>
-                                    </div>
-                                  </SelectContent>
-                                </Select>
-                              </div>
-
-                              <div className="space-y-2">
-                                <Label htmlFor="rate" className="text-white font-medium">Speech Rate</Label>
-                                <Select
-                                  value={newAgentData.config.rate || "+0%"}
-                                  onValueChange={(value) =>
-                                    setNewAgentData({
-                                      ...newAgentData,
-                                      config: { ...newAgentData.config, rate: value }
-                                    })
-                                  }
-                                >
-                                  <SelectTrigger className="bg-black/50 border-purple-900/40 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all">
-                                    <SelectValue placeholder="Select rate" />
-                                  </SelectTrigger>
-                                  <SelectContent className="max-h-[200px] overflow-y-auto">
-                                    <div className="bg-black/90 border-purple-900/40 text-white">
-                                      <SelectItem value="-50%" className="hover:bg-purple-900/20">Very Slow</SelectItem>
-                                      <SelectItem value="-25%" className="hover:bg-purple-900/20">Slow</SelectItem>
-                                      <SelectItem value="+0%" className="hover:bg-purple-900/20">Normal</SelectItem>
-                                      <SelectItem value="+25%" className="hover:bg-purple-900/20">Fast</SelectItem>
-                                      <SelectItem value="+50%" className="hover:bg-purple-900/20">Very Fast</SelectItem>
-                                    </div>
-                                  </SelectContent>
-                                </Select>                              </div>
-                            </div>
-                          </div>
-                        )}                        <div className="space-y-2 bg-black/40 p-4 rounded-lg border border-purple-900/30">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <Label className="text-white font-medium">
-                                Enhance System Prompt
-                              </Label>
-                              <p className="text-gray-400 text-xs">Automatically improve your system instruction using AI</p>
-                            </div>
-                            <Button 
-                              variant="outline"
-                              size="sm"
-                              onClick={async () => {
-                                if (!newAgentData.systemInstruction) {
-                                  toast({
-                                    variant: "destructive",
-                                    title: "System instruction is empty",
-                                    description: "Please add a system instruction first"
-                                  });
-                                  return;
-                                }
-
-                                // Show loading toast
-                                const loadingToast = toast({
-                                  title: "Enhancing system prompt",
-                                  description: "Please wait...",
-                                });                                try {
-                                  const response = await fetch(`http://127.0.0.1:8000/api/v1/agents/enhance_system_prompt?current_user_id=${userId}`, {
-                                    method: "POST",
-                                    headers: {
-                                      "Content-Type": "application/json",
-                                      Authorization: `Bearer ${Cookies.get("access_token")}`,
-                                    },
-                                    body: JSON.stringify({
-                                      system_prompt: newAgentData.systemInstruction,
-                                      name: newAgentData.name || "empty",
-                                  description: newAgentData.description || "empty",
-                                  input_type: newAgentData.inputType || "empty", 
-                                  output_type: newAgentData.outputType || "empty",
-                                  agent_type: newAgentData.agentType || "empty"
-                                    }),
-                                  });if (!response.ok) {
-                                    const errorData = await response.json().catch(() => null);
-                                    throw new Error(errorData?.detail || "Failed to enhance system prompt");
-                                  }
-
-                                  const result = await response.json();
-                                  
-                                  // Update the system instruction with the enhanced version
-                                  setNewAgentData({
-                                    ...newAgentData,
-                                    systemInstruction: result.enhanced_prompt,
-                                    enhancePrompt: true // Keep this flag enabled
-                                  });
-
-                                  // Dismiss loading toast and show success
-                                  loadingToast.dismiss();
-                                  toast({
-                                    title: "System prompt enhanced",
-                                    description: "Your system instruction has been improved"
-                                  });                                } catch (error) {
-                                  console.error("Error enhancing system prompt:", error);
-                                  
-                                  // Dismiss loading toast and show error
-                                  loadingToast.dismiss();
-                                  toast({
-                                    variant: "destructive",
-                                    title: "Enhancement failed",
-                                    description: error instanceof Error ? error.message : "Failed to enhance system prompt. Please try again."
-                                  });
-                                }                              }}
-                              className="bg-gradient-to-r from-purple-600 to-purple-800 text-white border-0 hover:opacity-90"
-                            >
-                              Enhance System Prompt
-                            </Button>
-                          </div>
-                        </div>
-
-                        <div className="flex justify-end pt-4">
-                          <Button
-                            onClick={async () => {
-                              setIsCreatingAgent(true);
-                              try {
-                                const result = await createAgent();
-                                if (result) {
-                                  setIsAgentDialogOpen(false);
-                                }
-                              } catch (error) {
-                                console.error("Agent creation error:", error);
-                              } finally {
-                                setIsCreatingAgent(false);
-                              }
-                            }}                            className="bg-gradient-to-r from-purple-600 to-purple-800 text-white hover:opacity-90 transition-all duration-300 hover:shadow-purple-500/30 hover:scale-105 w-full sm:w-auto"
-                            disabled={
-                              isCreatingAgent || 
-                              !newAgentData.name || 
-                              !newAgentData.agentType ||
-                              (newAgentData.agentType === "google_translate" && !newAgentData.config.target_language)
-                            }
-                          >
-                            {isCreatingAgent ? (
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            ) : null}
-                            {!newAgentData.name ? (
-                              "Enter agent name"
-                            ) : !newAgentData.agentType ? (
-                              "Select agent type"
-                            ) : newAgentData.agentType === "google_translate" && !newAgentData.config.target_language ? (
-                              "Select target language"
-                            ) : (
-                              "Create Agent"
-                            )}
-                          </Button>
                         </div>
                       </div>
-                    </DialogContent>
-                  </Dialog>
+                    )}
+                  </div>
 
                   <div className="flex justify-between">
                     <Button

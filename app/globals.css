@@ -111,3 +111,30 @@
   height: 100%;
 }
 
+/* ReactFlow Custom Styles */
+.react-flow__node {
+  @apply transition-all duration-200;
+}
+
+.react-flow__node.selected {
+  @apply shadow-lg shadow-purple-500/30;
+}
+
+.react-flow__attribution {
+  @apply bg-transparent text-gray-500;
+}
+
+.react-flow__controls {
+  @apply border border-gray-700/50 bg-black/50 backdrop-blur-md !important;
+}
+
+.react-flow__controls-button {
+  @apply border-gray-700/50 text-white hover:bg-gray-800 !important;
+}
+
+.react-flow__panel.react-flow__attribution {
+  @apply hidden;
+}
+
+/* End ReactFlow Custom Styles */
+
