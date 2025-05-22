@@ -1402,6 +1402,10 @@ export default function ServiceWorkflowBuilder() {
               ></div>
             </div>
           </div>
+              
+          
+
+
 
           <Tabs defaultValue="details" value={activeTab} onValueChange={setActiveTab} className="space-y-6">
 
@@ -1768,6 +1772,404 @@ export default function ServiceWorkflowBuilder() {
                       </div>
                     )}
                   </div>
+                  
+
+                   {/* Create Agent Dialog */}
+                    <Dialog open={isAgentDialogOpen} onOpenChange={setIsAgentDialogOpen}>
+                    <DialogTrigger asChild>
+                      <Button className="w-full bg-gradient-to-r from-purple-600 to-purple-800 text-white hover:opacity-90 transition-all duration-300 hover:shadow-purple-500/30">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Create New Agent
+                      </Button>
+                    </DialogTrigger>
+
+                    <DialogContent
+                      className="bg-black/80 backdrop-blur-md border border-purple-700/50 text-white w-[95vw] sm:w-[90vw] md:w-[80vw] lg:w-[70vw] xl:w-[60vw] max-w-3xl shadow-xl relative rounded-xl z-50 overflow-y-auto max-h-[90vh]"
+                      style={{
+                      top: "50%",
+                      left: "50%",
+                      transform: "translate(-50%, -50%)",
+                      position: "fixed",
+                      }}
+                    >
+                      {/* Glow effects, placed inside and behind content */}
+                      <div className="pointer-events-none absolute inset-0 z-0">
+                      <div className="absolute -top-24 -right-24 w-64 h-64 bg-purple-600/20 rounded-full blur-3xl" />
+                      <div className="absolute -bottom-32 -left-32 w-96 h-96 bg-indigo-600/20 rounded-full blur-3xl" />
+                      </div>
+                      <DialogHeader className="relative z-10">
+                      <DialogTitle className="text-xl font-semibold bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent">Create New Agent</DialogTitle>
+                      <p className="text-gray-400 text-sm mt-1">Configure a new AI agent for your workflow</p>
+                      </DialogHeader>
+
+                     
+                      {/* Agent Type Selection */}
+                      <div className="space-y-2">
+                        <Label htmlFor="agentType" className="text-white font-medium">
+                        Agent Type <span className="text-red-500">*</span>
+                        </Label>
+                        <Select
+                        value={newAgentData.agentType}
+                        onValueChange={(value) => {
+                          const selectedType = agentTypes.find(type => type.type === value);
+                          if (selectedType) {
+                          setNewAgentData({
+                            ...newAgentData,
+                            agentType: value,
+                            inputType: selectedType.input_type,
+                            outputType: selectedType.output_type
+                          });
+                          }
+                        }}
+                        >
+                        <SelectTrigger id="agentType" className="bg-black/50 border-purple-900/40 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all">
+                          <SelectValue placeholder="Select agent type" />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-[200px] overflow-y-auto">
+                          <div className="bg-black/90 border-purple-900/40 text-white">
+                          {isLoadingAgentTypes ? (
+                            <div className="p-2 text-center text-sm text-gray-400">Loading...</div>
+                          ) : agentTypes.length > 0 ? (
+                            agentTypes.map((type) => (
+                            <SelectItem key={type.type} value={type.type} className="hover:bg-purple-900/20">
+                              {type.type}
+                            </SelectItem>
+                            ))
+                          ) : (
+                            <div className="p-2 text-center text-sm text-gray-400">No agent types found</div>
+                          )}
+                          </div>
+                        </SelectContent>
+                        </Select>
+                        {!newAgentData.agentType && (
+                        <p className="text-xs text-red-500">Please select an agent type</p>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                        <Label htmlFor="agentName" className="text-white font-medium">Agent Name</Label>
+                        <Input
+                          id="agentName"
+                          value={newAgentData.name}
+                          onChange={(e) => setNewAgentData({ ...newAgentData, name: e.target.value })}
+                          placeholder="My Custom Agent"
+                          className="bg-black/50 border-purple-900/40 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all"
+                        />
+                        </div>
+
+                        <div className="space-y-2">
+                        <Label htmlFor="agentDescription" className="text-white font-medium">Description</Label>
+                        <Input
+                          id="agentDescription"
+                          value={newAgentData.description}
+                          onChange={(e) => setNewAgentData({ ...newAgentData, description: e.target.value })}
+                          placeholder="What does this agent do?"
+                          className="bg-black/50 border-purple-900/40 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all"
+                        />
+                        </div>
+                      </div>
+
+                      {/* Replace input/output type dropdowns with text display */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                        <Label className="text-white font-medium">Input Type</Label>
+                        <div className="p-2 bg-black/50 border border-purple-900/40 rounded-md">
+                          <p className="text-white text-sm">
+                          {newAgentData.inputType || "Will be set based on agent type"}
+                          </p>
+                        </div>
+                        </div>
+
+                        <div className="space-y-2">
+                        <Label className="text-white font-medium">Output Type</Label>
+                        <div className="p-2 bg-black/50 border border-purple-900/40 rounded-md">
+                          <p className="text-white text-sm">
+                          {newAgentData.outputType || "Will be set based on agent type"}
+                          </p>
+                        </div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="flex items-center space-x-2">
+                        <Label htmlFor="systemInstruction" className="text-white font-medium">System Instruction</Label>
+                        {newAgentData.enhancePrompt && (
+                          <Badge className="bg-purple-600/30 border-purple-500 text-purple-200 text-xs px-2 py-0.5">
+                          Enhanced
+                          </Badge>
+                        )}
+                        </div>
+                        <Textarea
+                        id="systemInstruction"
+                        value={newAgentData.systemInstruction}
+                        onChange={(e) => setNewAgentData({ ...newAgentData, systemInstruction: e.target.value })}
+                        placeholder="Instructions for the agent..."
+                        className={`bg-black/50 border-purple-900/40 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all ${newAgentData.enhancePrompt ? 'min-h-[200px]' : 'min-h-[80px]'}`}
+                        />
+                        <p className="text-gray-400 text-xs">Provide instructions to guide the agent's behavior</p>
+                      </div>
+
+                      {/* Agent type specific fields */}
+                      {newAgentData.agentType === "gemini" && (
+                        <div className="space-y-2 bg-black/40 p-4 rounded-lg border border-purple-900/30">
+                        <Label htmlFor="model" className="text-white font-medium">Model</Label>
+                        <Select
+                          value={newAgentData.config.model || ""}
+                          onValueChange={(value) =>
+                          setNewAgentData({
+                            ...newAgentData,
+                            config: { ...newAgentData.config, model: value }
+                          })
+                          }
+                        >
+                          <SelectTrigger className="bg-black/50 border-purple-900/40 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all">
+                          <SelectValue placeholder="Select model" />
+                          </SelectTrigger>
+                          <SelectContent className="max-h-[200px] overflow-y-auto">
+                          <div className="bg-black/90 border-purple-900/40 text-white">
+                            <SelectItem value="gemini-pro" className="hover:bg-purple-900/20">Gemini Pro</SelectItem>
+                            <SelectItem value="gemini-pro-vision" className="hover:bg-purple-900/20">Gemini Pro Vision</SelectItem>
+                          </div>
+                          </SelectContent>
+                        </Select>
+                        </div>
+                      )}                        {newAgentData.agentType === "google_translate" && (
+                        <div className="bg-black/40 p-4 rounded-lg border border-purple-900/30">
+                        <h4 className="text-sm font-medium text-purple-200 mb-3">Translation Settings</h4>
+                        <div className="space-y-2">
+                          <Label htmlFor="targetLanguage" className="text-white font-medium">Target Language <span className="text-red-500">*</span></Label>
+                          <Select
+                          value={newAgentData.config.target_language || ""}
+                          onValueChange={(value) =>
+                            setNewAgentData({
+                            ...newAgentData,
+                            config: { ...newAgentData.config, target_language: value }
+                            })
+                          }
+                          >
+                          <SelectTrigger className="bg-black/50 border-purple-900/40 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all">
+                            <SelectValue placeholder="Select target language" />
+                          </SelectTrigger>
+                          <SelectContent className="max-h-[200px] overflow-y-auto">
+                            <div className="bg-black/90 border-purple-900/40 text-white">
+                            {isLoadingLanguages ? (
+                              <div className="p-2 text-center text-sm text-gray-400">Loading languages...</div>
+                            ) : translateLanguages.length > 0 ? (
+                              translateLanguages.map((language) => (
+                              <SelectItem key={language.code} value={language.code} className="hover:bg-purple-900/20">
+                                {language.name}
+                              </SelectItem>
+                              ))
+                            ) : (
+                              <div className="p-2 text-center text-sm text-gray-400">No languages available</div>
+                            )}
+                            </div>
+                          </SelectContent>
+                          </Select>
+                          {(newAgentData.agentType === "google_translate" && !newAgentData.config.target_language) && (
+                          <p className="text-xs text-red-500">Please select a target language</p>
+                          )}
+                        </div>
+                        </div>
+                      )}
+
+                      {newAgentData.agentType === "text2speech" && (
+                        <div className="bg-black/40 p-4 rounded-lg border border-purple-900/30">
+                        <h4 className="text-sm font-medium text-purple-200 mb-3">Text to Speech Configuration</h4>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                          <Label htmlFor="voice" className="text-white font-medium">Voice</Label>
+                          <Select
+                            value={newAgentData.config.voice || ""}
+                            onValueChange={(value) =>
+                            setNewAgentData({
+                              ...newAgentData,
+                              config: { ...newAgentData.config, voice: value }
+                            })
+                            }
+                          >
+                            <SelectTrigger className="bg-black/50 border-purple-900/40 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all">
+                            <SelectValue placeholder="Select voice" />
+                            </SelectTrigger>
+                            <SelectContent className="max-h-[200px] overflow-y-auto">
+                            <div className="bg-black/90 border-purple-900/40 text-white"></div>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+
+                              <div className="space-y-2">
+                                <Label htmlFor="rate" className="text-white font-medium">Speech Rate</Label>
+                                <Select
+                                  value={newAgentData.config.rate || "+0%"}
+                                  onValueChange={(value) =>
+                                    setNewAgentData({
+                                      ...newAgentData,
+                                      config: { ...newAgentData.config, rate: value }
+                                    })
+                                  }
+                                >
+                                  <SelectTrigger className="bg-black/50 border-purple-900/40 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all">
+                                    <SelectValue placeholder="Select rate" />
+                                  </SelectTrigger>
+                                  <SelectContent className="max-h-[200px] overflow-y-auto">
+                                    <div className="bg-black/90 border-purple-900/40 text-white">
+                                      <SelectItem value="-50%" className="hover:bg-purple-900/20">Very Slow</SelectItem>
+                                      <SelectItem value="-25%" className="hover:bg-purple-900/20">Slow</SelectItem>
+                                      <SelectItem value="+0%" className="hover:bg-purple-900/20">Normal</SelectItem>
+                                      <SelectItem value="+25%" className="hover:bg-purple-900/20">Fast</SelectItem>
+                                      <SelectItem value="+50%" className="hover:bg-purple-900/20">Very Fast</SelectItem>
+                                    </div>
+                                  </SelectContent>
+                                </Select>                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="space-y-2 bg-black/40 p-4 rounded-lg border border-purple-900/30">
+                                                <div className="space-y-2 bg-black/40 p-4 rounded-lg border border-purple-900/30">
+                          <div className="flex items-center justify-between">
+                          
+                            <div>
+                              <Label className="text-white font-medium">
+                               Enhance System Prompt
+                              </Label>
+                           
+                            </div>
+                            
+                            <Button 
+                              variant="outline"
+                              size="sm"
+                              onClick={async () => {
+                                if (!newAgentData.systemInstruction) {
+                                  toast({
+                                    variant: "destructive",
+                                    title: "System instruction is empty",
+                                    description: "Please add a system instruction first"
+                                  });
+                                  return;
+                                }
+
+                                // Show loading toast
+                                const loadingToast = toast({
+                                  title: "Enhancing system prompt",
+                                  description: "Please wait...",
+                                });                                try {
+                                  const response = await fetch(`http://127.0.0.1:8000/api/v1/agents/enhance_system_prompt?current_user_id=${userId}`, {
+                                    method: "POST",
+                                    headers: {
+                                      "Content-Type": "application/json",
+                                      Authorization: `Bearer ${Cookies.get("access_token")}`,
+                                    },
+                                    body: JSON.stringify({
+                                      system_prompt: newAgentData.systemInstruction,
+                                      name: newAgentData.name || "empty",
+                                  description: newAgentData.description || "empty",
+                                  input_type: newAgentData.inputType || "empty", 
+                                  output_type: newAgentData.outputType || "empty",
+                                  agent_type: newAgentData.agentType || "empty"
+                                    }),
+                                  });if (!response.ok) {
+                                    const errorData = await response.json().catch(() => null);
+                                    throw new Error(errorData?.detail || "Failed to enhance system prompt");
+                                  }
+
+                                  const result = await response.json();
+                                  
+                                  // Update the system instruction with the enhanced version with typing animation
+                                  const enhancedPrompt = result.enhanced_prompt;
+                                  const typingSpeed = Math.max(10, Math.floor(3000 / enhancedPrompt.length)); // Calculate speed to complete in ~3 seconds
+
+                                  let currentText = '';
+                                  let charIndex = 0;
+
+                                  // Clear the system instruction first
+                                  setNewAgentData({
+                                    ...newAgentData,
+                                    systemInstruction: '',
+                                    enhancePrompt: true
+                                  });
+
+                                  // Create typing animation using interval
+                                  const typingInterval = setInterval(() => {
+                                    if (charIndex < enhancedPrompt.length) {
+                                      currentText += enhancedPrompt.charAt(charIndex);
+                                      setNewAgentData(prev => ({
+                                        ...prev,
+                                        systemInstruction: currentText
+                                      }));
+                                      charIndex++;
+                                    } else {
+                                      clearInterval(typingInterval);
+                                    }
+                                  }, typingSpeed);
+
+                                  // Clean up interval if component unmounts
+                                  return () => clearInterval(typingInterval);
+
+                                  // Dismiss loading toast and show success
+                                  loadingToast.dismiss();
+                                  toast({
+                                    title: "System prompt enhanced",
+                                    description: "Your system instruction has been improved"
+                                  });                                } catch (error) {
+                                  console.error("Error enhancing system prompt:", error);
+                                  
+                                  // Dismiss loading toast and show error
+                                  loadingToast.dismiss();
+                                  toast({
+                                    variant: "destructive",
+                                    title: "Enhancement failed",
+                                    description: error instanceof Error ? error.message : "Failed to enhance system prompt. Please try again."
+                                  });
+                                }                              }}
+                              className="bg-gradient-to-r from-purple-600 to-purple-800 text-white border-0 hover:opacity-90"
+                            >
+                              <Wand2 className="h-3.5 w-3.5 mr-1" />  Enhance
+                            </Button>
+                          </div>
+                          <p className="text-gray-400 text-xs">Automatically improve system prompt using AI</p>
+                        </div>
+
+                        <div className="flex justify-end pt-4">
+                          <Button
+                            onClick={async () => {
+                              setIsCreatingAgent(true);
+                              try {
+                                const result = await createAgent();
+                                if (result) {
+                                  setIsAgentDialogOpen(false);
+                                }
+                              } catch (error) {
+                                console.error("Agent creation error:", error);
+                              } finally {
+                                setIsCreatingAgent(false);
+                              }
+                            }}                            className="bg-gradient-to-r from-purple-600 to-purple-800 text-white hover:opacity-90 transition-all duration-300 hover:shadow-purple-500/30 hover:scale-105 w-full sm:w-auto"
+                            disabled={
+                              isCreatingAgent || 
+                              !newAgentData.name || 
+                              !newAgentData.agentType ||
+                              (newAgentData.agentType === "google_translate" && !newAgentData.config.target_language)
+                            }
+                          >
+                            {isCreatingAgent ? (
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : null}
+                            {!newAgentData.name ? (
+                              "Enter agent name"
+                            ) : !newAgentData.agentType ? (
+                              "Select agent type"
+                            ) : newAgentData.agentType === "google_translate" && !newAgentData.config.target_language ? (
+                              "Select target language"
+                            ) : (
+                              "Create Agent"
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
 
                   <div className="flex justify-between">
                     <Button
