@@ -138,3 +138,113 @@
 
 /* End ReactFlow Custom Styles */
 
+/* Service Page Workflow Visualization Styles */
+.custom-wf-scrollbar::-webkit-scrollbar {
+  height: 10px;
+  background: transparent;
+}
+
+.custom-wf-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(90deg, #a78bfa 0%, #8b5cf6 100%);
+  border-radius: 8px;
+  min-width: 48px;
+}
+
+.custom-wf-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-wf-scrollbar {
+  scrollbar-color: #a78bfa #18181b;
+  scrollbar-width: thin;
+}
+
+/* Service Page Range Slider Styles */
+input[type='range'].accent-purple-600::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #c4b5fd 0%, #a78bfa 100%);
+  box-shadow: 0 2px 8px rgba(167, 139, 250, 0.5);
+  border: 2px solid #fff;
+  cursor: pointer;
+  margin-top: -5px; /* This centers the thumb vertically relative to the track */
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+input[type='range'].accent-purple-600::-webkit-slider-thumb:hover {
+  transform: scale(1.1);
+  box-shadow: 0 2px 12px rgba(167, 139, 250, 0.7);
+}
+
+input[type='range'].accent-purple-600::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #c4b5fd 0%, #a78bfa 100%);
+  box-shadow: 0 2px 8px rgba(167, 139, 250, 0.5);
+  border: 2px solid #fff;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+input[type='range'].accent-purple-600::-ms-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%; 
+  background: linear-gradient(135deg, #c4b5fd 0%, #a78bfa 100%);
+  box-shadow: 0 2px 8px rgba(167, 139, 250, 0.5);
+  border: 2px solid #fff;
+  cursor: pointer;
+  margin-top: 0; /* MS Edge specific adjustment */
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+input[type='range'].accent-purple-600:focus::-webkit-slider-thumb {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.3);
+}
+
+/* Range Track Styling */
+input[type='range'].accent-purple-600::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 8px;
+  background: linear-gradient(90deg, rgba(167, 139, 250, 0.3) 0%, rgba(139, 92, 246, 0.3) 100%);
+}
+
+input[type='range'].accent-purple-600::-moz-range-track {
+  height: 6px;
+  border-radius: 8px;
+  background: linear-gradient(90deg, rgba(167, 139, 250, 0.3) 0%, rgba(139, 92, 246, 0.3) 100%);
+}
+
+input[type='range'].accent-purple-600::-ms-track {
+  height: 6px;
+  border-radius: 8px;
+  background: transparent;
+  border-color: transparent;
+  color: transparent;
+}
+
+input[type='range'].accent-purple-600::-ms-fill-lower {
+  background: rgba(167, 139, 250, 0.5);
+  border-radius: 8px;
+}
+
+input[type='range'].accent-purple-600::-ms-fill-upper {
+  background: rgba(139, 92, 246, 0.3);
+  border-radius: 8px;
+}
+
+/* Custom Pulse Animation */
+@keyframes service-pulse {
+  0%, 100% { opacity: 0.6; transform: scale(1) translate(-50%, -50%); }
+  50% { opacity: 1; transform: scale(1.3) translate(-38%, -38%); }
+}
+
+.animate-service-pulse {
+  animation: service-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+

@@ -244,6 +244,9 @@ export default function ServiceWorkflowBuilder() {
     enhancePrompt: false, //Add enhance prompt to agent data
   })
 
+  // **[NEW STATE]** - Add file upload state for RAG agents
+  const [ragDocumentFile, setRagDocumentFile] = useState<File | null>(null);
+
   const { toast } = useToast()
 
   const [agentTypes, setAgentTypes] = useState<AgentType[]>([]);
@@ -752,111 +755,148 @@ export default function ServiceWorkflowBuilder() {
         throw new Error("User not authenticated")
       }
 
+      // **[RAG AGENT VALIDATION]** - Check if RAG agent has required file
+      if (newAgentData.agentType === "rag" && !ragDocumentFile) {
+        throw new Error("RAG agents require a PDF document to be uploaded");
+      }
+
       // Clone the config object to avoid mutation
       let config = { ...newAgentData.config };
 
-      // Interface for agent creation payload
-      interface AgentCreationData {
-        name: string;
-        description: string;
-        input_type: string;
-        output_type: string;
-        system_instruction: string;
-        config: Record<string, any>;
-        is_public: boolean;
-        agent_type: string;
-        enhance_prompt: number; // 1 for true, 0 for false
-      }
+      // **[MULTIPART FORM DATA]** - RAG agents require multipart/form-data
+      if (newAgentData.agentType === "rag") {
+        const formData = new FormData();
+        formData.append("name", newAgentData.name);
+        formData.append("system_instruction", newAgentData.systemInstruction);
+        formData.append("agent_type", newAgentData.agentType);
+        formData.append("input_type", newAgentData.inputType);
+        formData.append("output_type", newAgentData.outputType);
+        formData.append("config", JSON.stringify(config));
+        formData.append("file", ragDocumentFile!); // Add the PDF file
 
-      const agentData: AgentCreationData = {
-        name: newAgentData.name,
-        description: newAgentData.description,
-        input_type: newAgentData.inputType,
-        output_type: newAgentData.outputType,
-        system_instruction: newAgentData.systemInstruction,
-        config: config,
-        is_public: newAgentData.isPublic,
-        agent_type: newAgentData.agentType,
-        enhance_prompt: newAgentData.enhancePrompt ? 1 : 0 // Add enhance_prompt parameter
-      }
-      
-      console.log("Creating agent with data:", {
-        ...agentData,
-        config: agentData.config
-      });
-      
-      // Agent create endpoint
-      const apiUrl = `http://127.0.0.1:8000/api/v1/agents/?enhance_prompt=${agentData.enhance_prompt}&current_user_id=${userId}`;
+        const apiUrl = `http://127.0.0.1:8000/api/v1/agents/?enhance_prompt=${newAgentData.enhancePrompt ? 1 : 0}&current_user_id=${userId}`;
 
-      const response = await fetch(apiUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${Cookies.get("access_token")}`
-        },
-        body: JSON.stringify(agentData)
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error("API Error Response:", {
-          status: response.status,
-          statusText: response.statusText,
-          error: errorData
+        const response = await fetch(apiUrl, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${Cookies.get("access_token")}` // No Content-Type header for FormData
+          },
+          body: formData
         });
-        throw new Error(`Failed to create agent: ${JSON.stringify(errorData)}`)
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.error("RAG Agent Creation Error:", {
+            status: response.status,
+            statusText: response.statusText,
+            error: errorData
+          });
+          throw new Error(`Failed to create RAG agent: ${errorData.detail || JSON.stringify(errorData)}`);
+        }
+
+        const data = await response.json();
+        console.log("RAG Agent created successfully:", data);
+
+        // Success handling
+        await fetchAgents();
+        toast({
+          title: "RAG Agent Created",
+          description: `Agent "${newAgentData.name}" has been created with document processing capabilities.`,
+        });
+
+        // Reset form
+        setNewAgentData({
+          name: "",
+          description: "",
+          inputType: "text",
+          outputType: "text",
+          systemInstruction: "",
+          enhancePrompt: false,
+          config: {},
+          isPublic: false,
+          agentType: ""
+        });
+        setRagDocumentFile(null);
+        setSelectedApiKey("");
+        setCustomApiKey("");
+        setUseCustomApiKey(false);
+
+        return data;
+      } else {
+        // **[JSON REQUEST]** - Non-RAG agents use JSON
+        const agentData = {
+          name: newAgentData.name,
+          description: newAgentData.description,
+          input_type: newAgentData.inputType,
+          output_type: newAgentData.outputType,
+          system_instruction: newAgentData.systemInstruction,
+          config: config,
+          is_public: newAgentData.isPublic,
+          agent_type: newAgentData.agentType,
+          enhance_prompt: newAgentData.enhancePrompt ? 1 : 0
+        };
+        
+        console.log("Creating agent with data:", {
+          ...agentData,
+          config: agentData.config
+        });
+        
+        const apiUrl = `http://127.0.0.1:8000/api/v1/agents/?enhance_prompt=${agentData.enhance_prompt}&current_user_id=${userId}`;
+
+        const response = await fetch(apiUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${Cookies.get("access_token")}`
+          },
+          body: JSON.stringify(agentData)
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.error("API Error Response:", {
+            status: response.status,
+            statusText: response.statusText,
+            error: errorData
+          });
+          throw new Error(`Failed to create agent: ${JSON.stringify(errorData)}`);
+        }
+
+        const data = await response.json();
+        console.log("Agent created successfully:", data);
+
+        // Yeni agent oluşturulduktan sonra agent listesini güncelle
+        await fetchAgents();
+
+        setNewAgentData({
+          name: "",
+          description: "",
+          inputType: "text",
+          outputType: "text",
+          systemInstruction: "",
+          enhancePrompt: false,
+          config: {},
+          isPublic: false,
+          agentType: "text"
+        });
+        setSelectedApiKey("");
+        setCustomApiKey("");
+        setUseCustomApiKey(false);
+
+        return data;
       }
-
-      const data = await response.json()
-      console.log("Agent created successfully:", data);
-
-      // Yeni agent oluşturulduktan sonra agent listesini güncelle
-      await fetchAgents();
-
-      setNewAgentData({
-        name: "",
-        description: "",
-        inputType: "text",
-        outputType: "text",
-        systemInstruction: "",
-        enhancePrompt: false,
-        config: {},
-        isPublic: false,
-        agentType: "text"
-      })
-      setSelectedApiKey("")
-      setCustomApiKey("")
-      setUseCustomApiKey(false)
-
-      // Başarı mesajı göster
-      toast({
-        title: "Agent oluşturuldu",
-        description: "Yeni agent başarıyla oluşturuldu ve listeye eklendi.",
-      })
-
-      return data
     } catch (error: any) {
-      console.error("Detailed error in createAgent:", {
-        error,
-        message: error.message,
-        stack: error.stack,
-        newAgentData,
-        selectedApiKey: selectedApiKey ? "PRESENT" : "NOT_PRESENT",
-        customApiKey: customApiKey ? "PRESENT" : "NOT_PRESENT"
-      });
-
-      // Hata mesajı göster
+      console.error("Agent creation error:", error);
       toast({
         variant: "destructive",
-        title: "Agent creation failed",
-        description: error.message || "An error occurred while creating the agent.",
+        title: "Agent Creation Failed",
+        description: error.message || "An unexpected error occurred while creating the agent"
       });
-
-      throw error
+      throw error;
     } finally {
       setIsCreatingAgent(false);
     }
-  }
+  };
 
   // Format workflow for API
   const formatWorkflowForAPI = () => {
@@ -2150,7 +2190,8 @@ export default function ServiceWorkflowBuilder() {
                               isCreatingAgent || 
                               !newAgentData.name || 
                               !newAgentData.agentType ||
-                              (newAgentData.agentType === "google_translate" && !newAgentData.config.target_language)
+                              (newAgentData.agentType === "google_translate" && !newAgentData.config.target_language) ||
+                              (newAgentData.agentType === "rag" && !ragDocumentFile)
                             }
                           >
                             {isCreatingAgent ? (
@@ -2162,12 +2203,101 @@ export default function ServiceWorkflowBuilder() {
                               "Select agent type"
                             ) : newAgentData.agentType === "google_translate" && !newAgentData.config.target_language ? (
                               "Select target language"
+                            ) : newAgentData.agentType === "rag" && !ragDocumentFile ? (
+                              "Upload RAG document"
                             ) : (
                               "Create Agent"
                             )}
                           </Button>
                         </div>
                       </div>
+
+                      {/* RAG Agent Configuration */}
+                      {newAgentData.agentType === "rag" && (
+                        <div className="bg-black/40 p-4 rounded-lg border border-purple-900/30">
+                          <h4 className="text-sm font-medium text-purple-200 mb-3 flex items-center">
+                            <FileText className="h-4 w-4 mr-2" />
+                            RAG Document Configuration
+                          </h4>
+                          <div className="space-y-4">
+                            <div className="space-y-2">
+                              <Label htmlFor="ragDocument" className="text-white font-medium">
+                                Document Upload <span className="text-red-500">*</span>
+                              </Label>
+                              <div className="border-2 border-dashed border-purple-900/50 rounded-lg p-6 text-center hover:border-purple-500/50 transition-colors cursor-pointer">
+                                {!ragDocumentFile && (
+                                  <>
+                                    <FileText className="h-8 w-8 mx-auto text-purple-400 mb-2" />
+                                    <p className="text-gray-400 text-sm">Drag and drop a PDF document here, or click to select</p>
+                                    <p className="text-gray-500 text-xs mt-1">Only PDF files are supported for RAG agents</p>
+                                  </>
+                                )}
+                                
+                                {ragDocumentFile && (
+                                  <div className="flex flex-col items-center">
+                                    <div className="bg-black/30 rounded-lg p-3 w-full max-w-[300px] mx-auto mb-2">
+                                      <div className="flex items-center gap-2">
+                                        <FileText className="h-5 w-5 text-purple-400 flex-shrink-0" />
+                                        <p className="text-purple-200 text-sm font-medium truncate">{ragDocumentFile.name}</p>
+                                      </div>
+                                      <p className="text-gray-400 text-xs mt-1">{(ragDocumentFile.size / 1024 / 1024).toFixed(2)} MB</p>
+                                    </div>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="text-xs border-purple-900/30 text-white"
+                                      onClick={() => setRagDocumentFile(null)}
+                                    >
+                                      Change Document
+                                    </Button>
+                                  </div>
+                                )}
+                                
+                                <input
+                                  type="file"
+                                  accept=".pdf"
+                                  className="hidden"
+                                  id="rag-document-upload"
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) {
+                                      if (file.type === "application/pdf") {
+                                        setRagDocumentFile(file);
+                                      } else {
+                                        toast({
+                                          variant: "destructive",
+                                          title: "Invalid file type",
+                                          description: "Only PDF files are supported for RAG agents"
+                                        });
+                                      }
+                                    }
+                                  }}
+                                />
+                                {!ragDocumentFile && (
+                                  <Button
+                                    onClick={() => document.getElementById("rag-document-upload")?.click()}
+                                    variant="outline"
+                                    className="mt-4 border-purple-900/30 text-white"
+                                  >
+                                    Select PDF Document
+                                  </Button>
+                                )}
+                              </div>
+                              {newAgentData.agentType === "rag" && !ragDocumentFile && (
+                                <p className="text-xs text-red-500">A PDF document is required for RAG agents</p>
+                              )}
+                            </div>
+                            
+                            <div className="bg-blue-950/30 border border-blue-800/30 rounded-lg p-3">
+                              <h5 className="text-xs font-semibold text-blue-200 mb-2">How RAG Works</h5>
+                              <p className="text-xs text-blue-300/80 leading-relaxed">
+                                This document will be processed and split into chunks for semantic search. 
+                                When users query this agent, relevant sections will be retrieved and used to generate accurate responses.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </DialogContent>
                   </Dialog>
 

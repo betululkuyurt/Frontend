@@ -43,7 +43,7 @@
 
 import type React from "react"
 
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { useRouter, useParams } from "next/navigation"
 import Cookies from "js-cookie"
 import { NavBar } from "@/components/nav-bar"
@@ -55,6 +55,9 @@ import { Loader2, ArrowLeft, Wand2, ImageIcon, Headphones, FileText, Video, Tras
 import { toast } from "@/components/ui/use-toast"
 import { deleteMiniService } from "@/lib/services"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Switch } from "@/components/ui/switch"
+import { Badge } from "@/components/ui/badge"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 interface MiniService {
   id: number
@@ -96,6 +99,68 @@ interface AgentDetails {
   is_enhanced: boolean;
 }
 
+// **[IMPROVEMENT]** - Create unified agent type configuration system
+interface AgentTypeConfig {
+  endpoint: string | ((agentId: number) => string);
+  fileFieldName: string;
+  additionalFields?: { [key: string]: any };
+  requiresApiKey: boolean;
+  supportedFileTypes: string[];
+  maxFileSize: number; // in MB
+  hasSpecialUI?: boolean;
+  processingMessage?: string;
+}
+
+// **[UNIFIED APPROACH]** - Central configuration for all file upload agent types
+const AGENT_TYPE_CONFIGS: { [agentType: string]: AgentTypeConfig } = {
+  rag: {
+    endpoint: (agentId: number) => `http://127.0.0.1:8000/api/v1/agents/${agentId}/run/rag_document`,
+    fileFieldName: "file", // Not used for RAG query endpoint
+    additionalFields: {
+      input: (query: string) => query, // Backend expects 'input', not 'query'
+      api_key: (apiKeys: any) => {
+        // Backend expects single 'api_key' string, not 'api_keys' JSON
+        // Extract the Gemini API key directly
+        return apiKeys.gemini || Object.values(apiKeys)[0] || "";
+      }
+    },
+    requiresApiKey: true,
+    supportedFileTypes: [".pdf", ".docx", ".txt"],
+    maxFileSize: 10,
+    hasSpecialUI: true,
+    processingMessage: "Processing document query..."
+  },
+  transcribe: {
+    endpoint: (agentId: number) => `http://127.0.0.1:8000/api/v1/agents/${agentId}/transcribe`,
+    fileFieldName: "file",
+    additionalFields: {
+      language: "en",
+      include_timestamps: (options: any) => options.include_timestamps?.toString()
+    },
+    requiresApiKey: false,
+    supportedFileTypes: [".mp3", ".wav", ".m4a", ".mp4", ".mov"],
+    maxFileSize: 50,
+    hasSpecialUI: true,
+    processingMessage: "Transcribing audio/video content..."
+  },
+  image_analyzer: {
+    endpoint: (agentId: number) => `http://127.0.0.1:8000/api/v1/agents/${agentId}/run/image`,
+    fileFieldName: "file",
+    additionalFields: {},
+    requiresApiKey: true,
+    supportedFileTypes: [".jpg", ".jpeg", ".png", ".webp"],
+    maxFileSize: 5,
+    processingMessage: "Analyzing image content..."
+  }
+};
+
+// **[UTILITY FUNCTIONS]** - Reduce code duplication
+const getAuthHeaders = () => {
+  const token = localStorage.getItem("token") || localStorage.getItem("accessToken") || Cookies.get("accessToken");
+  const currentUserId = Cookies.get("user_id");
+  return { token, currentUserId };
+};
+
 export default function ServicePage() {
   const router = useRouter()
   const params = useParams()
@@ -114,6 +179,29 @@ export default function ServicePage() {
   const [agentDetails, setAgentDetails] = useState<{ [id: number]: AgentDetails }>({});
   // Add state for expanded descriptions
   const [expandedDescriptions, setExpandedDescriptions] = useState<{ [nodeId: string]: boolean }>({});
+  // Add state for document processing feedback
+  const [documentProcessingState, setDocumentProcessingState] = useState<{
+    isProcessing: boolean;
+    stage: 'uploading' | 'embedding' | 'indexing' | 'processing' | 'complete';
+    message: string;
+  }>({
+    isProcessing: false,
+    stage: 'uploading',
+    message: ''
+  });
+
+  // **[RESTORED]** - Document collection state (endpoint now available in backend)
+  const [documentCollection, setDocumentCollection] = useState<{
+    documents: Array<{
+      filename: string;
+      source: string;
+      chunks: number;
+    }>;
+    isLoading: boolean;
+  }>({
+    documents: [],
+    isLoading: false
+  });
 
   // Add ref and slider state for workflow visualization
   const workflowScrollRef = useRef<HTMLDivElement>(null);
@@ -128,8 +216,7 @@ export default function ServicePage() {
         localStorage.getItem("accessToken") ||
         Cookies.get("accessToken");
 
-      const userId = Cookies.get("user_id"); // Debug: Check if user_id is available
-      console.log("Auth check - Token:", !!token, "User ID:", userId); // Debug log
+      const userId = Cookies.get("user_id");
 
       if (token) {
         setIsAuthenticated(true);
@@ -151,8 +238,6 @@ export default function ServicePage() {
         setIsServiceLoading(true);
         const currentUserId = Cookies.get("user_id") || "0";
 
-        console.log("Fetching service details for ID:", serviceId);
-
         const response = await fetch(
           `http://127.0.0.1:8000/api/v1/mini-services/${serviceId}?current_user_id=${currentUserId}`
         );
@@ -167,18 +252,9 @@ export default function ServicePage() {
         }
 
         const data = await response.json();
-        console.log("Loaded service data:", {
-          id: data.id,
-          name: data.name,
-          workflow: data.workflow,
-          api_key: data.api_key ? "present" : "not present",
-          api_key_id: data.api_key_id,
-          workflow_first_node: data.workflow?.nodes ? Object.keys(data.workflow.nodes)[0] : null,
-          workflow_nodes_count: data.workflow?.nodes ? Object.keys(data.workflow.nodes).length : 0,
-          workflow_sample_node: data.workflow?.nodes ? data.workflow.nodes[Object.keys(data.workflow.nodes)[0]] : null,
-          average_token_usage: data.average_token_usage,
-          run_time: data.run_time
-        });
+        // if (process.env.NODE_ENV === 'development') {
+        //   console.log("Service loaded:", data.name, "- Agents:", Object.keys(data.workflow?.nodes || {}).length);
+        // }
 
         setService(data);
 
@@ -205,8 +281,6 @@ export default function ServicePage() {
       const token = localStorage.getItem("token") || localStorage.getItem("accessToken") || Cookies.get("accessToken");
       const currentUserId = Cookies.get("user_id") || "0";
 
-      console.log("Fetching details for agents:", uniqueAgentIds);
-
       const agentDetailsMap: { [id: number]: AgentDetails } = {};
 
       await Promise.all(
@@ -226,7 +300,6 @@ export default function ServicePage() {
 
             const agentData = await response.json();
             agentDetailsMap[agentId] = agentData;
-            console.log(`Fetched details for agent ${agentId}:`, agentData);
           } catch (error) {
             console.error(`Error fetching agent ${agentId} details:`, error);
           }
@@ -270,6 +343,10 @@ export default function ServicePage() {
   // Add state for API keys (store key id, not api_key value)
   const [apiKeys, setApiKeys] = useState<{ [agentId: number]: string }>({});
   const [availableApiKeys, setAvailableApiKeys] = useState<{ [provider: string]: { id: string, name: string, api_key: string }[] }>({});
+  // Add state for transcription options with just include_timestamps
+  const [transcriptionOptions, setTranscriptionOptions] = useState({
+    include_timestamps: false
+  });
 
   // Fetch available API keys
   useEffect(() => {
@@ -319,10 +396,11 @@ export default function ServicePage() {
     "gemini",
     "openai",
     "gemini_text2image",
-    "custom_endpoint_llm"
+    "custom_endpoint_llm",
+    "rag" // Add RAG agent type to the list
   ];
 
-  // Function to extract agents that require API keys
+  // **[OPTIMIZED]** Function to extract agents that require API keys - memoized to prevent excessive calls
   const getAgentsRequiringApiKey = useCallback(() => {
     if (!service?.workflow?.nodes) return [];
 
@@ -333,51 +411,61 @@ export default function ServicePage() {
       const agentDetail = agentDetails[agentId];
 
       // If we have detailed agent info, use it to determine if API key is required
-      if (agentDetail && AGENT_TYPES_REQUIRING_API_KEY.includes(agentDetail.agent_type.toLowerCase())) {
+      const agentType = agentDetail?.agent_type?.toLowerCase() || node.agent_type?.toLowerCase() || "";
+      if (agentDetail && (AGENT_TYPES_REQUIRING_API_KEY.includes(agentType) || agentType.includes("rag"))) {
+        // Handle special provider type mapping (for RAG agents using Gemini, etc)
+        let providerType = agentType;
+        if (agentType.includes("rag")) {
+          providerType = "gemini"; // RAG agents need Gemini API keys
+        } else if (agentType.includes("gemini_text2image") || agentType === "gemini_text2image") {
+          providerType = "gemini"; // Gemini image generation agents need Gemini API keys
+        }
+
         agents.push({
           id: agentId,
           name: agentDetail.name || `Agent ${agentId}`,
-          type: agentDetail.agent_type.toLowerCase(),
+          type: providerType,
           nodeId
         });
       }
       // Fallback to the basic node info if detailed info not available
-      else if (node.agent_type && AGENT_TYPES_REQUIRING_API_KEY.includes(node.agent_type.toLowerCase())) {
+      else if (node.agent_type && (AGENT_TYPES_REQUIRING_API_KEY.includes(node.agent_type.toLowerCase()) || node.agent_type.toLowerCase().includes("rag"))) {
+        let providerType = node.agent_type.toLowerCase();
+        if (providerType.includes("rag")) {
+          providerType = "gemini"; // RAG agents need Gemini API keys
+        } else if (providerType.includes("gemini_text2image") || providerType === "gemini_text2image") {
+          providerType = "gemini"; // Gemini image generation agents need Gemini API keys
+        }
+        
         agents.push({
           id: agentId,
           name: node.agent_name || `Agent ${agentId}`,
-          type: node.agent_type.toLowerCase(),
+          type: providerType,
           nodeId
         });
       }
     });
 
-    console.log("Agents requiring API key:", agents);
+    // Only log in development mode and when agents change
+    // if (process.env.NODE_ENV === 'development' && agents.length > 0) {
+    //   console.log("API key required for:", agents.map(a => `${a.name} (${a.type})`).join(', '));
+    // }
     return agents;
   }, [service?.workflow, agentDetails]);
 
-  // Check if all required API keys are selected
-  const areAllRequiredApiKeysSelected = useCallback(() => {
+  // **[OPTIMIZED]** Check if all required API keys are selected - optimized with useMemo
+  const areAllRequiredApiKeysSelected = useMemo(() => {
     const requiredAgents = getAgentsRequiringApiKey();
     if (requiredAgents.length === 0) return true;
-
-    // Debug output
-    console.log("[DEBUG] Required agents:", requiredAgents);
-    console.log("[DEBUG] apiKeys state:", apiKeys);
-    console.log("[DEBUG] availableApiKeys:", availableApiKeys);
 
     // Check for each required agent if a valid key is selected
     const allSelected = requiredAgents.every(agent => {
       const selectedKeyId = apiKeys[agent.id];
       if (!selectedKeyId) return false;
       // Must match an available key for this agent type
-      const found = availableApiKeys[agent.type]?.some(key => key.id === selectedKeyId);
-      if (!found) {
-        console.log(`[DEBUG] No valid key found for agent ${agent.id} (${agent.type}) with selectedKeyId:`, selectedKeyId);
-      }
-      return found;
+      return availableApiKeys[agent.type]?.some(key => key.id === selectedKeyId);
     });
-    console.log("[DEBUG] All required API keys selected:", allSelected);
+    
     return allSelected;
   }, [apiKeys, getAgentsRequiringApiKey, availableApiKeys]);
 
@@ -389,116 +477,327 @@ export default function ServicePage() {
     }));
   };
 
-  // Move getApiKeysForBackend inside ServicePage and make it always use latest state
-  const getApiKeysForBackend = () => {
+  // **[OPTIMIZED]** Move getApiKeysForBackend inside ServicePage and optimize
+  const getApiKeysForBackend = useCallback(() => {
     const result: { [agentId: number]: string } = {};
     const requiredAgents = getAgentsRequiringApiKey();
     requiredAgents.forEach(agent => {
       const keyId = apiKeys[agent.id];
       if (keyId) {
-        const keyObj = (availableApiKeys[agent.type] || []).find(k => k.id === keyId);
+        // For RAG agents, map their provider type to 'gemini' for API key lookup
+        let providerType = agent.type;
+        if (agent.type === 'rag' || agent.type === 'rag_agent') {
+          providerType = 'gemini'; // RAG agents use Gemini API keys
+        } else if (agent.type === 'gemini_text2image' || agent.type.includes('gemini_text2image')) {
+          providerType = 'gemini'; // Gemini image generation agents use Gemini API keys
+        }
+        
+        const keyObj = (availableApiKeys[providerType] || []).find(k => k.id === keyId);
         if (keyObj) {
           result[agent.id] = keyObj.api_key;
-        } else {
-          console.warn("[getApiKeysForBackend] No keyObj found for agent", agent, "with keyId", keyId);
         }
-      } else {
-        console.warn("[getApiKeysForBackend] No keyId for agent", agent);
-      }
+        }
     });
-    console.log("[getApiKeysForBackend] Result:", result);
+    // Only log in development mode
+    // if (process.env.NODE_ENV === 'development' && Object.keys(result).length > 0) {
+    //   console.log("API keys prepared for backend:", Object.keys(result).length, "keys");
+    // }
     return result;
-  }
+  }, [getAgentsRequiringApiKey, apiKeys, availableApiKeys]);
 
-  // Handle form submission
+  // **[UNIFIED FUNCTION]** - Generic function to detect file upload agent types
+  const getFileUploadAgents = useCallback(() => {
+    if (!service?.workflow?.nodes) return [];
+
+    const fileUploadAgents: Array<{
+      id: number;
+      name: string;
+      type: string;
+      nodeId: string;
+      config: AgentTypeConfig;
+    }> = [];
+
+    Object.entries(service.workflow.nodes).forEach(([nodeId, node]) => {
+      const agentId = node.agent_id;
+      const agentDetail = agentDetails[agentId];
+      const agentType = agentDetail?.agent_type?.toLowerCase() || node.agent_type?.toLowerCase() || "";
+
+      // Check if this agent type supports file uploads
+      const config = AGENT_TYPE_CONFIGS[agentType];
+      if (config) {
+        fileUploadAgents.push({
+          id: agentId,
+          name: agentDetail?.name || node.agent_name || `Agent ${agentId}`,
+          type: agentType,
+          nodeId,
+          config
+        });
+      }
+      });
+      
+    return fileUploadAgents;
+  }, [service?.workflow, agentDetails]);
+
+  // **[UNIFIED FUNCTION]** - Generic file upload handler
+  const handleUnifiedFileUpload = async () => {
+    const fileUploadAgents = getFileUploadAgents();
+    
+    if (fileUploadAgents.length === 0) {
+      // Fall back to regular service endpoint
+      return handleRegularServiceSubmit();
+    }
+
+    // For now, handle the first file upload agent (can be extended for multiple)
+    const primaryAgent = fileUploadAgents[0];
+    const config = primaryAgent.config;
+
+    try {
+        setDocumentProcessingState({
+          isProcessing: true,
+          stage: 'uploading',
+        message: config.processingMessage || 'Processing file...'
+        });
+        
+      const token = localStorage.getItem("token") || localStorage.getItem("accessToken") || Cookies.get("accessToken");
+      const currentUserId = Cookies.get("user_id");
+
+      const formData = new FormData();
+        
+      // **[SPECIAL HANDLING]** - RAG agents work differently
+      if (primaryAgent.type === 'rag' || primaryAgent.type === 'rag_agent') {
+        // RAG agents only need query and API key, no file upload for querying
+        if (!userInput || !userInput.trim()) {
+          throw new Error("Please provide a query for the RAG agent");
+        }
+        
+        // Get the API keys for backend
+        const apiKeysForBackend = getApiKeysForBackend();
+        const geminiApiKey = apiKeysForBackend[primaryAgent.id];
+        
+        if (!geminiApiKey) {
+          throw new Error("Gemini API key is required for RAG document queries");
+        }
+
+        // Add required fields for RAG endpoint
+        formData.append("input", userInput); // Backend expects 'input'
+        formData.append("api_key", geminiApiKey); // Backend expects single 'api_key' string
+        
+        // Only log in development mode
+        // if (process.env.NODE_ENV === 'development') {
+        //   console.log("RAG query request:", {
+        //     input: userInput,
+        //     hasApiKey: !!geminiApiKey,
+        //     agentId: primaryAgent.id
+        //   });
+        // }
+      } else {
+        // Regular file upload agents
+        if (uploadedFile) {
+          formData.append(config.fileFieldName, uploadedFile, uploadedFile.name);
+        }
+
+        // Add text input if provided and not a pure file processing agent
+        if (userInput && !config.hasSpecialUI) {
+          formData.append("input", userInput);
+            }
+            
+        // Add additional fields based on agent type
+        Object.entries(config.additionalFields || {}).forEach(([fieldName, fieldValue]) => {
+          if (typeof fieldValue === 'function') {
+            // Dynamic field value based on context
+            if (fieldName === 'filename' && uploadedFile) {
+              formData.append(fieldName, fieldValue(uploadedFile));
+            } else if (fieldName === 'api_keys' && config.requiresApiKey) {
+              const apiKeysForBackend = getApiKeysForBackend();
+              formData.append(fieldName, fieldValue(apiKeysForBackend));
+            } else if (fieldName === 'include_timestamps') {
+              formData.append(fieldName, fieldValue(transcriptionOptions));
+            }
+          } else {
+            // Static field value
+            formData.append(fieldName, fieldValue);
+          }
+        });
+
+        // Handle special query field for non-RAG agents
+        if (config.hasSpecialUI && userInput && userInput.trim()) {
+          formData.append("query", userInput);
+        }
+      }
+
+      // Make the API call
+      const endpoint = typeof config.endpoint === 'function' 
+        ? config.endpoint(primaryAgent.id) 
+        : config.endpoint;
+
+      const response = await fetch(
+        `${endpoint}?current_user_id=${currentUserId}`,
+              {
+                method: "POST",
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                },
+          body: formData,
+          signal: AbortSignal.timeout(300000) // 5 minute timeout
+              }
+            );
+            
+      if (!response.ok) {
+              let errorDetail = "Unknown error";
+              try {
+          const errorData = await response.json();
+          errorDetail = errorData?.detail || JSON.stringify(errorData);
+              } catch (parseError) {
+                errorDetail = response.statusText;
+              }
+              throw new Error(`Server error: ${response.status} ${errorDetail}`);
+            }
+            
+      const data = await response.json();
+      // console.log("🎯 Backend RAG response:", data);
+      setResult(data);
+
+          } catch (error: any) {
+      console.error(`Error in ${primaryAgent.type} processing:`, error);
+      
+      // **[IMPROVED ERROR HANDLING]** - Better error messages for RAG
+      if (primaryAgent.type === 'rag' || primaryAgent.type === 'rag_agent') {
+        if (error.message.includes('api_key') || error.message.includes('API key')) {
+          setError("API key error: Please check that you've selected a valid Gemini API key for document processing.");
+        } else if (error.message.includes('collection') || error.message.includes('ChromaDB')) {
+          setError("Document collection not found. Please make sure documents have been uploaded to this RAG agent first.");
+        } else {
+          setError(error.message || "An error occurred while processing your query");
+        }
+            } else {
+        setError(error.message || "An error occurred while processing your file");
+      }
+    } finally {
+              setDocumentProcessingState({
+        isProcessing: false,
+        stage: 'complete',
+        message: ''
+              });
+    }
+  };
+
+  // **[UNIFIED FUNCTION]** - Regular service submission (non-file upload)
+  const handleRegularServiceSubmit = async () => {
+    // ... existing regular service submission logic ...
+    const token = localStorage.getItem("token") || localStorage.getItem("accessToken") || Cookies.get("accessToken");
+    const currentUserId = Cookies.get("user_id");
+
+        let body: FormData | string;
+        let headers: Record<string, string> = {
+          "Authorization": `Bearer ${token}`,
+        };
+        
+    if (service!.input_type === "text") {
+          const bodyData = {
+            input: userInput,
+            api_keys: getApiKeysForBackend()
+          };
+          body = JSON.stringify(bodyData);
+          headers["Content-Type"] = "application/json";
+        } else if (uploadedFile) {
+          body = new FormData();
+          body.append("file", uploadedFile);
+          if (userInput) {
+            body.append("input", userInput);
+          }
+          const backendKeys = getApiKeysForBackend();
+          if (Object.keys(backendKeys).length > 0) {
+            body.append("api_keys", JSON.stringify(backendKeys));
+          }
+        } else {
+          throw new Error("No input provided");
+        }
+
+    const response = await fetch(
+          `http://127.0.0.1:8000/api/v1/mini-services/${serviceId}/run?current_user_id=${currentUserId}`,
+          {
+            method: "POST",
+            headers,
+            body,
+          }
+        );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.detail || `Server error: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      setResult(data);
+  };
+
+  // **[MAIN HANDLER]** - Updated main submit handler to use unified approach
   const handleSubmit = async () => {
-    if (!service || (!userInput && !uploadedFile)) return;
+    if (!service) return;
 
+    // console.log("🚀 handleSubmit started");
+
+    // Check if we have file upload agents
+    const fileUploadAgents = getFileUploadAgents();
+    const hasFileUploadAgents = fileUploadAgents.length > 0;
+
+    // console.log("📁 File upload check:", {
+    //   fileUploadAgents: fileUploadAgents.length,
+    //   hasFileUploadAgents,
+    //   agentTypes: fileUploadAgents.map(a => a.type),
+    //   uploadedFile: !!uploadedFile,
+    //   userInput: !!userInput?.trim()
+    // });
+
+    // Validation based on agent capabilities
+    const ragAgents = fileUploadAgents.filter(agent => agent.type === 'rag');
+    const nonRagFileAgents = fileUploadAgents.filter(agent => agent.type !== 'rag');
+    
+    // RAG agents only need text input (for queries), not file uploads
+    if (ragAgents.length > 0 && !userInput?.trim()) {
+      // console.log("❌ Validation failed: RAG service needs text query");
+      setError("Please provide a question or query for the RAG service.");
+      return;
+    }
+    
+    // Non-RAG file upload agents need actual files
+    if (nonRagFileAgents.length > 0 && !uploadedFile) {
+      // console.log("❌ Validation failed: No file uploaded for file upload service");
+      setError("Please upload a file for this service.");
+      return;
+    }
+
+    // Regular text services need text input
+    if (!hasFileUploadAgents && !userInput?.trim()) {
+      // console.log("❌ Validation failed: No text input for text service");
+      setError("Please provide text input for this service.");
+      return;
+    }
+
+    // Check API key requirements
+    if (!areAllRequiredApiKeysSelected) {
+      // console.log("❌ Validation failed: Missing API keys");
+      setError("Please select all required API keys before proceeding.");
+      return;
+    }
+
+    // console.log("✅ Validation passed, proceeding to submit");
 
     setIsLoading(true);
     setResult(null);
     setError(null);
 
     try {
-      const token = localStorage.getItem("token") || localStorage.getItem("accessToken") || Cookies.get("accessToken");
-      if (!token) {
-        throw new Error("Authentication token not found");
-      }
-
-      const currentUserId = Cookies.get("user_id");
-      if (!currentUserId) {
-        throw new Error("User ID not found");
-      }
-
-      // Prepare request headers
-      const headers: Record<string, string> = {
-        "Authorization": `Bearer ${token}`,
-      };
-
-      // Prepare request body
-      let body: FormData | string;
-      if (service.input_type === "text") {
-        const bodyData = {
-          input: userInput,
-          api_keys: getApiKeysForBackend()
-        };
-        body = JSON.stringify(bodyData);
-        console.log("Request body:", {
-          ...bodyData,
-          api_keys: Object.keys(bodyData.api_keys).length > 0 ? "present" : "not present",
-        });
-        headers["Content-Type"] = "application/json";
-      } else if (uploadedFile) {
-        body = new FormData();
-        body.append("file", uploadedFile);
-        if (userInput) {
-          body.append("input", userInput);
-        }
-
-        // Add API keys to form data
-        const backendKeys = getApiKeysForBackend();
-        if (Object.keys(backendKeys).length > 0) {
-          body.append("api_keys", JSON.stringify(backendKeys));
-        }
+      if (hasFileUploadAgents) {
+        // console.log("📁 Calling handleUnifiedFileUpload");
+        await handleUnifiedFileUpload();
       } else {
-        throw new Error("No input provided");
+        // console.log("📝 Calling handleRegularServiceSubmit");
+        await handleRegularServiceSubmit();
       }
-
-      // Make the API request
-      const response = await fetch(
-        `http://127.0.0.1:8000/api/v1/mini-services/${serviceId}/run?current_user_id=${currentUserId}`,
-        {
-          method: "POST",
-          headers,
-          body,
-        }
-      );
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-        console.error("Backend error details:", {
-          status: response.status,
-          statusText: response.statusText,
-          errorData,
-          headers: response.headers,
-        });
-
-        throw new Error(
-          errorData?.detail ||
-          `Server error: ${response.status} ${response.statusText}`
-        );
-      }
-
-      const data = await response.json();
-      console.log("Service response:", data);
-      setResult(data);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error running service:", err);
-      setError(
-        err instanceof Error
-          ? err.message
-          : "An unexpected error occurred while processing your request"
-      );
+      setError(err.message || "An unexpected error occurred while processing your request");
     } finally {
       setIsLoading(false);
     }
@@ -572,133 +871,260 @@ export default function ServicePage() {
     }
   }
 
-  // Render input based on service type
+  // **[UNIFIED UI RENDERER]** - Render input based on unified agent configuration
   const renderInput = () => {
-    if (!service) return null
+    if (!service) return null;
 
-    switch (service.input_type) {
-      case "text":
-        return (
-          <Textarea
-            value={userInput}
-            onChange={(e) => setUserInput(e.target.value)}
-            placeholder="Enter your text input here..."
-            className="bg-black/40 border-purple-900/30 text-white min-h-[150px]"
-          />
-        )
+    // Get file upload requirements from agents
+    const fileUploadRequirements = getFileUploadRequirements();
+    
+    // If we have file upload agents, render file upload UI
+    if (fileUploadRequirements) {
+      const { acceptedTypes, maxSize, hasSpecialUI, type, agentName } = fileUploadRequirements;
+      
+      // Special UI for RAG document services
+      if (hasSpecialUI && (type === 'rag')) {
+      return (
+        <div className="space-y-4">
+            {/* RAG Service Info */}
+            <div className="bg-indigo-950/30 border border-indigo-800/30 rounded-lg p-4 text-indigo-200">
+              <h3 className="text-sm font-semibold flex items-center">
+                <LucideSearch className="h-4 w-4 mr-2" />
+                Document Query Service
+              </h3>
+              <p className="text-xs mt-2 text-indigo-300/80">
+                This service queries documents that have already been uploaded and processed for this RAG agent. 
+                To upload new documents, please use the agent creation or management interface.
+              </p>
+            </div>
 
-      case "image":
+            <Tabs defaultValue="query" className="w-full">
+            <TabsList className="grid grid-cols-2 mb-4">
+                <TabsTrigger value="query" className="text-sm">Query Documents</TabsTrigger>
+              <TabsTrigger value="collection" className="text-sm">Document Collection</TabsTrigger>
+            </TabsList>
+            
+              <TabsContent value="query" className="space-y-4">
+              <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-200 flex items-center">
+                    <LucideSearch className="h-4 w-4 mr-2" />
+                    Your Question or Query
+                  </label>
+                <Textarea
+                  value={userInput}
+                  onChange={(e) => setUserInput(e.target.value)}
+                    placeholder="Ask a question about the documents in this collection..."
+                    className="bg-black/40 border-purple-900/30 text-white min-h-[120px]"
+                    required
+                />
+                  <p className="text-xs text-gray-500">
+                    Examples: "What is the main topic?", "Summarize the key points", "What does the document say about...?"
+                  </p>
+              </div>
+            </TabsContent>
+            
+            <TabsContent value="collection" className="space-y-4">
+              <div className="bg-black/40 rounded-lg border border-purple-900/30 p-4">
+                <h3 className="text-sm font-medium text-purple-200 mb-3">Document Collection</h3>
+                
+                {documentCollection.isLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-5 w-5 text-purple-400 animate-spin mr-2" />
+                    <span className="text-gray-400 text-sm">Loading documents...</span>
+                  </div>
+                ) : documentCollection.documents.length === 0 ? (
+                  <div className="text-center py-8 border border-dashed border-purple-900/30 rounded-lg">
+                    <FileText className="h-6 w-6 mx-auto text-gray-500 mb-2" />
+                    <p className="text-gray-400 text-sm">No documents in collection</p>
+                    <p className="text-gray-500 text-xs mt-1">Documents are uploaded during RAG agent creation</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2">
+                    {documentCollection.documents.map((doc, idx) => (
+                      <div 
+                        key={doc.filename + idx} 
+                        className="bg-black/20 border border-purple-900/20 rounded-lg p-3 hover:border-purple-600/30 transition-colors"
+                      >
+                        <div className="flex items-center gap-2">
+                          <FileText className="h-4 w-4 text-purple-400 flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-white truncate max-w-[150px] sm:max-w-[200px] md:max-w-[300px]" title={doc.filename}>{doc.filename}</p>
+                            <div className="flex flex-wrap items-center gap-2 mt-1">
+                              <span className="text-xs text-gray-400">
+                                {doc.chunks} chunk{doc.chunks !== 1 ? 's' : ''}
+                              </span>
+                              <Badge variant="outline" className="text-xs px-1 py-0 h-4 bg-purple-950/30">
+                                PDF
+                              </Badge>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                <div className="mt-4 text-xs text-gray-500">
+                  <p>You can ask questions about any documents in this collection.</p>
+                </div>
+              </div>
+            </TabsContent>
+            
+          </Tabs>
+        </div>
+      );
+    }
+
+      // Special UI for transcription services
+      if (hasSpecialUI && type === 'transcribe') {
+        const isAudio = acceptedTypes.includes('.mp3') || acceptedTypes.includes('.wav');
+        const isVideo = acceptedTypes.includes('.mp4') || acceptedTypes.includes('.mov');
+        
         return (
           <div className="space-y-4">
             <div className="border-2 border-dashed border-purple-900/50 rounded-lg p-6 text-center hover:border-purple-500/50 transition-colors cursor-pointer">
-              <ImageIcon className="h-8 w-8 mx-auto text-purple-400 mb-2" />
-              <p className="text-gray-400 text-sm">Drag and drop an image here, or click to select</p>
-              <p className="text-gray-500 text-xs mt-1">Supports JPG, PNG, WebP up to 5MB</p>
-              <input type="file" accept="image/*" className="hidden" id="image-upload" onChange={handleFileUpload} />
-              <Button
-                onClick={() => document.getElementById("image-upload")?.click()}
-                variant="outline"
-                className="mt-4 border-purple-900/30 text-white"
-              >
-                Select Image
-              </Button>
-            </div>
-            {uploadedFile && <div className="text-sm text-gray-300">Selected: {uploadedFile.name}</div>}
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-200">Additional Description (Optional)</label>
-              <Input
-                value={userInput}
-                onChange={(e) => setUserInput(e.target.value)}
-                placeholder="Add any additional context..."
-                className="bg-black/40 border-purple-900/30 text-white"
-              />
-            </div>
-          </div>
-        )
-
-      case "sound":
-        return (
-          <div className="space-y-4">
-            <div className="border-2 border-dashed border-purple-900/50 rounded-lg p-6 text-center hover:border-purple-500/50 transition-colors cursor-pointer">
-              <Headphones className="h-8 w-8 mx-auto text-purple-400 mb-2" />
-              <p className="text-gray-400 text-sm">Drag and drop an audio file here, or click to select</p>
-              <p className="text-gray-500 text-xs mt-1">Supports MP3, WAV, M4A up to 10MB</p>
-              <input type="file" accept="audio/*" className="hidden" id="audio-upload" onChange={handleFileUpload} />
-              <Button
-                onClick={() => document.getElementById("audio-upload")?.click()}
-                variant="outline"
-                className="mt-4 border-purple-900/30 text-white"
-              >
-                Select Audio
-              </Button>
-            </div>
-            {uploadedFile && <div className="text-sm text-gray-300">Selected: {uploadedFile.name}</div>}
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-200">Additional Instructions (Optional)</label>
-              <Input
-                value={userInput}
-                onChange={(e) => setUserInput(e.target.value)}
-                placeholder="Add any additional instructions..."
-                className="bg-black/40 border-purple-900/30 text-white"
-              />
-            </div>
-          </div>
-        )
-
-      case "video":
-        return (
-          <div className="space-y-4">
-            <div className="border-2 border-dashed border-purple-900/50 rounded-lg p-6 text-center hover:border-purple-500/50 transition-colors cursor-pointer">
-              <Video className="h-8 w-8 mx-auto text-purple-400 mb-2" />
-              <p className="text-gray-400 text-sm">Drag and drop a video here, or click to select</p>
-              <p className="text-gray-500 text-xs mt-1">Supports MP4, WebM, MOV up to 50MB</p>
-              <input type="file" accept="video/*" className="hidden" id="video-upload" onChange={handleFileUpload} />
-              <Button
-                onClick={() => document.getElementById("video-upload")?.click()}
-                variant="outline"
-                className="mt-4 border-purple-900/30 text-white"
-              >
-                Select Video
-              </Button>
-            </div>
-            {uploadedFile && <div className="text-sm text-gray-300">Selected: {uploadedFile.name}</div>}
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-200">Additional Instructions (Optional)</label>
-              <Input
-                value={userInput}
-                onChange={(e) => setUserInput(e.target.value)}
-                placeholder="Add any additional instructions..."
-                className="bg-black/40 border-purple-900/30 text-white"
-              />
-            </div>
-          </div>
-        )
-
-      case "document":
-        return (
-          <div className="space-y-4">
-            <div className="border-2 border-dashed border-purple-900/50 rounded-lg p-6 text-center hover:border-purple-500/50 transition-colors cursor-pointer">
-              <FileText className="h-8 w-8 mx-auto text-purple-400 mb-2" />
-              <p className="text-gray-400 text-sm">Drag and drop a document here, or click to select</p>
-              <p className="text-gray-500 text-xs mt-1">Supports PDF, DOCX, TXT up to 10MB</p>
+              {!uploadedFile && (
+                <>
+                  {isAudio && <Headphones className="h-8 w-8 mx-auto text-purple-400 mb-2" />}
+                  {isVideo && <Video className="h-8 w-8 mx-auto text-purple-400 mb-2" />}
+                  <p className="text-gray-400 text-sm">Drag and drop a {isAudio ? 'audio' : 'video'} file here, or click to select</p>
+                  <p className="text-gray-500 text-xs mt-1">Supports {acceptedTypes} up to {maxSize}MB</p>
+                </>
+              )}
+              
+              {uploadedFile && (
+                <div className="flex flex-col items-center">
+                  <div className="bg-black/30 rounded-lg p-3 w-full max-w-[300px] mx-auto mb-2">
+                    <div className="flex items-center gap-2">
+                      {isAudio && <Headphones className="h-5 w-5 text-purple-400 flex-shrink-0" />}
+                      {isVideo && <Video className="h-5 w-5 text-purple-400 flex-shrink-0" />}
+                      <p className="text-purple-200 text-sm font-medium truncate">{uploadedFile.name}</p>
+                    </div>
+                    <p className="text-gray-400 text-xs mt-1">{(uploadedFile.size / 1024 / 1024).toFixed(2)} MB</p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs border-purple-900/30 text-white"
+                    onClick={() => setUploadedFile(null)}
+                  >
+                    Change {isAudio ? 'Audio' : 'Video'}
+                  </Button>
+                </div>
+              )}
+              
               <input
                 type="file"
-                accept=".pdf,.docx,.txt"
+                accept={acceptedTypes}
                 className="hidden"
-                id="document-upload"
+                id="unified-file-upload"
                 onChange={handleFileUpload}
               />
-              <Button
-                onClick={() => document.getElementById("document-upload")?.click()}
-                variant="outline"
-                className="mt-4 border-purple-900/30 text-white"
-              >
-                Select Document
-              </Button>
+              {!uploadedFile && (
+                  <Button
+                  onClick={() => document.getElementById("unified-file-upload")?.click()}
+                  variant="outline"
+                  className="mt-4 border-purple-900/30 text-white"
+                >
+                  Select {isAudio ? 'Audio' : 'Video'}
+                </Button>
+              )}
             </div>
-            {uploadedFile && <div className="text-sm text-gray-300">Selected: {uploadedFile.name}</div>}
+            
+            {/* Transcription options */}
+            <div className="mt-4 p-4 border border-purple-900/30 rounded-lg bg-black/30">
+              <h4 className="text-sm font-medium text-purple-200 mb-3">Transcription Options</h4>
+              
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                  <label className="text-sm text-gray-300">Include timestamps</label>
+                  <span className="text-xs text-gray-500">(Shows time markers in the transcript)</span>
+                </div>
+                <Switch
+                  checked={transcriptionOptions.include_timestamps}
+                  onCheckedChange={(checked) => setTranscriptionOptions(prev => ({...prev, include_timestamps: checked}))}
+                  className="data-[state=checked]:bg-purple-600"
+                />
+              </div>
+            </div>
+            
             <div className="space-y-2">
               <label className="text-sm font-medium text-gray-200">Additional Instructions (Optional)</label>
+              <Input
+                value={userInput}
+                onChange={(e) => setUserInput(e.target.value)}
+                placeholder="Add any additional instructions..."
+                className="bg-black/40 border-purple-900/30 text-white"
+              />
+            </div>
+          </div>
+        );
+      }
+      
+      // Generic file upload UI for other agent types
+      const getFileIcon = () => {
+        if (acceptedTypes.includes('.jpg') || acceptedTypes.includes('.png')) return ImageIcon;
+        if (acceptedTypes.includes('.mp3') || acceptedTypes.includes('.wav')) return Headphones;
+        if (acceptedTypes.includes('.mp4') || acceptedTypes.includes('.mov')) return Video;
+        return FileText;
+      };
+      
+      const FileIcon = getFileIcon();
+      const fileTypeName = acceptedTypes.includes('.jpg') ? 'image' : 
+                          acceptedTypes.includes('.mp3') ? 'audio' : 
+                          acceptedTypes.includes('.mp4') ? 'video' : 'document';
+      
+        return (
+          <div className="space-y-4">
+            <div className="border-2 border-dashed border-purple-900/50 rounded-lg p-6 text-center hover:border-purple-500/50 transition-colors cursor-pointer">
+              {!uploadedFile && (
+                <>
+                <FileIcon className="h-8 w-8 mx-auto text-purple-400 mb-2" />
+                <p className="text-gray-400 text-sm">Drag and drop a {fileTypeName} here, or click to select</p>
+                <p className="text-gray-500 text-xs mt-1">Supports {acceptedTypes} up to {maxSize}MB</p>
+                </>
+              )}
+              
+              {uploadedFile && (
+                <div className="flex flex-col items-center">
+                  <div className="bg-black/30 rounded-lg p-3 w-full max-w-[300px] mx-auto mb-2">
+                    <div className="flex items-center gap-2">
+                    <FileIcon className="h-5 w-5 text-purple-400 flex-shrink-0" />
+                      <p className="text-purple-200 text-sm font-medium truncate">{uploadedFile.name}</p>
+                    </div>
+                    <p className="text-gray-400 text-xs mt-1">{(uploadedFile.size / 1024 / 1024).toFixed(2)} MB</p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs border-purple-900/30 text-white"
+                    onClick={() => setUploadedFile(null)}
+                  >
+                  Change {fileTypeName}
+                  </Button>
+                </div>
+              )}
+              
+              <input
+                type="file"
+              accept={acceptedTypes}
+                className="hidden"
+              id="unified-file-upload"
+                onChange={handleFileUpload}
+              />
+              {!uploadedFile && (
+                <Button
+                onClick={() => document.getElementById("unified-file-upload")?.click()}
+                  variant="outline"
+                  className="mt-4 border-purple-900/30 text-white"
+                >
+                Select {fileTypeName}
+                </Button>
+              )}
+            </div>
+          
+            <div className="space-y-2">
+            <label className="text-sm font-medium text-gray-200">Additional Context (Optional)</label>
               <Input
                 value={userInput}
                 onChange={(e) => setUserInput(e.target.value)}
@@ -707,23 +1133,37 @@ export default function ServicePage() {
               />
             </div>
           </div>
-        )
+      );
+    }
 
-      default:
+    // Fall back to text input for non-file upload services
         return (
           <Textarea
             value={userInput}
             onChange={(e) => setUserInput(e.target.value)}
-            placeholder="Enter your input here..."
+        placeholder="Enter your text input here..."
             className="bg-black/40 border-purple-900/30 text-white min-h-[150px]"
           />
-        )
-    }
-  }
+    );
+  };
 
   // Render output based on service type and result
   const renderOutput = () => {
     if (!result) return null;
+
+    // console.log("🖼️ renderOutput called with result:", JSON.stringify(result, null, 2));
+    // console.log("🔍 RAG detection fields:", {
+    //   sources: !!result.sources,
+    //   rag_prompt: !!result.rag_prompt, 
+    //   answer: !!result.answer,
+    //   source_documents: !!result.source_documents
+    // });
+    // console.log("🔍 Output candidates:", {
+    //   answer: result.answer,
+    //   response: result.response,
+    //   output: result.output,
+    //   final_output: result.final_output
+    // });
 
     // Handle error display
     if (error) {
@@ -732,6 +1172,40 @@ export default function ServicePage() {
           <p className="text-red-300">{error}</p>
         </div>
       );
+    }
+
+    // Check if this is a RAG result (has source_documents or answer from backend)
+    if (result.source_documents || result.sources || result.answer || result.rag_prompt) {
+      return (
+        <div className="bg-black/40 backdrop-blur-sm rounded-xl border border-purple-900/30 p-6">
+          <h3 className="text-lg font-medium text-white mb-4">Document Analysis</h3>
+          
+          {/* Main response - backend uses 'answer' field */}
+          <div className="whitespace-pre-wrap text-gray-300 mb-6 p-4 bg-black/30 rounded-lg border border-purple-900/20">
+            {result.answer || result.response || result.output || "No response available"}
+          </div>
+          
+          {/* Debug info in development */}
+          {process.env.NODE_ENV === 'development' && (
+            <div className="mt-6 pt-4 border-t border-purple-900/30">
+              <details>
+                <summary className="text-sm text-gray-400 cursor-pointer">Debug Information</summary>
+                <div className="mt-2 text-xs text-gray-500">
+                  <p>Token Usage: {result.token_usage ? JSON.stringify(result.token_usage) : "Not available"}</p>
+                  <pre className="mt-2 overflow-auto max-h-[200px] bg-black/30 p-2 rounded">
+                    {JSON.stringify(result, null, 2)}
+                  </pre>
+                </div>
+              </details>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // Check if this is a transcription result
+    if (result.transcription || result.agent_type === "transcribe") {
+      // ... existing transcription result rendering ...
     }
 
     // Determine what to display based on output type
@@ -813,7 +1287,7 @@ export default function ServicePage() {
             {imageUrl && (
               <div className="mt-4 flex justify-center">
                 <img
-                  src={imageUrl.startsWith("http") ? imageUrl : `http://127.0.0.1:8000${imageUrl}`}
+                  src={imageUrl.startsWith("http") || imageUrl.startsWith("data:") ? imageUrl : `http://127.0.0.1:8000${imageUrl}`}
                   alt="Generated image"
                   className="max-w-full rounded-lg shadow-lg max-h-[500px]"
                 />
@@ -898,8 +1372,8 @@ export default function ServicePage() {
         {/* Flow line connector - continuous line through all nodes */}
         <div className="absolute left-0 right-0 top-1/2 h-[2px] -translate-y-1/2 bg-gradient-to-r from-purple-500/10 via-indigo-500/30 to-purple-500/10 z-0"></div>
 
-        <div className="overflow-x-auto pb-4 -mx-4 px-4 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-purple-900/30 hover:scrollbar-thumb-purple-600/50">
-          <div className="flex items-stretch gap-16 min-w-fit py-4">
+        <div className="pb-4 -mx-4 px-4">
+          <div className="flex items-stretch gap-8 sm:gap-12 lg:gap-16 min-w-fit py-4">
             {orderedNodes.map((node, idx) => {
               const description = node.agent_description || "";
               const isLongDescription = description.length > 100;
@@ -914,7 +1388,7 @@ export default function ServicePage() {
                     className={`
                       transition-all duration-300 bg-gradient-to-br from-zinc-900 to-zinc-950 
                       border-2 border-purple-900/30 rounded-xl shadow-[0_4px_20px_rgba(107,70,193,0.2)]
-                      px-5 py-4 w-64 z-10 hover:scale-105 hover:border-purple-500/60 
+                      px-3 sm:px-4 lg:px-5 py-3 sm:py-4 w-48 sm:w-56 lg:w-64 z-10 hover:scale-105 hover:border-purple-500/60 
                       focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:ring-offset-2 focus:ring-offset-black
                       cursor-pointer group/card origin-center
                       ${agentColor}
@@ -930,13 +1404,13 @@ export default function ServicePage() {
                       }
                     }}
                   >
-                    <div className="absolute -top-3 bg-gradient-to-br from-purple-600 to-indigo-700 h-6 w-6 rounded-full flex items-center justify-center shadow-lg shadow-purple-900/20 z-100">
+                    <div className="absolute -top-2 sm:-top-3 bg-gradient-to-br from-purple-600 to-indigo-700 h-5 w-5 sm:h-6 sm:w-6 rounded-full flex items-center justify-center shadow-lg shadow-purple-900/20 z-100">
                       <span className="text-xs font-bold text-white">{idx + 1}</span>
                     </div>
 
                     {/* Rest of your node card contents - unchanged */}
-                    <div className="flex items-center gap-2 mb-3">
-                      <div className={`h-8 w-8 rounded-full bg-gradient-to-br from-purple-600 to-indigo-700 
+                    <div className="flex items-center gap-2 mb-2 sm:mb-3">
+                      <div className={`h-6 w-6 sm:h-7 sm:w-7 lg:h-8 lg:w-8 rounded-full bg-gradient-to-br from-purple-600 to-indigo-700 
                         flex items-center justify-center shadow-inner text-xs text-white font-bold
                         transition-all group-hover/card:scale-110 group-hover/card:shadow-purple-500/30`}
                       >
@@ -970,7 +1444,7 @@ export default function ServicePage() {
                           }
                         })()}
                       </div>
-                      <h3 className="font-semibold text-white text-base truncate flex-1" title={node.agent_name}>
+                      <h3 className="font-semibold text-white text-sm sm:text-base truncate flex-1" title={node.agent_name}>
                         {node.agent_name}
                       </h3>
                     </div>
@@ -979,9 +1453,9 @@ export default function ServicePage() {
                       {isLongDescription ? (
                         <>
                           <div className={`overflow-hidden transition-all duration-300 ease-in-out
-                            ${isExpanded ? "max-h-48" : "max-h-12"}`}
+                            ${isExpanded ? "max-h-32 sm:max-h-48" : "max-h-10 sm:max-h-12"}`}
                           >
-                            <p className={`leading-relaxed ${isExpanded ? "" : "line-clamp-2"}`}>
+                            <p className={`leading-relaxed text-xs ${isExpanded ? "" : "line-clamp-2"}`}>
                               {description}
                             </p>
                           </div>
@@ -997,25 +1471,27 @@ export default function ServicePage() {
                           </button>
                         </>
                       ) : (
-                        <p className="leading-relaxed">{description}</p>
+                        <p className="leading-relaxed text-xs">{description}</p>
                       )}
                     </div>
 
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      <span className="text-xs bg-purple-900/40 text-purple-300 px-2 py-1 rounded-full font-medium border border-purple-800/30">
+                    <div className="mt-3 sm:mt-4 flex flex-wrap gap-1 sm:gap-2">
+                      <span className="text-xs bg-purple-900/40 text-purple-300 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full font-medium border border-purple-800/30">
                         {node.agent_type}
                       </span>
                       {node.agent_config?.model && (
-                        <span className="text-xs bg-indigo-900/40 text-indigo-300 px-2 py-1 rounded-full font-medium border border-indigo-800/30">
+                        <span className="text-xs bg-indigo-900/40 text-indigo-300 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full font-medium border border-indigo-800/30">
                           {node.agent_config.model}
                         </span>
                       )}
-                      {AGENT_TYPES_REQUIRING_API_KEY.includes(node.agent_type?.toLowerCase() || "") && (
-                        <span className="text-xs bg-amber-900/40 text-amber-300 px-2 py-1 rounded-full font-medium flex items-center gap-1 border border-amber-800/30">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                      {(AGENT_TYPES_REQUIRING_API_KEY.includes(node.agent_type?.toLowerCase() || "") ||
+                        node.agent_type?.toLowerCase().includes("rag")) && (
+                        <span className="text-xs bg-amber-900/40 text-amber-300 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full font-medium flex items-center gap-1 border border-amber-800/30">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-2.5 w-2.5 sm:h-3 sm:w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1721 9z" />
                           </svg>
-                          API Key
+                          <span className="hidden sm:inline">API Key</span>
+                          <span className="sm:hidden">Key</span>
                         </span>
                       )}
                     </div>
@@ -1026,17 +1502,17 @@ export default function ServicePage() {
 
                   {/* Add the beautifully styled arrow */}
                   {showArrow && (
-                    <div className="absolute -right-10 top-1/2 transform translate-y-1.5 translate-x-7 z-20">
+                    <div className="absolute -right-6 sm:-right-8 lg:-right-10 top-1/2 transform translate-y-1.5 translate-x-4 sm:translate-x-6 lg:translate-x-7 z-20">
                       <div className="flex items-center justify-center">
                         <div className="relative">
                           {/* Arrow shaft with animated gradient */}
-                          <div className="h-[3px] w-20 bg-gradient-to-r from-purple-500 to-indigo-500 rounded-full"></div>
+                          <div className="h-[2px] sm:h-[3px] w-12 sm:w-16 lg:w-20 bg-gradient-to-r from-purple-500 to-indigo-500 rounded-full"></div>
 
                           {/* Arrow head - triangle */}
                           <div className="absolute -right-1 top-1/2 transform -translate-y-1/2 w-0 h-0 
-                                        border-t-[6px] border-t-transparent 
-                                        border-l-[9px] border-l-indigo-500
-                                        border-b-[6px] border-b-transparent">
+                                        border-t-[4px] sm:border-t-[5px] lg:border-t-[6px] border-t-transparent 
+                                        border-l-[6px] sm:border-l-[8px] lg:border-l-[9px] border-l-indigo-500
+                                        border-b-[4px] sm:border-b-[5px] lg:border-b-[6px] border-b-transparent">
                           </div>
 
                           {/* Subtle glow effect */}
@@ -1044,7 +1520,7 @@ export default function ServicePage() {
 
                           {/* Pulsing animated dot in center */}
                           <div className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2
-                                        h-3 w-3 rounded-full bg-purple-300/80 animate-pulse"></div>
+                                        h-2 w-2 sm:h-2.5 sm:w-2.5 lg:h-3 lg:w-3 rounded-full bg-purple-300/80 animate-pulse"></div>
                         </div>
                       </div>
                     </div>
@@ -1052,21 +1528,21 @@ export default function ServicePage() {
 
                   {/* Tooltip - unchanged */}
                   <div
-                    className="hidden group-hover/card:flex absolute left-1/2 -translate-x-1/2 top-full mt-4 z-30 
-                    w-72 flex-col bg-zinc-900/95 backdrop-blur-md border border-purple-800/40 rounded-xl 
-                    shadow-[0_10px_25px_-5px_rgba(0,0,0,0.8)] p-4 text-xs text-gray-200 transition-opacity 
-                    duration-300 opacity-0 group-hover/card:opacity-100"
+                    className="hidden lg:group-hover/card:flex absolute left-1/2 -translate-x-1/2 top-full mt-4 z-30 
+                    w-64 sm:w-72 flex-col bg-zinc-900/95 backdrop-blur-md border border-purple-800/40 rounded-xl 
+                    shadow-[0_10px_25px_-5px_rgba(0,0,0,0.8)] p-3 sm:p-4 text-xs text-gray-200 transition-opacity 
+                    duration-300 opacity-0 lg:group-hover/card:opacity-100"
                   >
                     <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 transform rotate-45 w-4 h-4 bg-zinc-900 border-t border-l border-purple-800/40"></div>
                     <div className="font-bold text-purple-300 text-sm mb-1 border-b border-purple-900/40 pb-2">{node.agent_name}</div>
-                    <div className="mb-2 py-2 max-h-40 overflow-y-auto scrollbar-thin scrollbar-thumb-purple-800/30">{description}</div>
-                    <div className="flex flex-wrap gap-2 mt-1">
-                      <span className="bg-purple-900/40 text-purple-300 px-2 py-1 rounded-full">{node.agent_type}</span>
+                    <div className="mb-2 py-2 max-h-32 sm:max-h-40 overflow-y-auto scrollbar-thin scrollbar-thumb-purple-800/30">{description}</div>
+                    <div className="flex flex-wrap gap-1 sm:gap-2 mt-1">
+                      <span className="bg-purple-900/40 text-purple-300 px-2 py-1 rounded-full text-xs">{node.agent_type}</span>
                       {node.agent_config?.model && (
-                        <span className="bg-indigo-900/40 text-indigo-300 px-2 py-1 rounded-full">{node.agent_config.model}</span>
+                        <span className="bg-indigo-900/40 text-indigo-300 px-2 py-1 rounded-full text-xs">{node.agent_config.model}</span>
                       )}
                       {node.agent_input_type && node.agent_output_type && (
-                        <span className="bg-green-900/40 text-green-300 px-2 py-1 rounded-full">{node.agent_input_type} → {node.agent_output_type}</span>
+                        <span className="bg-green-900/40 text-green-300 px-2 py-1 rounded-full text-xs">{node.agent_input_type} → {node.agent_output_type}</span>
                       )}
                     </div>
                   </div>
@@ -1079,6 +1555,125 @@ export default function ServicePage() {
 
       </div>
     );
+  };
+
+  // **[NEW HELPER]** - Get file upload requirements for UI
+  const getFileUploadRequirements = useCallback(() => {
+    const agents = getFileUploadAgents();
+    if (agents.length === 0) return null;
+
+    // For now, return requirements for the primary agent
+    const primaryAgent = agents[0];
+    return {
+      acceptedTypes: primaryAgent.config.supportedFileTypes.join(','),
+      maxSize: primaryAgent.config.maxFileSize,
+      hasSpecialUI: primaryAgent.config.hasSpecialUI,
+      type: primaryAgent.type,
+      agentName: primaryAgent.name
+    };
+  }, [getFileUploadAgents]);
+
+  // **[RESTORED]** - Fetch document collection for RAG services (endpoint now available in backend)
+  useEffect(() => {
+    // Only fetch if this is a RAG service and we have service details
+    const isRAGService = checkIfRAGDocumentService();
+    const hasServiceId = !!service?.id;
+    const isAuth = !!isAuthenticated;
+    
+    // console.log("📝 useEffect conditions:", {
+    //   isRAGService,
+    //   hasServiceId,
+    //   isAuth,
+    //   serviceId: service?.id,
+    //   shouldRun: isRAGService && hasServiceId && isAuth
+    // });
+    
+    if (!isRAGService || !hasServiceId || !isAuth) return;
+    
+    const fetchDocumentCollection = async () => {
+      try {
+        // console.log("🔍 Fetching document collection for service:", service?.id);
+        setDocumentCollection(prev => ({ ...prev, isLoading: true }));
+        const token = localStorage.getItem("token") || localStorage.getItem("accessToken") || Cookies.get("accessToken");
+        const currentUserId = Cookies.get("user_id");
+        
+        // Get the agent ID for the RAG service
+        const agentId = getRAGAgentId();
+        // console.log("🤖 RAG Agent ID:", agentId);
+        if (!agentId) {
+          console.error("RAG agent ID not found");
+          setDocumentCollection(prev => ({ ...prev, isLoading: false }));
+          return;
+        }
+        
+        const url = `http://127.0.0.1:8000/api/v1/agents/${agentId}/documents?current_user_id=${currentUserId}`;
+        // console.log("📡 Fetching documents from:", url);
+        
+        const response = await fetch(url, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        
+        // console.log("📄 Response status:", response.status);
+        
+        if (!response.ok) {
+          console.error("Failed to fetch document collection:", response.status, response.statusText);
+          setDocumentCollection(prev => ({ ...prev, isLoading: false }));
+          return;
+        }
+        
+        const data = await response.json();
+        // console.log("📋 Documents received:", data);
+        
+        setDocumentCollection({
+          documents: data.documents || [],
+          isLoading: false
+        });
+      } catch (error) {
+        console.error("Error fetching document collection:", error);
+        setDocumentCollection(prev => ({ ...prev, isLoading: false }));
+      }
+    };
+    
+    fetchDocumentCollection();
+  }, [service?.id, isAuthenticated, agentDetails]);
+
+  // Format seconds into a readable timestamp (MM:SS.ms)
+  const formatTime = (seconds: number): string => {
+    if (isNaN(seconds)) return "00:00.0";
+    
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = Math.floor(seconds % 60);
+    const milliseconds = Math.floor((seconds % 1) * 10);
+    
+    const formattedMinutes = minutes.toString().padStart(2, '0');
+    const formattedSeconds = remainingSeconds.toString().padStart(2, '0');
+    
+    return `${formattedMinutes}:${formattedSeconds}.${milliseconds}`;
+  };
+
+  // **[HELPER FUNCTIONS]** - Add helper functions for backward compatibility
+  const checkIfRAGDocumentService = (): boolean => {
+    const fileUploadAgents = getFileUploadAgents();
+    const isRAG = fileUploadAgents.some(agent => agent.type === 'rag');
+    // console.log("🔍 Checking if RAG service:", { 
+    //   fileUploadAgents: fileUploadAgents.length, 
+    //   agentTypes: fileUploadAgents.map(a => a.type),
+    //   isRAG 
+    // });
+    return isRAG;
+  };
+
+  const checkIfTranscriptionService = (): boolean => {
+    const fileUploadAgents = getFileUploadAgents();
+    return fileUploadAgents.some(agent => agent.type === 'transcribe');
+  };
+
+  const getRAGAgentId = (): number | null => {
+    const fileUploadAgents = getFileUploadAgents();
+    const ragAgent = fileUploadAgents.find(agent => agent.type === 'rag');
+    return ragAgent ? ragAgent.id : null;
   };
 
   if (isServiceLoading) {
@@ -1144,51 +1739,54 @@ export default function ServicePage() {
                 </Button>
               </div>
 
-              <Card className={`bg-gradient-to-r ${getServiceColor()} rounded-2xl p-8 shadow-xl border-0 flex flex-col gap-4`}>
-                <div className="flex flex-col md:flex-row md:items-center gap-4 md:gap-8">
-                  <div className="w-16 h-16 rounded-full bg-black/30 flex items-center justify-center shadow-lg">
-                    <Wand2 className="h-8 w-8 text-white" />
-                  </div>
-                  <div className="flex-1">
-                    <h1 className="text-3xl font-extrabold text-white tracking-tight mb-1">{service?.name}</h1>
-                    <p className="text-white/80 text-base mb-2">{service?.description}</p>
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      <span className="text-xs bg-black/40 text-white px-3 py-1 rounded-full font-medium">Input: {service?.input_type}</span>
-                      <span className="text-xs bg-black/40 text-white px-3 py-1 rounded-full font-medium">Output: {service?.output_type}</span>
+              <Card className={`bg-gradient-to-r ${getServiceColor()} rounded-2xl p-4 sm:p-6 lg:p-8 shadow-xl border-0 flex flex-col gap-4`}>
+                <div className="flex flex-col gap-4 sm:gap-6">
+                  <div className="flex flex-col sm:flex-row sm:items-start gap-4 sm:gap-6">
+                    <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-black/30 flex items-center justify-center shadow-lg flex-shrink-0">
+                      <Wand2 className="h-6 w-6 sm:h-8 sm:w-8 text-white" />
                     </div>
-                  </div>
-                  <div className="flex flex-col gap-2 items-end">
-                    <Button
-                      variant="outline"
-                      className="text-red-400 hover:text-red-300 border-red-900/30 hover:bg-red-950/30"
-                      onClick={handleDelete}
-                    >
-                      <Trash2 className="mr-2 h-4 w-4" /> Delete Service
-                    </Button>
+                    <div className="flex-1 min-w-0">
+                      <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-white tracking-tight mb-1 break-words">{service?.name}</h1>
+                      <p className="text-white/80 text-sm sm:text-base mb-2 break-words">{service?.description}</p>
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        <span className="text-xs bg-black/40 text-white px-2 sm:px-3 py-1 rounded-full font-medium">Input: {service?.input_type}</span>
+                        <span className="text-xs bg-black/40 text-white px-2 sm:px-3 py-1 rounded-full font-medium">Output: {service?.output_type}</span>
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-2 sm:items-end">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-red-400 hover:text-red-300 border-red-900/30 hover:bg-red-950/30 w-full sm:w-auto"
+                        onClick={handleDelete}
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" /> Delete Service
+                      </Button>
+                    </div>
                   </div>
                 </div>
                 {/* Stats */}
                 {(service?.average_token_usage || service?.run_time !== undefined) && (
-                  <div className="mt-4 flex flex-wrap gap-4 border-t border-white/20 pt-4">
+                  <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:flex xl:flex-wrap gap-3 sm:gap-4 border-t border-white/20 pt-4">
                     {service?.run_time !== undefined && (
-                      <div className="text-xs bg-black/30 p-3 rounded-xl min-w-[120px]">
-                        <span className="block text-white/70">Avg. Run Time</span>
-                        <span className="text-white font-bold text-lg">{Math.round(service.run_time)}</span>
+                      <div className="text-xs bg-black/30 p-3 rounded-xl min-w-[100px] sm:min-w-[120px]">
+                        <span className="block text-white/70 text-xs">Avg. Run Time</span>
+                        <span className="text-white font-bold text-base sm:text-lg">{Math.round(service.run_time)}s</span>
                       </div>
                     )}
                     {service?.average_token_usage && (
                       <>
-                        <div className="text-xs bg-black/30 p-3 rounded-xl min-w-[120px]">
-                          <span className="block text-white/70">Prompt Tokens</span>
-                          <span className="text-white font-bold text-lg">{Math.round(service.average_token_usage.prompt_tokens)}</span>
+                        <div className="text-xs bg-black/30 p-3 rounded-xl min-w-[100px] sm:min-w-[120px]">
+                          <span className="block text-white/70 text-xs">Prompt Tokens</span>
+                          <span className="text-white font-bold text-base sm:text-lg">{Math.round(service.average_token_usage.prompt_tokens)}</span>
                         </div>
-                        <div className="text-xs bg-black/30 p-3 rounded-xl min-w-[120px]">
-                          <span className="block text-white/70">Completion Tokens</span>
-                          <span className="text-white font-bold text-lg">{Math.round(service.average_token_usage.completion_tokens)}</span>
+                        <div className="text-xs bg-black/30 p-3 rounded-xl min-w-[100px] sm:min-w-[120px]">
+                          <span className="block text-white/70 text-xs">Completion</span>
+                          <span className="text-white font-bold text-base sm:text-lg">{Math.round(service.average_token_usage.completion_tokens)}</span>
                         </div>
-                        <div className="text-xs bg-black/30 p-3 rounded-xl min-w-[120px]">
-                          <span className="block text-white/70">Total Tokens</span>
-                          <span className="text-white font-bold text-lg">{Math.round(service.average_token_usage.total_tokens)}</span>
+                        <div className="text-xs bg-black/30 p-3 rounded-xl min-w-[100px] sm:min-w-[120px]">
+                          <span className="block text-white/70 text-xs">Total Tokens</span>
+                          <span className="text-white font-bold text-base sm:text-lg">{Math.round(service.average_token_usage.total_tokens)}</span>
                         </div>
                       </>
                     )}
@@ -1198,9 +1796,23 @@ export default function ServicePage() {
             </div>
 
             {/* Input & API Key Section */}
-            <Card className="bg-zinc-950/80 border-0 rounded-2xl shadow-xl p-8 flex flex-col gap-8">
-              <div className="flex flex-col md:flex-row gap-8">
-                <div className="flex-1 flex flex-col gap-6">
+            <Card className="bg-zinc-950/80 border-0 rounded-2xl shadow-xl p-4 sm:p-6 lg:p-8 flex flex-col gap-6 sm:gap-8">
+              <div className="flex flex-col gap-6 sm:gap-8">
+                <div className="flex-1 flex flex-col gap-4 sm:gap-6">
+                  {/* Show transcription info box if this is a transcription service */}
+                  {checkIfTranscriptionService() && (
+                    <div className="bg-indigo-950/30 border border-indigo-800/30 rounded-lg p-4 text-indigo-200">
+                      <h3 className="text-sm font-semibold flex items-center">
+                        <LucideMic className="h-4 w-4 mr-2" />
+                        Transcription Service
+                      </h3>
+                      <p className="text-xs mt-2 text-indigo-300/80">
+                        This service will transcribe your audio or video file into text. Upload your file, 
+                        select your preferred language, and choose if you want timestamps included.
+                      </p>
+                    </div>
+                  )}
+                
                   <div>
                     <label className="text-base font-semibold text-purple-200 mb-2 block">
                       {service?.input_type === "text"
@@ -1265,22 +1877,43 @@ export default function ServicePage() {
                   </div>
                 </div>
               </div>
-              <div className="flex flex-col md:flex-row md:items-center gap-4 mt-4">
+              <div className="flex flex-col gap-4 mt-4">
                 <Button
                   onClick={handleSubmit}
-                  disabled={isLoading || !areAllRequiredApiKeysSelected() ||
-                    (service?.input_type === "text" && !userInput?.trim() && !uploadedFile) ||
-                    (service?.input_type !== "text" && !uploadedFile && service?.input_type !== "text")}
-                  className={`bg-gradient-to-r ${getServiceColor()} text-white font-bold text-lg px-8 py-3 rounded-xl shadow-lg hover:opacity-90 transition-all relative`}
+                  disabled={isLoading || 
+                    (getFileUploadAgents().length > 0 
+                      ? (getFileUploadAgents()[0].type === 'rag'
+                          ? (!userInput?.trim() || !areAllRequiredApiKeysSelected) // RAG agents only need query and API key
+                          : !uploadedFile // Other file upload agents require a file
+                        )
+                      : (!areAllRequiredApiKeysSelected ||
+                         (!userInput?.trim())) // Non-file agents require text input and API keys
+                    )
+                  }
+                  className={`w-full sm:w-auto bg-gradient-to-r ${getServiceColor()} text-white font-bold text-base sm:text-lg px-6 sm:px-8 py-3 rounded-xl shadow-lg hover:opacity-90 transition-all relative`}
                 >
                   {isLoading ? (
                     <>
-                      <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Processing...
+                      <Loader2 className="mr-2 h-4 w-4 sm:h-5 sm:w-5 animate-spin" /> 
+                      <span className="hidden sm:inline">
+                        {documentProcessingState.isProcessing 
+                          ? `${documentProcessingState.stage.charAt(0).toUpperCase() + documentProcessingState.stage.slice(1)}...` 
+                          : "Processing..."}
+                      </span>
+                      <span className="sm:hidden">Processing...</span>
                     </>
                   ) : (
                     <>Run Service</>
                   )}
                 </Button>
+                
+                {/* Document processing status message */}
+                {documentProcessingState.isProcessing && (
+                  <div className="text-amber-300 text-sm flex items-center">
+                    <div className="w-2 h-2 bg-amber-400 rounded-full animate-pulse mr-2 flex-shrink-0"></div>
+                    <span className="break-words">{documentProcessingState.message}</span>
+                  </div>
+                )}
               </div>
               {(result || error) && (
                 <div className="mt-8">
@@ -1293,29 +1926,29 @@ export default function ServicePage() {
           </section>
         </div>
         {/* Workflow Visualization - now below the service, centered and responsive */}
-        <div className="w-full flex flex-col items-center mt-12">
-          <Card className="bg-zinc-950/90 border-0 rounded-2xl shadow-xl p-6 w-full max-w-[1200px]">
-            <h3 className="text-lg font-bold text-white mb-2 text-center">Workflow Visualization</h3>
-            <p className="text-gray-400 text-xs mb-4 text-center">This diagram shows how agents are connected in this service.</p>
+        <div className="w-full flex flex-col items-center mt-8 sm:mt-12">
+          <Card className="bg-zinc-950/90 border-0 rounded-2xl shadow-xl p-4 sm:p-6 w-full max-w-[1200px]">
+            <h3 className="text-base sm:text-lg font-bold text-white mb-2 text-center">Workflow Visualization</h3>
+            <p className="text-gray-400 text-xs mb-4 text-center px-2">This diagram shows how agents are connected in this service.</p>
             <div className="w-full">
               {/* Responsive overflow and improved scrollbar styling */}
               <div
                 ref={workflowScrollRef}
-                className="overflow-x-auto rounded-xl custom-wf-scrollbar"
-                style={{ WebkitOverflowScrolling: 'touch', minHeight: '220px', width: '100%' }}
+                className="overflow-x-auto rounded-xl scrollbar-thin scrollbar-track-transparent scrollbar-thumb-purple-900/20 hover:scrollbar-thumb-purple-600/40"
+                style={{ WebkitOverflowScrolling: 'touch', minHeight: '200px', width: '100%' }}
                 onScroll={e => {
                   const target = e.target as HTMLDivElement;
                   setWorkflowScroll(target.scrollLeft);
                   setWorkflowMaxScroll(target.scrollWidth - target.clientWidth);
                 }}
               >
-                <div className="flex justify-center min-w-[min(900px,100%)]" style={{ width: 'fit-content' }}>
+                <div className="flex justify-center min-w-[min(800px,100%)] sm:min-w-[min(900px,100%)]" style={{ width: 'fit-content' }}>
                   {renderWorkflow()}
                 </div>
               </div>
-              {/* Themed slider for horizontal scroll */}
+              {/* Themed slider for horizontal scroll - only show if needed and on smaller screens */}
               {workflowMaxScroll > 0 && (
-                <div className="w-full flex justify-center mt-4 px-4">
+                <div className="w-full flex justify-center mt-4 px-2 sm:px-4 lg:hidden">
                   <input
                     type="range"
                     min={0}
@@ -1328,14 +1961,7 @@ export default function ServicePage() {
                         workflowScrollRef.current.scrollLeft = value;
                       }
                     }}
-                    className="w-full max-w-2xl accent-purple-600 h-5 appearance-none focus:outline-none focus:ring-2 focus:ring-purple-500/40 transition cursor-pointer"
-                    style={{
-                      background: 'linear-gradient(90deg, rgba(167, 139, 250, 0.3) 0%, rgba(139, 92, 246, 0.3) 100%)',
-                      height: '6px',
-                      borderRadius: '8px',
-                      outline: 'none',
-                      WebkitAppearance: 'none',
-                    }}
+                    className="w-full max-w-md accent-purple-600 h-2 appearance-none focus:outline-none focus:ring-2 focus:ring-purple-500/40 transition cursor-pointer bg-purple-900/20 rounded-full"
                   />
                 </div>
               )}
@@ -1343,114 +1969,6 @@ export default function ServicePage() {
           </Card>
         </div>
       </main>
-
-      {/* Add effect to sync slider with scroll position */}
-      <style jsx global>{`
-  .custom-wf-scrollbar::-webkit-scrollbar {
-    height: 10px;
-    background: transparent;
-  }
-  .custom-wf_scrollbar::-webkit-scrollbar-thumb {
-    background: linear-gradient(90deg, #a78bfa 0%, #8b5cf6 100%);
-    border-radius: 8px;
-    min-width: 48px;
-  }
-  .custom-wf_scrollbar::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  .custom-wf_scrollbar {
-    scrollbar-color: #a78bfa #18181b;
-    scrollbar-width: thin;
-  }
-  
-  /* Improved slider thumb styling */
-  input[type='range'].accent-purple-600::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, #c4b5fd 0%, #a78bfa 100%);
-    box-shadow: 0 2px 8px rgba(167, 139, 250, 0.5);
-    border: 2px solid #fff;
-    cursor: pointer;
-    margin-top: -5px; /* This centers the thumb vertically relative to the track */
-    transition: transform 0.2s, box-shadow 0.2s;
-  }
-  
-  input[type='range'].accent-purple-600::-webkit-slider-thumb:hover {
-    transform: scale(1.1);
-    box-shadow: 0 2px 12px rgba(167, 139, 250, 0.7);
-  }
-  
-  input[type='range'].accent-purple-600::-moz-range-thumb {
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, #c4b5fd 0%, #a78bfa 100%);
-    box-shadow: 0 2px 8px rgba(167, 139, 250, 0.5);
-    border: 2px solid #fff;
-    cursor: pointer;
-    transition: transform 0.2s, box-shadow 0.2s;
-  }
-  
-  input[type='range'].accent-purple-600::-ms-thumb {
-    width: 16px;
-    height: 16px;
-    border-radius: 50%; 
-    background: linear-gradient(135deg, #c4b5fd 0%, #a78bfa 100%);
-    box-shadow: 0 2px 8px rgba(167, 139, 250, 0.5);
-    border: 2px solid #fff;
-    cursor: pointer;
-    margin-top: 0; /* MS Edge specific adjustment */
-    transition: transform 0.2s, box-shadow 0.2s;
-  }
-  
-  input[type='range'].accent-purple-600:focus::-webkit-slider-thumb {
-    outline: none;
-    box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.3);
-  }
-  
-  /* Track styling improvements */
-  input[type='range'].accent-purple-600::-webkit-slider-runnable-track {
-    height: 6px;
-    border-radius: 8px;
-    background: linear-gradient(90deg, rgba(167, 139, 250, 0.3) 0%, rgba(139, 92, 246, 0.3) 100%);
-  }
-  
-  input[type='range'].accent-purple-600::-moz-range-track {
-    height: 6px;
-    border-radius: 8px;
-    background: linear-gradient(90deg, rgba(167, 139, 250, 0.3) 0%, rgba(139, 92, 246, 0.3) 100%);
-  }
-  
-  input[type='range'].accent-purple-600::-ms-track {
-    height: 6px;
-    border-radius: 8px;
-    background: transparent;
-    border-color: transparent;
-    color: transparent;
-  }
-  
-  input[type='range'].accent-purple-600::-ms-fill-lower {
-    background: rgba(167, 139, 250, 0.5);
-    border-radius: 8px;
-  }
-  
-  input[type='range'].accent-purple-600::-ms-fill-upper {
-    background: rgba(139, 92, 246, 0.3);
-    border-radius: 8px;
-  }
-
-  /* Add this to your style jsx global section */
-  @keyframes pulse {
-    0%, 100% { opacity: 0.6; transform: scale(1) translate(-50%, -50%); }
-    50% { opacity: 1; transform: scale(1.3) translate(-38%, -38%); }
-  }
-  .animate-pulse {
-    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-  }
-`}</style>
     </div>
   )
 }
