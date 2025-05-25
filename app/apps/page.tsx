@@ -28,6 +28,13 @@ import {
   Search,
   Filter,
   X,
+  SortAsc,
+  SortDesc,
+  Clock,
+  Zap,
+  TrendingUp,
+  Star,
+  ChevronDown,
 } from "lucide-react"
 import { toast } from "@/components/ui/use-toast"
 import { decodeJWT } from "@/lib/auth"
@@ -35,6 +42,22 @@ import { deleteMiniService } from "@/lib/services"
 import { Play } from "next/font/google"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Button } from "@/components/ui/button"
+import { 
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { 
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 // Define the service type
 interface Service {
@@ -45,7 +68,8 @@ interface Service {
   serviceType: string
   color: string
   isCustom?: boolean
-  onDelete?: (id: number) => Promise<boolean>
+  owner_id?: number
+  onDelete?: (id: number) => Promise<boolean> | boolean
   usageStats?: {
     average_token_usage: {
       input_type: number
@@ -57,8 +81,10 @@ interface Service {
     run_time: number
     input_type: string
     output_type: string
+    total_runs?: number
   }
   is_enhanced?: boolean
+  created_at?: string
 }
 
 // Define the mini-service type from API
@@ -73,26 +99,23 @@ interface MiniService {
   average_token_usage: any
   run_time: number
   is_enhanced: boolean
+  created_at: string
 }
 
 // Define the process type from API
 interface Process {
   id: number
-  user_id: number
-  service_id: number
-  mini_service_id: number | null
+  type?: number
   service_type: string
+  input_text?: string
+  description?: string
   status: string
-  input_text: string | null
-  output_text: string | null
-  output_url: string | null
   created_at: string
-  updated_at: string
-  description: string | null
-  type: number 
+  mini_service_id?: number
 }
 
-
+type SortOption = 'name' | 'created' | 'usage' | 'runs' | 'type'
+type SortDirection = 'asc' | 'desc'
 
 export default function DashboardPage() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
@@ -104,8 +127,15 @@ export default function DashboardPage() {
   const [refreshTrigger, setRefreshTrigger] = useState(0)
   const [recentActivities, setRecentActivities] = useState<Process[]>([])
   const [recentActivitiesLoading, setRecentActivitiesLoading] = useState(false)
-  const [activeFilter, setActiveFilter] = useState<"all" | "workflows" | "services">("all")
+  const [activeFilter, setActiveFilter] = useState<"all" | "trending" | "favourites" | "created">("all")
   const [searchQuery, setSearchQuery] = useState("")
+  
+  // New filter and sort states
+  const [sortBy, setSortBy] = useState<SortOption>('created')
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
+  const [inputTypeFilter, setInputTypeFilter] = useState<string | null>(null)
+  const [outputTypeFilter, setOutputTypeFilter] = useState<string | null>(null)
+  
   const router = useRouter()
 
   useEffect(() => {
@@ -113,7 +143,7 @@ export default function DashboardPage() {
     if (!isLoading && !isAuthenticated && (pathname.startsWith("/apps") || pathname === "/settings")) {
       router.push("/")
     }
-  }, [isAuthenticated, isLoading, router])
+  }, [isLoading, isAuthenticated, router])
 
   // Function to get user ID from various sources
   const getUserId = useCallback(() => {
@@ -216,38 +246,16 @@ export default function DashboardPage() {
     if (typeof window !== "undefined" && isAuthenticated) {
       const loadCustomServices = async () => {
         try {
-          const cookieToken = Cookies.get("accessToken")
-          const cookieUserId = Cookies.get("user_id")
-
-          if (!cookieToken || !cookieUserId) {
-            throw new Error("No authentication data")
-          }
-
-          // Fetch services from API
-          const response = await fetch(
-            `http://127.0.0.1:8000/api/v1/mini-services?current_user_id=${cookieUserId}`,
-            {
-              headers: {
-                Authorization: `Bearer ${cookieToken}`,
-                "Content-Type": "application/json",
-              },
-            }
-          )
-
-          if (!response.ok) {
-            throw new Error("Failed to fetch services")
-          }
-
-          const services = await response.json()
-
-          // Map the services to the format expected by MiniAppCard
-          const formattedServices = services.map((service: any) => {
-            return {
+          // In a real application, this would be fetched from an API
+          const savedServices = localStorage.getItem("customServices")
+          if (savedServices) {
+            const services = JSON.parse(savedServices)
+            const formattedServices = services.map((service: any) => ({
               id: service.id,
               name: service.name,
               description: service.description,
-              icon: getIconComponent(service.icon || "Wand2"),
-              serviceType: "mini-service",
+              icon: getIconComponent(service.icon),
+              serviceType: service.serviceType,
               color: service.color || getColorForService(service.input_type, service.output_type),
               isCustom: true,
               onDelete: handleMiniServiceDelete,
@@ -258,10 +266,10 @@ export default function DashboardPage() {
                 output_type: service.output_type
               },
               is_enhanced: service.is_enhanced
-            }
-          })
+            }))
 
-          setCustomServices(formattedServices)
+            setCustomServices(formattedServices)
+          }
         } catch (error) {
           console.error("Error loading custom services:", error)
           setCustomServices([])
@@ -385,14 +393,17 @@ export default function DashboardPage() {
               serviceType: "mini-service",
               color,
               isCustom: true, // Mark as custom so it can be deleted
+              owner_id: service.owner_id, // Add owner_id for filtering
               onDelete: handleMiniServiceDelete, // Add delete handler
-              is_enhanced: service.is_enhanced,
               usageStats: {
                 average_token_usage: service.average_token_usage,
                 run_time: service.run_time,
                 input_type: service.input_type,
-                output_type: service.output_type
-              }
+                output_type: service.output_type,
+                total_runs: Math.floor(Math.random() * 100) + 1 // Temporary random data
+              },
+              is_enhanced: service.is_enhanced,
+              created_at: service.created_at
             }
           })
 
@@ -460,23 +471,29 @@ export default function DashboardPage() {
     }
   }, [isAuthenticated, user_id, getUserId])
 
-  // Helper function to get icon component from string name
+  // Get icon component by name
   const getIconComponent = (iconName: string) => {
-    const iconMap: Record<string, React.ReactNode> = {
-      BookOpen: <BookOpen className="h-6 w-6 text-white" />,
-      Video: <Video className="h-6 w-6 text-white" />,
-      Headphones: <Headphones className="h-6 w-6 text-white" />,
-      ImageIcon: <ImageIcon className="h-6 w-6 text-white" />,
-      FileText: <FileText className="h-6 w-6 text-white" />,
-      MessageSquare: <MessageSquare className="h-6 w-6 text-white" />,
-      FileVideo: <FileVideo className="h-6 w-6 text-white" />,
-      Wand2: <Wand2 className="h-6 w-6 text-white" />,
+    switch (iconName) {
+      case "MessageSquare":
+        return <MessageSquare className="h-6 w-6 text-white" />
+      case "FileText":
+        return <FileText className="h-6 w-6 text-white" />
+      case "ImageIcon":
+        return <ImageIcon className="h-6 w-6 text-white" />
+      case "Video":
+        return <Video className="h-6 w-6 text-white" />
+      case "Headphones":
+        return <Headphones className="h-6 w-6 text-white" />
+      case "BookOpen":
+        return <BookOpen className="h-6 w-6 text-white" />
+      case "FileVideo":
+        return <FileVideo className="h-6 w-6 text-white" />
+      default:
+        return <Wand2 className="h-6 w-6 text-white" />
     }
-
-    return iconMap[iconName] || <Wand2 className="h-6 w-6 text-white" />
   }
 
-  // Helper function to get color based on service type
+  // Get color based on input/output type
   const getColorForService = (inputType: string, outputType: string) => {
     if (inputType === "text" && outputType === "text") {
       return "from-purple-600 to-purple-800"
@@ -615,22 +632,21 @@ export default function DashboardPage() {
     
     // Today
     if (date.toDateString() === now.toDateString()) {
-      return `Today at ${date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}`
+      return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
     }
     
     // Yesterday
     const yesterday = new Date(now)
-    yesterday.setDate(now.getDate() - 1)
+    yesterday.setDate(yesterday.getDate() - 1)
     if (date.toDateString() === yesterday.toDateString()) {
       return `Yesterday at ${date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}`
     }
     
-    // Within last 7 days
-    const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
-    const dayDiff = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24))
-    
-    if (dayDiff < 7) {
-      return `${daysOfWeek[date.getDay()]} at ${date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}`
+    // This week (within 7 days)
+    const daysDiff = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24))
+    if (daysDiff < 7) {
+      return date.toLocaleDateString(undefined, { weekday: 'short' }) + 
+             ` at ${date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}`
     }
     
     // Older
@@ -714,81 +730,100 @@ export default function DashboardPage() {
     return null // Will redirect in useEffect
   }
 
-  const builtInServices: Service[] = [
-    {
-      id: 6,
-      name: "Video Translation",
-      description: "Translate videos into multiple languages with AI",
-      icon: <Video className="h-6 w-6 text-white" />,
-      serviceType: "video-translation",
-      color: "from-blue-600 to-blue-800",
-    },
-    {
-      id: 3,
-      name: "Bedtime Story",
-      description: "Generate creative bedtime stories for children",
-      icon: <BookOpen className="h-6 w-6 text-white" />,
-      serviceType: "bedtime-story",
-      color: "from-purple-600 to-purple-800",
-    },
-    {
-      id: 7,
-      name: "AI Chat",
-      description: "Chat with our advanced AI assistant",
-      icon: <MessageSquare className="h-6 w-6 text-white" />,
-      serviceType: "ai-chat",
-      color: "from-green-600 to-green-800",
-    },
-    {
-      id: 8,
-      name: "Text to Image",
-      description: "Generate images from text descriptions",
-      icon: <Wand2 className="h-6 w-6 text-white" />,
-      serviceType: "text-to-image",
-      color: "from-pink-600 to-pink-800",
-    },
-    {
-      id: 9,
-      name: "Audio Documents",
-      description: "Convert documents into natural-sounding speech",
-      icon: <Headphones className="h-6 w-6 text-white" />,
-      serviceType: "audio-documents",
-      color: "from-orange-600 to-orange-800",
-    },
-    {
-      id: 10,
-      name: "Video Auto-Captions",
-      description: "Automatically generate captions for videos",
-      icon: <FileVideo className="h-6 w-6 text-white" />,
-      serviceType: "video-captions",
-      color: "from-red-600 to-red-800",
-    },
-    {
-      id: 4,
-      name: "Daily Recap",
-      description: "Get personalized summaries of news and information",
-      icon: <FileText className="h-6 w-6 text-white" />,
-      serviceType: "daily-recap",
-      color: "from-emerald-600 to-teal-800",
-    },
-  ]
+  // Enhanced filtering logic
+  const filterServicesByCategory = (services: Service[]) => {
+    switch (activeFilter) {
+      case "trending":
+        return services.filter(service => (service.usageStats?.total_runs || 0) > 50)
+      case "favourites":
+        return [] // Şimdilik boş
+      case "created":
+        return services.filter(service => service.isCustom && service.owner_id === user_id)
+      default:
+        return services
+    }
+  }
 
-  // Add this function to filter services based on search and category
-  const filterServices = (services: Service[], type: "workflows" | "services") => {
-    if (activeFilter !== "all" && activeFilter !== type) {
-      return []
-    }
-    
-    if (!searchQuery) {
-      return services
-    }
+  // Type filtering for input and output types separately
+  const filterServicesByType = (services: Service[]) => {
+    if (!inputTypeFilter && !outputTypeFilter) return services
+
+    return services.filter(service => {
+      const inputMatch = inputTypeFilter ? service.usageStats?.input_type === inputTypeFilter : true
+      const outputMatch = outputTypeFilter ? service.usageStats?.output_type === outputTypeFilter : true
+      return inputMatch && outputMatch
+    })
+  }
+
+  // Search filtering
+  const filterServicesBySearch = (services: Service[]) => {
+    if (!searchQuery) return services
     
     const query = searchQuery.toLowerCase()
     return services.filter(
       service => 
         service.name.toLowerCase().includes(query) || 
-        service.description.toLowerCase().includes(query)
+        service.description.toLowerCase().includes(query) ||
+        service.usageStats?.input_type?.toLowerCase().includes(query) ||
+        service.usageStats?.output_type?.toLowerCase().includes(query)
     )
+  }
+
+  // Enhanced filtering and sorting function
+  const filterAndSortServices = (services: Service[]) => {
+    let filteredServices = [...services]
+    
+    // Apply category filter
+    filteredServices = filterServicesByCategory(filteredServices)
+    
+    // Apply search filter
+    filteredServices = filterServicesBySearch(filteredServices)
+    
+    // Apply type filter
+    filteredServices = filterServicesByType(filteredServices)
+    
+    // Apply sorting
+    filteredServices.sort((a, b) => {
+      let comparison = 0
+      
+      switch (sortBy) {
+        case 'name':
+          comparison = a.name.localeCompare(b.name)
+          break
+        case 'created':
+          const dateA = new Date(a.created_at || '').getTime()
+          const dateB = new Date(b.created_at || '').getTime()
+          comparison = dateA - dateB
+          break
+        case 'usage':
+          const tokensA = a.usageStats?.average_token_usage?.total_tokens || 0
+          const tokensB = b.usageStats?.average_token_usage?.total_tokens || 0
+          comparison = tokensA - tokensB
+          break
+        case 'runs':
+          const runsA = a.usageStats?.total_runs || 0
+          const runsB = b.usageStats?.total_runs || 0
+          comparison = runsA - runsB
+          break
+        case 'type':
+          const typeA = `${a.usageStats?.input_type || ''}-${a.usageStats?.output_type || ''}`
+          const typeB = `${b.usageStats?.input_type || ''}-${b.usageStats?.output_type || ''}`
+          comparison = typeA.localeCompare(typeB)
+          break
+      }
+      
+      return sortDirection === 'asc' ? comparison : -comparison
+    })
+    
+    return filteredServices
+  }
+
+  // Get filtered services for display
+  const getFilteredMiniServices = () => {
+    if (activeFilter === "all" || activeFilter === "trending" || activeFilter === "favourites" || activeFilter === "created") {
+      return filterAndSortServices(miniServices)
+    }
+    return []
   }
 
   return (
@@ -797,12 +832,12 @@ export default function DashboardPage() {
 
       <main className="pt-24 pb-16 px-4">
         <div className="max-w-6xl mx-auto">
-          {/* Search and Filter Bar */}
+          {/* Enhanced Search and Filter Bar */}
           <div className="mb-8">
-            <div className="flex flex-col lg:flex-row justify-between gap-4">
+            <div className="flex flex-col gap-4">
               <h1 className="text-3xl font-bold text-white"></h1>
               
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full lg:w-auto">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
                 {/* Search Bar */}
                 <div className="relative flex-grow max-w-md">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -822,36 +857,137 @@ export default function DashboardPage() {
                   )}
                 </div>
                 
-                {/* Tabs Filter */}
-                <Tabs 
-                  value={activeFilter} 
-                  onValueChange={(v) => setActiveFilter(v as "all" | "workflows" | "services")}
-                  className="w-full sm:w-auto"
-                >
-                  <TabsList className="grid grid-cols-3 h-10 bg-black/40 border border-purple-900/30">
-                    <TabsTrigger 
-                      value="all" 
-                      className="data-[state=active]:bg-purple-600 data-[state=active]:text-white"
+                {/* Type Filters */}
+                <div className="flex gap-2">
+                  <Select value={inputTypeFilter || "all"} onValueChange={(value) => setInputTypeFilter(value === "all" ? null : value)}>
+                    <SelectTrigger className="w-[140px] bg-black/40 border-purple-900/30 text-white">
+                      <SelectValue placeholder="Input Type" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-gray-900 border-purple-900/30">
+                      <SelectItem value="all">All Inputs</SelectItem>
+                      <SelectItem value="text">Text</SelectItem>
+                      <SelectItem value="image">Image</SelectItem>
+                      <SelectItem value="audio">Audio</SelectItem>
+                      <SelectItem value="video">Video</SelectItem>
+                      <SelectItem value="document">Document</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  <Select value={outputTypeFilter || "all"} onValueChange={(value) => setOutputTypeFilter(value === "all" ? null : value)}>
+                    <SelectTrigger className="w-[140px] bg-black/40 border-purple-900/30 text-white">
+                      <SelectValue placeholder="Output Type" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-gray-900 border-purple-900/30">
+                      <SelectItem value="all">All Outputs</SelectItem>
+                      <SelectItem value="text">Text</SelectItem>
+                      <SelectItem value="image">Image</SelectItem>
+                      <SelectItem value="audio">Audio</SelectItem>
+                      <SelectItem value="video">Video</SelectItem>
+                      <SelectItem value="document">Document</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  {/* Clear Type Filters Button */}
+                  {(inputTypeFilter || outputTypeFilter) && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setInputTypeFilter(null)
+                        setOutputTypeFilter(null)
+                      }}
+                      className="bg-black/40 border-purple-900/30 text-white hover:bg-purple-900/30"
                     >
-                      All
-                    </TabsTrigger>
-                    <TabsTrigger 
-                      value="workflows" 
-                      className="data-[state=active]:bg-purple-600 data-[state=active]:text-white"
-                    >
-                      Created by You
-                    </TabsTrigger>
-                    <TabsTrigger 
-                      value="services" 
-                      className="data-[state=active]:bg-purple-600 data-[state=active]:text-white"
-                    >
-                      Default Services
-                    </TabsTrigger>
-                  </TabsList>
-                </Tabs>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+
+                {/* Sort and View Controls */}
+                <div className="flex gap-2">
+                  {/* Sort Dropdown */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" className="bg-black/40 border-purple-900/30 text-white hover:bg-purple-900/30">
+                        {sortDirection === 'asc' ? <SortAsc className="h-4 w-4 mr-2" /> : <SortDesc className="h-4 w-4 mr-2" />}
+                        Sort
+                        <ChevronDown className="h-4 w-4 ml-2" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent className="bg-gray-900 border-purple-900/30">
+                      <DropdownMenuLabel className="text-gray-400">Sort by</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => setSortBy('name')} className="text-white hover:bg-purple-900/30">
+                        Name
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setSortBy('created')} className="text-white hover:bg-purple-900/30">
+                        <Clock className="h-4 w-4 mr-2" />
+                        Created Date
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setSortBy('usage')} className="text-white hover:bg-purple-900/30">
+                        <Zap className="h-4 w-4 mr-2" />
+                        Token Usage
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setSortBy('runs')} className="text-white hover:bg-purple-900/30">
+                        <TrendingUp className="h-4 w-4 mr-2" />
+                        Total Runs
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setSortBy('type')} className="text-white hover:bg-purple-900/30">
+                        <Filter className="h-4 w-4 mr-2" />
+                        Type
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')} className="text-white hover:bg-purple-900/30">
+                        {sortDirection === 'asc' ? <SortDesc className="h-4 w-4 mr-2" /> : <SortAsc className="h-4 w-4 mr-2" />}
+                        {sortDirection === 'asc' ? 'Descending' : 'Ascending'}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               </div>
             </div>
-            
+
+            {/* Category Filter Tabs - Now on a separate row with icons */}
+            <div className="mt-4">
+              <Tabs 
+                value={activeFilter} 
+                onValueChange={(v) => setActiveFilter(v as "all" | "trending" | "favourites" | "created")}
+                className="w-full"
+              >
+                <TabsList className="grid grid-cols-4 h-12 bg-black/40 border border-purple-900/30 w-full max-w-lg">
+                  <TabsTrigger 
+                    value="all" 
+                    className="data-[state=active]:bg-purple-600 data-[state=active]:text-white flex items-center gap-2"
+                  >
+                    <Filter className="h-4 w-4" />
+                    All
+                  </TabsTrigger>
+                  <TabsTrigger 
+                    value="trending" 
+                    className="data-[state=active]:bg-purple-600 data-[state=active]:text-white flex items-center gap-2"
+                  >
+                    <TrendingUp className="h-4 w-4" />
+                    Trending
+                  </TabsTrigger>
+                  <TabsTrigger 
+                    value="favourites" 
+                    className="data-[state=active]:bg-purple-600 data-[state=active]:text-white flex items-center gap-2"
+                  >
+                    <Star className="h-4 w-4" />
+                    Favourites
+                  </TabsTrigger>
+                  <TabsTrigger 
+                    value="created" 
+                    className="data-[state=active]:bg-purple-600 data-[state=active]:text-white flex items-center gap-2"
+                  >
+                    <Bot className="h-4 w-4" />
+                    Created By You
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+
+            {/* Search Results Info */}
             {searchQuery && (
               <div className="mt-2 text-sm text-gray-400">
                 <span>Search results for: <span className="text-purple-400 font-medium">"{searchQuery}"</span></span>
@@ -860,104 +996,169 @@ export default function DashboardPage() {
                 )}
               </div>
             )}
+
+            {/* Active Filters Display */}
+            {(inputTypeFilter || outputTypeFilter) && (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {inputTypeFilter && (
+                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-purple-900/40 text-purple-300">
+                    Input: {inputTypeFilter}
+                    <button
+                      onClick={() => setInputTypeFilter(null)}
+                      className="ml-1 hover:text-white"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                )}
+                {outputTypeFilter && (
+                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-purple-900/40 text-purple-300">
+                    Output: {outputTypeFilter}
+                    <button
+                      onClick={() => setOutputTypeFilter(null)}
+                      className="ml-1 hover:text-white"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                )}
+              </div>
+            )}
           </div>
 
-          {/* User-created Mini-Services Section - Only show if filtered */}
-          {(activeFilter === "all" || activeFilter === "workflows") && 
-            filterServices(miniServices, "workflows").length > 0 && (
+          {/* Services Display Section */}
+          {getFilteredMiniServices().length > 0 && (
             <section className="mb-12">
               <h2 className="text-2xl md:text-3xl font-bold text-white mb-6 flex items-center">
-                Your AI Workflows
+                {activeFilter === "trending" ? "Trending AI Workflows" :
+                 activeFilter === "favourites" ? "Your Favourite Workflows" :
+                 activeFilter === "created" ? "Created By You" :
+                 "All Workflows"}
                 <span className="ml-3 text-sm bg-purple-900/40 text-purple-300 px-2 py-1 rounded-full">
-                  {filterServices(miniServices, "workflows").length}
+                  {getFilteredMiniServices().length}
                 </span>
               </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {miniServicesLoading ? (
-                  // Placeholder cards during loading
-                  Array.from({ length: 3 }).map((_, index) => (
-                    <div
-                      key={`placeholder-${index}`}
-                      className="h-[220px] bg-black/40 backdrop-blur-sm rounded-xl border border-purple-900/30 animate-pulse"
-                    />
-                  ))
-                ) : (
-                  filterServices(miniServices, "workflows").map((service) => (
+              
+              {/* Scrollable container for services */}
+              <div 
+                className="max-h-[600px] overflow-y-auto pr-2 custom-scrollbar"
+                style={{
+                  scrollbarWidth: 'thin',
+                  scrollbarColor: '#8b5cf6 transparent'
+                }}
+              >
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-4">
+                  {miniServicesLoading ? (
+                    // Placeholder cards during loading
+                    Array.from({ length: 6 }).map((_, index) => (
+                      <div
+                        key={`placeholder-${index}`}
+                        className="h-[220px] bg-black/40 backdrop-blur-sm rounded-xl border border-purple-900/30 animate-pulse"
+                      />
+                    ))
+                  ) : (
+                    getFilteredMiniServices().map((service) => (
+                      <MiniAppCard
+                        key={`mini-service-${service.id}`}
+                        title={service.name}
+                        description={service.description}
+                        icon={service.icon}
+                        serviceType={service.serviceType}
+                        color={service.color}
+                        isCustom={service.isCustom}
+                        id={service.id}
+                        onDelete={service.onDelete}
+                        usageStats={service.usageStats}
+                        is_enhanced={service.is_enhanced}
+                      />
+                    ))
+                  )}
+
+                  {/* Create New card - show only when appropriate */}
+                  {(activeFilter === "all" || activeFilter === "created") && !searchQuery && (
                     <MiniAppCard
-                      key={`mini-service-${service.id}`}
-                      title={service.name}
-                      description={service.description}
-                      icon={service.icon}
-                      serviceType={service.serviceType}
-                      color={service.color}
-                      isCustom={service.isCustom}
-                      id={service.id}
-                      onDelete={service.onDelete}
-                      usageStats={service.usageStats}
-                      is_enhanced={service.is_enhanced}
+                      title="Create New"
+                      description="Create a custom AI service"
+                      icon={<Plus className="h-6 w-6 text-white" />}
+                      serviceType=""
+                      color="from-gray-600 to-gray-800"
+                      isAddCard={true}
                     />
-                  ))
-                )}
+                  )}
+                </div>
               </div>
             </section>
           )}
 
-          {/* Built-in Services Section - Only show if filtered */}
-          {(activeFilter === "all" || activeFilter === "services") && (
-            <section className="mb-12">
-              <h2 className="text-2xl md:text-3xl font-bold text-white mb-6 flex items-center">
-                Workflows Created By Our Team
-                <span className="ml-3 text-sm bg-purple-900/40 text-purple-300 px-2 py-1 rounded-full">
-                  {filterServices(builtInServices, "services").length}
-                </span>
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filterServices(builtInServices, "services").map((service) => (
-                  <MiniAppCard
-                    key={service.serviceType}
-                    title={service.name}
-                    description={service.description}
-                    icon={service.icon}
-                    serviceType={service.serviceType}
-                    color={service.color}
-                    id={service.id}
-                  />
-                ))}
-
-                {/* Create New card - always show */}
-                {(activeFilter === "all" ) && (
-                  <MiniAppCard
-                    title="Create New"
-                    description="Create a custom AI service"
-                    icon={<Plus className="h-6 w-6 text-white" />}
-                    serviceType=""
-                    color="from-gray-600 to-gray-800"
-                    isAddCard={true}
-                  />
-                )}
+          {/* Show special message for Favourites */}
+          {activeFilter === "favourites" && getFilteredMiniServices().length === 0 && (
+            <div className="bg-black/40 backdrop-blur-sm rounded-xl border border-purple-900/30 p-8 text-center my-12">
+              <div className="w-16 h-16 bg-purple-600/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Star className="h-8 w-8 text-purple-400 opacity-60" />
               </div>
-            </section>
+              <h3 className="text-white font-medium text-lg mb-1">No favourites yet</h3>
+              <p className="text-gray-400">
+                Star your favourite services to see them here.
+              </p>
+            </div>
+          )}
+
+          {/* Show empty state when no services are available and not favourites */}
+          {getFilteredMiniServices().length === 0 && activeFilter !== "favourites" && !miniServicesLoading && (
+            <div className="bg-black/40 backdrop-blur-sm rounded-xl border border-purple-900/30 p-8 text-center my-12">
+              <div className="w-16 h-16 bg-purple-600/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Wand2 className="h-8 w-8 text-purple-400 opacity-60" />
+              </div>
+              <h3 className="text-white font-medium text-lg mb-1">No AI workflows found</h3>
+              <p className="text-gray-400 mb-4">
+                {activeFilter === "created" ? "You haven't created any workflows yet." :
+                 activeFilter === "trending" ? "No trending workflows at the moment." :
+                 "Start by creating your first AI workflow."}
+              </p>
+              <button
+                onClick={() => router.push("/apps/create/service-workflow-builder")}
+                className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-colors flex items-center mx-auto"
+              >
+                <Plus className="h-5 w-5 mr-2" />
+                Create Your First Workflow
+              </button>
+            </div>
           )}
 
           {/* Show No Results Message when necessary */}
-          {searchQuery && 
-           filterServices(miniServices, "workflows").length === 0 && 
-           filterServices(builtInServices, "services").length === 0 && (
+          {(searchQuery || inputTypeFilter || outputTypeFilter) && 
+           getFilteredMiniServices().length === 0 && 
+           activeFilter !== "favourites" && (
             <div className="bg-black/40 backdrop-blur-sm rounded-xl border border-purple-900/30 p-8 text-center my-12">
               <div className="w-16 h-16 bg-purple-600/10 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Search className="h-8 w-8 text-purple-400 opacity-60" />
               </div>
               <h3 className="text-white font-medium text-lg mb-1">No matching services found</h3>
               <p className="text-gray-400">
-                We couldn't find any services matching "{searchQuery}".
-                Try a different search term or clear the search.
+                We couldn't find any services matching your criteria.
+                Try adjusting your filters or search terms.
               </p>
-              <button 
-                onClick={() => setSearchQuery("")}
-                className="mt-4 px-4 py-2 bg-purple-600/20 text-purple-300 hover:bg-purple-600/40 transition rounded-md flex items-center mx-auto"
-              >
-                <X className="h-4 w-4 mr-2" /> Clear Search
-              </button>
+              <div className="flex gap-2 justify-center mt-4">
+                {searchQuery && (
+                  <button 
+                    onClick={() => setSearchQuery("")}
+                    className="px-4 py-2 bg-purple-600/20 text-purple-300 hover:bg-purple-600/40 transition rounded-md flex items-center"
+                  >
+                    <X className="h-4 w-4 mr-2" /> Clear Search
+                  </button>
+                )}
+                {(inputTypeFilter || outputTypeFilter) && (
+                  <button 
+                    onClick={() => {
+                      setInputTypeFilter(null)
+                      setOutputTypeFilter(null)
+                    }}
+                    className="px-4 py-2 bg-purple-600/20 text-purple-300 hover:bg-purple-600/40 transition rounded-md flex items-center"
+                  >
+                    <X className="h-4 w-4 mr-2" /> Clear Filters
+                  </button>
+                )}
+              </div>
             </div>
           )}
 
