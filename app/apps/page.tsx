@@ -903,7 +903,7 @@ export default function DashboardPage() {
                   )}
                 </div>
 
-                {/* Sort and View Controls */}
+                {/* Sort Controls (removed Create button from here) */}
                 <div className="flex gap-2">
                   {/* Sort Dropdown */}
                   <DropdownMenu>
@@ -1029,15 +1029,26 @@ export default function DashboardPage() {
           {/* Services Display Section */}
           {getFilteredMiniServices().length > 0 && (
             <section className="mb-12">
-              <h2 className="text-2xl md:text-3xl font-bold text-white mb-6 flex items-center">
-                {activeFilter === "trending" ? "Trending AI Workflows" :
-                 activeFilter === "favourites" ? "Your Favourite Workflows" :
-                 activeFilter === "created" ? "Created By You" :
-                 "All Workflows"}
-                <span className="ml-3 text-sm bg-purple-900/40 text-purple-300 px-2 py-1 rounded-full">
-                  {getFilteredMiniServices().length}
-                </span>
-              </h2>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-4">
+                <h2 className="text-2xl md:text-3xl font-bold text-white flex items-center">
+                  {activeFilter === "trending" ? "Trending AI Workflows" :
+                   activeFilter === "favourites" ? "Your Favourite Workflows" :
+                   activeFilter === "created" ? "Created By You" :
+                   "All Workflows"}
+                  <span className="ml-3 text-sm bg-purple-900/40 text-purple-300 px-2 py-1 rounded-full">
+                    {getFilteredMiniServices().length}
+                  </span>
+                </h2>
+                
+                {/* Create New Mini Service Button - now positioned at the rightmost */}
+                <Button
+                  onClick={() => router.push("/apps/create/service-workflow-builder")}
+                  className="bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white border-0 shadow-lg transition-all duration-200 hover:shadow-purple-500/25 whitespace-nowrap"
+                >
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  Create New Mini Service
+                </Button>
+              </div>
               
               {/* Scrollable container for services */}
               <div 
@@ -1072,18 +1083,6 @@ export default function DashboardPage() {
                         is_enhanced={service.is_enhanced}
                       />
                     ))
-                  )}
-
-                  {/* Create New card - show only when appropriate */}
-                  {(activeFilter === "all" || activeFilter === "created") && !searchQuery && (
-                    <MiniAppCard
-                      title="Create New"
-                      description="Create a custom AI service"
-                      icon={<Plus className="h-6 w-6 text-white" />}
-                      serviceType=""
-                      color="from-gray-600 to-gray-800"
-                      isAddCard={true}
-                    />
                   )}
                 </div>
               </div>
