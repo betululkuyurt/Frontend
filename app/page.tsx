@@ -13,12 +13,14 @@
  * - Öne çıkan AI araçlarının gösterimi
  * - Görsel olarak çekici tasarım ve gradient arka plan
  * - Sorunsuz kullanıcı deneyimi için responsive tasarım
+ * - Sihirli kaydırma animasyonu ile kişi illüstrasyonu ve parçacıklar
  */
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/hooks/useAuth"
 import { useRouter } from "next/navigation"
 import { useEffect } from "react"
+import MagicalScrollAnimation from "@/components/MagicalScrollAnimation"
 import {
   BookOpen,
   Video,
@@ -61,6 +63,9 @@ export default function Home() {
   if (!isAuthenticated) {
    return (
       <div className="relative min-h-screen overflow-hidden bg-[#070707] text-gray-300">
+        {/* Magical Scroll Animation - Fixed overlay */}
+        <MagicalScrollAnimation />
+        
         {/* Navbar - Similar to Scout OS */}
         <div className="fixed top-0 left-0 right-0 z-50 bg-black/30 backdrop-blur-md border-b border-gray-800/50">
           <div className="container mx-auto px-4 py-4 flex justify-between items-center">
@@ -365,7 +370,7 @@ export default function Home() {
           {/* Final CTA Section */}
           <section className="py-16 bg-gradient-to-r from-purple-700/80 via-purple-800/90 to-black">
             <div className="container mx-auto px-6 text-center">
-              <h2 className="text-2xl md:text-3xl font-bold mb-4">Ready to Redefine AI?</h2>
+             
               <p className="text-lg text-purple-200 mb-6 max-w-xl mx-auto">
                 Join MyGen-AI Suite today and start building anything you can imagine.
                 Your imagination is the only boundary.
