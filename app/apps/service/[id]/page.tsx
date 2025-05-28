@@ -1771,22 +1771,37 @@ export default function ServicePage() {
                     {service?.run_time !== undefined && (
                       <div className="text-xs bg-black/30 p-3 rounded-xl min-w-[100px] sm:min-w-[120px]">
                         <span className="block text-white/70 text-xs">Avg. Run Time</span>
-                        <span className="text-white font-bold text-base sm:text-lg">{Math.round(service.run_time)}s</span>
+                        <span className="text-white font-bold text-base sm:text-lg">{Math.round(service.run_time)}</span>
                       </div>
                     )}
                     {service?.average_token_usage && (
                       <>
                         <div className="text-xs bg-black/30 p-3 rounded-xl min-w-[100px] sm:min-w-[120px]">
                           <span className="block text-white/70 text-xs">Prompt Tokens</span>
-                          <span className="text-white font-bold text-base sm:text-lg">{Math.round(service.average_token_usage.prompt_tokens)}</span>
+                          <span className="text-white font-bold text-base sm:text-lg">
+                            {getAgentsRequiringApiKey().length > 0 
+                              ? Math.round(service.average_token_usage.prompt_tokens)
+                              : "—"
+                            }
+                          </span>
                         </div>
                         <div className="text-xs bg-black/30 p-3 rounded-xl min-w-[100px] sm:min-w-[120px]">
                           <span className="block text-white/70 text-xs">Completion</span>
-                          <span className="text-white font-bold text-base sm:text-lg">{Math.round(service.average_token_usage.completion_tokens)}</span>
+                          <span className="text-white font-bold text-base sm:text-lg">
+                            {getAgentsRequiringApiKey().length > 0 
+                              ? Math.round(service.average_token_usage.completion_tokens)
+                              : "—"
+                            }
+                          </span>
                         </div>
                         <div className="text-xs bg-black/30 p-3 rounded-xl min-w-[100px] sm:min-w-[120px]">
                           <span className="block text-white/70 text-xs">Total Tokens</span>
-                          <span className="text-white font-bold text-base sm:text-lg">{Math.round(service.average_token_usage.total_tokens)}</span>
+                          <span className="text-white font-bold text-base sm:text-lg">
+                            {getAgentsRequiringApiKey().length > 0 
+                              ? Math.round(service.average_token_usage.total_tokens)
+                              : "—"
+                            }
+                          </span>
                         </div>
                       </>
                     )}

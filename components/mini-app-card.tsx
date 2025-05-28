@@ -44,6 +44,7 @@ interface MiniAppCardProps {
   onDelete?: (id: number) => Promise<boolean> | boolean
   usageStats?: UsageStats
   is_enhanced?: boolean
+  requiresApiKey?: boolean
 }
 
 export function MiniAppCard({
@@ -58,6 +59,7 @@ export function MiniAppCard({
   onDelete,
   usageStats,
   is_enhanced,
+  requiresApiKey,
 }: Readonly<MiniAppCardProps>) {
   const router = useRouter()
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
@@ -278,8 +280,8 @@ export function MiniAppCard({
                   <div className="bg-black/40 rounded-md p-2 backdrop-blur-sm border border-purple-900/20">
                     <span className="block text-purple-300/80 text-[10px] font-medium mb-0.5">Total Runs</span>
                     <span className="text-gray-200 flex items-center font-semibold">
-                      {usageStats?.total_runs !== undefined ?
-                        usageStats.total_runs :
+                      {usageStats?.run_time !== undefined ?
+                        Math.round(usageStats.run_time) :
                         "—"
                       }
                     </span>

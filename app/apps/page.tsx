@@ -85,6 +85,7 @@ interface Service {
   }
   is_enhanced?: boolean
   created_at?: string
+  requiresApiKey?: boolean
 }
 
 // Define the mini-service type from API
@@ -265,7 +266,8 @@ export default function DashboardPage() {
                 input_type: service.input_type,
                 output_type: service.output_type
               },
-              is_enhanced: service.is_enhanced
+              is_enhanced: service.is_enhanced,
+              requiresApiKey: service.requiresApiKey
             }))
 
             setCustomServices(formattedServices)
@@ -322,6 +324,7 @@ export default function DashboardPage() {
     return true;
   };
 
+ 
   // Fetch mini-services from API
   useEffect(() => {
     if (isAuthenticated) {
@@ -403,7 +406,8 @@ export default function DashboardPage() {
                 total_runs: Math.floor(Math.random() * 100) + 1 // Temporary random data
               },
               is_enhanced: service.is_enhanced,
-              created_at: service.created_at
+              created_at: service.created_at,
+              
             }
           })
 
@@ -1081,6 +1085,7 @@ export default function DashboardPage() {
                         onDelete={service.onDelete}
                         usageStats={service.usageStats}
                         is_enhanced={service.is_enhanced}
+                        requiresApiKey={service.requiresApiKey}
                       />
                     ))
                   )}
