@@ -830,12 +830,11 @@ export default function DashboardPage() {
     return []
   }
 
-  return (
-    <div className="min-h-screen bg-gradient-to-b from-black via-purple-950/20 to-black">
+  return (    <div className="min-h-screen bg-gradient-to-b from-black via-purple-950/20 to-black">
       <NavBar />
 
-      <main className="pt-24 pb-16 px-4">
-        <div className="max-w-6xl mx-auto">
+      <main className="pt-24 pb-16 px-6">
+        <div className="max-w-7xl mx-auto">
           {/* Enhanced Search and Filter Bar */}
           <div className="mb-8">
             <div className="flex flex-col gap-4">
@@ -1052,17 +1051,15 @@ export default function DashboardPage() {
                   <Sparkles className="h-4 w-4 mr-2" />
                   Create New Mini Service
                 </Button>
-              </div>
-              
-              {/* Scrollable container for services */}
+              </div>              {/* Scrollable container for services */}
               <div 
-                className="max-h-[600px] overflow-y-auto pr-2 custom-scrollbar"
+                className="max-h-[650px] overflow-y-auto pr-2 custom-scrollbar px-4 py-6"
                 style={{
                   scrollbarWidth: 'thin',
                   scrollbarColor: '#8b5cf6 transparent'
                 }}
               >
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-4">
                   {miniServicesLoading ? (
                     // Placeholder cards during loading
                     Array.from({ length: 6 }).map((_, index) => (
