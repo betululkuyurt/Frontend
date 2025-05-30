@@ -59,9 +59,7 @@ export function UserNav() {
       if (decodedToken) {
         name = decodedToken.username || name
         email = decodedToken.email || userEmail || email
-      }
-
-      // Generate initials from name
+      }      // Generate initials from name
       const initials = name
         .split(" ")
         .map((part) => part[0])
@@ -74,50 +72,71 @@ export function UserNav() {
 
     fetchUserData()
   }, [])
-
+  
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="relative h-12 w-12 rounded-full p-0 hover:bg-transparent">
-          <div className="h-12 w-12 rounded-full bg-gradient-to-br from-purple-600 to-purple-800 flex items-center justify-center border-2 border-purple-500/30 shadow-lg transition-all duration-300 hover:border-purple-500/50">
-            <span className="text-xl font-bold text-white">
+        <Button variant="ghost" className="relative h-9 w-9 rounded-full p-0 hover:bg-transparent group">
+          <div className="h-9 w-9 rounded-full bg-gradient-to-br from-purple-600 to-purple-800 flex items-center justify-center border border-purple-500/30 shadow-lg transition-all duration-300 hover:border-purple-500/60 hover:shadow-purple-500/25 group-hover:scale-105">
+            <span className="text-sm font-bold text-white transition-transform duration-300 group-hover:scale-110">
               {userData.initials.charAt(0)}
             </span>
           </div>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent className="w-56" align="end">
-        <DropdownMenuLabel>
-          <div className="flex flex-col space-y-1">
-            <p className="text-sm font-medium leading-none">{userData.name}</p>
-            <p className="text-xs leading-none text-muted-foreground">{userData.email}</p>
+      <DropdownMenuContent className="w-64 bg-black/90 backdrop-blur-sm border border-purple-900/50 rounded-xl p-1 shadow-2xl shadow-purple-900/20" align="end">
+        <DropdownMenuLabel className="p-3">
+          <div className="flex items-center space-x-3">
+            <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-purple-600 to-purple-800 flex items-center justify-center border border-purple-500/30 shadow-lg flex-shrink-0">
+              <span className="text-sm font-bold text-white">
+                {userData.initials}
+              </span>
+            </div>
+            <div className="flex flex-col space-y-1 min-w-0 flex-1">
+              <p className="text-sm font-semibold text-white leading-none truncate">{userData.name}</p>
+              <p className="text-xs text-gray-400 leading-none truncate">{userData.email}</p>
+              <div className="flex items-center space-x-1 mt-1">
+                <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse"></div>
+                <span className="text-xs text-emerald-400 font-medium">Online</span>
+              </div>
+            </div>
           </div>
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuGroup>
-          <DropdownMenuItem asChild>
-            <Link href="/profile">
-              <User className="mr-2 h-4 w-4" />
-              <span>Profile</span>
+        </DropdownMenuLabel>        <DropdownMenuSeparator className="bg-purple-900/30 my-1" />
+        <DropdownMenuGroup className="space-y-0.5">
+          <DropdownMenuItem asChild className="rounded-lg mx-1">
+            <Link href="/profile" className="flex items-center px-2 py-2 text-gray-300 hover:text-white hover:bg-purple-900/20 transition-all duration-200 group">
+              <div className="w-6 h-6 rounded-md bg-gradient-to-br from-blue-600/20 to-blue-800/20 flex items-center justify-center mr-2 group-hover:from-blue-600/30 group-hover:to-blue-800/30 transition-all duration-200">
+                <User className="h-3 w-3 text-blue-400" />
+              </div>
+              <span className="text-sm font-medium">Profile</span>
             </Link>
           </DropdownMenuItem>
-          <DropdownMenuItem asChild>
-            <Link href="/apps/api-keys">
-              <CreditCard className="mr-2 h-4 w-4" />
-              <span>API Keys</span>
+          <DropdownMenuItem asChild className="rounded-lg mx-1">
+            <Link href="/apps/api-keys" className="flex items-center px-2 py-2 text-gray-300 hover:text-white hover:bg-purple-900/20 transition-all duration-200 group">
+              <div className="w-6 h-6 rounded-md bg-gradient-to-br from-green-600/20 to-green-800/20 flex items-center justify-center mr-2 group-hover:from-green-600/30 group-hover:to-green-800/30 transition-all duration-200">
+                <CreditCard className="h-3 w-3 text-green-400" />
+              </div>
+              <span className="text-sm font-medium">API Keys</span>
             </Link>
           </DropdownMenuItem>
-          <DropdownMenuItem asChild>
-            <Link href="/settings">
-              <Settings className="mr-2 h-4 w-4" />
-              <span>Settings</span>
+          <DropdownMenuItem asChild className="rounded-lg mx-1">
+            <Link href="/settings" className="flex items-center px-2 py-2 text-gray-300 hover:text-white hover:bg-purple-900/20 transition-all duration-200 group">
+              <div className="w-6 h-6 rounded-md bg-gradient-to-br from-amber-600/20 to-amber-800/20 flex items-center justify-center mr-2 group-hover:from-amber-600/30 group-hover:to-amber-800/30 transition-all duration-200">
+                <Settings className="h-3 w-3 text-amber-400" />
+              </div>
+              <span className="text-sm font-medium">Settings</span>
             </Link>
           </DropdownMenuItem>
         </DropdownMenuGroup>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={signOut} className="cursor-pointer text-red-500 focus:bg-red-500 focus:text-white">
-          <LogOut className="mr-2 h-4 w-4" />
-          <span>Log out</span>
+        <DropdownMenuSeparator className="bg-purple-900/30 my-1" />
+        <DropdownMenuItem 
+          onClick={signOut} 
+          className="cursor-pointer text-red-400 hover:text-white hover:bg-red-600/20 rounded-lg mx-1 px-2 py-2 transition-all duration-200 group"
+        >
+          <div className="w-6 h-6 rounded-md bg-gradient-to-br from-red-600/20 to-red-800/20 flex items-center justify-center mr-2 group-hover:from-red-600/30 group-hover:to-red-800/30 transition-all duration-200">
+            <LogOut className="h-3 w-3 text-red-400" />
+          </div>
+          <span className="text-sm font-medium">Log out</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
