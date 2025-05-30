@@ -148,117 +148,215 @@ export default function ProfilePage() {
       })
     }
   }
-
   if (isFetching) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-black via-purple-950/20 to-black flex items-center justify-center">
-        <div className="text-white">Loading profile...</div>
+        <div className="flex flex-col items-center space-y-4">
+          <div className="w-8 h-8 border-2 border-purple-400 border-t-transparent rounded-full animate-spin"></div>
+          <div className="text-white font-medium">Loading profile...</div>
+        </div>
       </div>
     )
   }
-
   return (
     <div className="min-h-screen bg-gradient-to-b from-black via-purple-950/20 to-black">
       <NavBar />
 
       <main className="pt-24 pb-16 px-4">
-        <div className="max-w-4xl mx-auto">
-          <div className="flex items-center h-16 my-2 relative">
+        <div className="max-w-5xl mx-auto">
+          {/* Header with back button */}
+          <div className="flex items-center justify-between mb-8">
             <Button
               variant="ghost"
               onClick={() => router.push("/apps")}
-              className="flex items-center text-gray-300 hover:text-white p-0 hover:bg-transparent absolute left-0"
+              className="flex items-center text-gray-300 hover:text-white hover:bg-purple-900/20 px-3 py-2 rounded-lg transition-all duration-300"
             >
               <ChevronLeft className="h-5 w-5 mr-2" />
+              Back to Apps
             </Button>
-            <div className="flex items-center justify-center w-full">
-              <User className="h-5 w-5 text-purple-400 mr-2" />
-              <span className="text-white font-semibold">Profile</span>
+            <div className="flex items-center space-x-3">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-600 to-purple-800 flex items-center justify-center">
+                <User className="h-4 w-4 text-white" />
+              </div>
+              <h1 className="text-2xl font-bold text-white">Profile Settings</h1>
             </div>
           </div>
 
           <div className="grid gap-8">
-            {/* Profile Header */}
-            <div className="flex flex-col md:flex-row items-start md:items-center gap-6 bg-black/40 backdrop-blur-sm rounded-xl border border-purple-900/30 p-6">
-              <div className="w-24 h-24 rounded-full bg-gradient-to-br from-purple-600 to-purple-800 flex items-center justify-center border-2 border-purple-500/30 shadow-lg">
-                <span className="text-3xl font-bold text-white">
-                  {userData.firstName.charAt(0).toUpperCase()}
-                </span>
-              </div>
-              <div className="flex-grow">
-                <h1 className="text-2xl font-bold text-white mb-2">
-                  {userData.username || `${userData.firstName} ${userData.lastName}`.trim()}
-                </h1>
-              </div>
-              <div className="flex flex-col gap-2 min-w-[150px] text-center bg-purple-900/20 rounded-lg p-4">
-                <div>
-                  <div className="text-2xl font-bold text-white">{userData.appsCreated}</div>
-                  <div className="text-sm text-gray-400">Apps Created</div>
+            {/* Enhanced Profile Header */}
+            <div className="relative overflow-hidden bg-black/60 backdrop-blur-sm rounded-2xl border border-purple-900/30 p-8">
+              {/* Background decoration */}
+              <div className="absolute inset-0 bg-gradient-to-br from-purple-900/10 via-transparent to-blue-900/10"></div>
+              <div className="absolute top-0 right-0 w-1/3 h-1/3 bg-gradient-to-bl from-purple-500/10 to-transparent rounded-full blur-3xl"></div>
+              <div className="absolute bottom-0 left-0 w-1/3 h-1/3 bg-gradient-to-tr from-blue-500/10 to-transparent rounded-full blur-3xl"></div>
+              
+              <div className="relative z-10 flex flex-col lg:flex-row items-center gap-8">
+                {/* Enhanced Avatar */}
+                <div className="relative">
+                  <div className="w-32 h-32 rounded-2xl bg-gradient-to-br from-purple-600 via-purple-700 to-purple-800 flex items-center justify-center border-2 border-purple-400/30 shadow-2xl relative overflow-hidden">
+                    {/* Avatar shimmer effect */}
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -skew-x-12 animate-pulse opacity-0 hover:opacity-100 transition-opacity duration-700"></div>
+                    <span className="text-5xl font-bold text-white relative z-10">
+                      {userData.firstName.charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                  {/* Online status indicator */}
+                  <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-emerald-500 rounded-full border-3 border-black flex items-center justify-center">
+                    <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
+                  </div>
                 </div>
-                <Separator className="bg-purple-900/30" />
-                <div>
-                  <div className="text-2xl font-bold text-white">{userData.generations}</div>
-                  <div className="text-sm text-gray-400">Generations</div>
-                </div>
-              </div>
-            </div>
 
-            {/* Profile Form */}
-            <div className="bg-black/40 backdrop-blur-sm rounded-xl border border-purple-900/30 p-6">
-              <h2 className="text-xl font-semibold text-white mb-6">Profile Information</h2>
-              <div className="grid gap-6">
-                <div className="space-y-2">
-                  <Label htmlFor="name" className="text-gray-400">Name</Label>
-                  <Input
-                    id="name"
-                    value={`${userData.firstName} ${userData.lastName}`.trim()}
-                    className="bg-black/30 border-purple-900/30 text-gray-300 pointer-events-none select-none cursor-default"
-                    readOnly
-                  />
+                {/* User Info */}
+                <div className="flex-grow text-center lg:text-left">
+                  <h1 className="text-3xl font-bold text-white mb-3 bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
+                    {userData.username || `${userData.firstName} ${userData.lastName}`.trim()}
+                  </h1>
+                  <p className="text-gray-400 mb-4 max-w-md">
+                    Welcome to your profile dashboard. Manage your account settings and track your activity.
+                  </p>
+                  <div className="flex items-center justify-center lg:justify-start space-x-2 text-sm text-gray-400">
+                    <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div>
+                    <span>Active</span>
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="email" className="text-gray-400">Email</Label>
-                  <div className="relative">
-                    <Input
-                      id="email"
-                      type="email"
-                      value={userData.email}
-                      className="bg-black/30 border-purple-900/30 text-gray-300 pr-10 cursor-pointer"
-                      readOnly
-                      onClick={() => copyToClipboard(userData.email)}
-                    />
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 text-gray-400 hover:text-white hover:bg-transparent"
-                      onClick={() => copyToClipboard(userData.email)}
-                    >
-                      {isCopied ? (
-                        <Check className="h-4 w-4 text-green-500" />
-                      ) : (
-                        <Copy className="h-4 w-4" />
-                      )}
-                    </Button>
+
+                {/* Enhanced Stats */}
+                <div className="grid grid-cols-2 gap-4 min-w-[280px]">
+                  <div className="bg-gradient-to-br from-purple-900/30 to-purple-800/20 rounded-xl p-4 border border-purple-700/30 hover:border-purple-500/50 transition-all duration-300 group">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm text-gray-400 font-medium">Apps Created</span>
+                      <div className="w-2 h-2 bg-purple-400 rounded-full group-hover:animate-pulse"></div>
+                    </div>
+                    <div className="text-2xl font-bold text-white">{userData.appsCreated}</div>
+                  </div>
+                  <div className="bg-gradient-to-br from-blue-900/30 to-blue-800/20 rounded-xl p-4 border border-blue-700/30 hover:border-blue-500/50 transition-all duration-300 group">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm text-gray-400 font-medium">Generations</span>
+                      <div className="w-2 h-2 bg-blue-400 rounded-full group-hover:animate-pulse"></div>
+                    </div>
+                    <div className="text-2xl font-bold text-white">{userData.generations}</div>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* API Usage */}
-            <div className="bg-black/40 backdrop-blur-sm rounded-xl border border-purple-900/30 p-6">
-              <h2 className="text-xl font-semibold text-white mb-6">API Usage</h2>
-              <div className="grid md:grid-cols-3 gap-4">
-                <div className="bg-purple-900/20 rounded-lg p-4">
-                  <div className="text-sm text-gray-400 mb-1">Total API Calls</div>
-                  <div className="text-2xl font-bold text-white">12,543</div>
+            {/* Enhanced Profile Form */}
+            <div className="bg-black/60 backdrop-blur-sm rounded-2xl border border-purple-900/30 p-8 relative overflow-hidden">
+              {/* Background decoration */}
+              <div className="absolute inset-0 bg-gradient-to-br from-gray-900/20 via-transparent to-purple-900/10"></div>
+              
+              <div className="relative z-10">
+                <div className="flex items-center space-x-3 mb-8">
+                  <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-purple-600 to-purple-800 flex items-center justify-center">
+                    <User className="h-3 w-3 text-white" />
+                  </div>
+                  <h2 className="text-xl font-semibold text-white">Profile Information</h2>
                 </div>
-                <div className="bg-purple-900/20 rounded-lg p-4">
-                  <div className="text-sm text-gray-400 mb-1">Active API Keys</div>
-                  <div className="text-2xl font-bold text-white">3</div>
+                
+                <div className="grid gap-6">
+                  <div className="space-y-3">
+                    <Label htmlFor="name" className="text-gray-300 font-medium">Full Name</Label>
+                    <Input
+                      id="name"
+                      value={`${userData.firstName} ${userData.lastName}`.trim()}
+                      className="bg-black/40 border-purple-900/40 text-gray-200 h-12 rounded-xl focus:border-purple-500/60 focus:ring-purple-500/20 cursor-not-allowed"
+                      readOnly
+                    />
+                    <p className="text-xs text-gray-500">This information is managed by your authentication provider.</p>
+                  </div>
+                  
+                  <div className="space-y-3">
+                    <Label htmlFor="email" className="text-gray-300 font-medium">Email Address</Label>
+                    <div className="relative">
+                      <Input
+                        id="email"
+                        type="email"
+                        value={userData.email}
+                        className="bg-black/40 border-purple-900/40 text-gray-200 h-12 rounded-xl pr-12 hover:border-purple-500/50 transition-all duration-300 cursor-pointer focus:border-purple-500/60 focus:ring-purple-500/20"
+                        readOnly
+                        onClick={() => copyToClipboard(userData.email)}
+                      />
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 text-gray-400 hover:text-white hover:bg-purple-500/20 rounded-lg transition-all duration-300"
+                        onClick={() => copyToClipboard(userData.email)}
+                      >
+                        {isCopied ? (
+                          <Check className="h-4 w-4 text-emerald-400" />
+                        ) : (
+                          <Copy className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
+                    <p className="text-xs text-gray-500">Click to copy your email address to clipboard.</p>
+                  </div>
                 </div>
-                <div className="bg-purple-900/20 rounded-lg p-4">
-                  <div className="text-sm text-gray-400 mb-1">Usage This Month</div>
-                  <div className="text-2xl font-bold text-white">2.1GB</div>
+              </div>
+            </div>
+
+            {/* Enhanced API Usage Section */}
+            <div className="bg-black/60 backdrop-blur-sm rounded-2xl border border-purple-900/30 p-8 relative overflow-hidden">
+              {/* Background decoration */}
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-900/10 via-transparent to-purple-900/10"></div>
+              
+              <div className="relative z-10">
+                <div className="flex items-center justify-between mb-8">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center">
+                      <div className="w-3 h-3 border border-white rounded-sm"></div>
+                    </div>
+                    <h2 className="text-xl font-semibold text-white">API Usage Statistics</h2>
+                  </div>
+                  <div className="text-xs text-gray-400 bg-gray-800/50 px-3 py-1 rounded-full">
+                    Last updated: Now
+                  </div>
+                </div>
+                
+                <div className="grid md:grid-cols-3 gap-6">
+                  <div className="bg-gradient-to-br from-purple-900/30 to-purple-800/20 rounded-xl p-6 border border-purple-700/30 hover:border-purple-500/50 transition-all duration-300 group relative overflow-hidden">
+                    <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-transparent"></div>
+                    <div className="relative z-10">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="text-sm text-gray-400 font-medium">Total API Calls</div>
+                        <div className="w-2 h-2 bg-purple-400 rounded-full group-hover:animate-pulse"></div>
+                      </div>
+                      <div className="text-3xl font-bold text-white mb-2">12,543</div>
+                      <div className="text-xs text-green-400">+23% from last month</div>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-gradient-to-br from-blue-900/30 to-blue-800/20 rounded-xl p-6 border border-blue-700/30 hover:border-blue-500/50 transition-all duration-300 group relative overflow-hidden">
+                    <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent"></div>
+                    <div className="relative z-10">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="text-sm text-gray-400 font-medium">Active API Keys</div>
+                        <div className="w-2 h-2 bg-blue-400 rounded-full group-hover:animate-pulse"></div>
+                      </div>
+                      <div className="text-3xl font-bold text-white mb-2">3</div>
+                      <div className="text-xs text-gray-400">2 production, 1 development</div>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-gradient-to-br from-emerald-900/30 to-emerald-800/20 rounded-xl p-6 border border-emerald-700/30 hover:border-emerald-500/50 transition-all duration-300 group relative overflow-hidden">
+                    <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent"></div>
+                    <div className="relative z-10">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="text-sm text-gray-400 font-medium">Usage This Month</div>
+                        <div className="w-2 h-2 bg-emerald-400 rounded-full group-hover:animate-pulse"></div>
+                      </div>
+                      <div className="text-3xl font-bold text-white mb-2">2.1GB</div>
+                      <div className="text-xs text-emerald-400">67% of quota used</div>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Usage chart placeholder */}
+                <div className="mt-8 bg-black/40 rounded-xl p-6 border border-gray-800/50">
+                  <h3 className="text-sm font-medium text-gray-300 mb-4">Monthly Usage Trend</h3>
+                  <div className="h-32 bg-gradient-to-r from-purple-500/10 via-blue-500/10 to-emerald-500/10 rounded-lg flex items-end justify-center">
+                    <div className="text-gray-500 text-sm">Chart visualization coming soon</div>
+                  </div>
                 </div>
               </div>
             </div>
