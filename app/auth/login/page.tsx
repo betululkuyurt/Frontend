@@ -18,7 +18,6 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
   const searchParams = useSearchParams()
-
   async function onSubmit(event: React.SyntheticEvent) {
     event.preventDefault()
     console.log("🚀 Login attempt started...")
@@ -90,87 +89,110 @@ export default function LoginPage() {
       console.log("🏁 Login process completed")
     }
   }
-
   return (
-    <div className="min-h-screen bg-gradient-to-b from-black via-purple-950/20 to-black flex items-center justify-center p-4">
-      <Card className="w-full max-w-lg bg-black/40 backdrop-blur-sm border-purple-900/30">
-        <CardHeader className="space-y-1">
-          <div className="flex items-center justify-center mb-4">
-            <div className="w-12 h-12 rounded-xl bg-purple-600 flex items-center justify-center">
-              <div className="w-3 h-3 rounded-full bg-white" />
+    <div className="min-h-screen bg-gradient-to-b from-black via-purple-950/20 to-black flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Background Effects */}
+      <div className="absolute inset-0 pointer-events-none">
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-purple-600/10 rounded-full blur-3xl animate-pulse" />
+        <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-indigo-600/10 rounded-full blur-3xl animate-pulse delay-1000" />
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-purple-500/5 rounded-full blur-3xl" />
+      </div>
+
+      <Card className="w-full max-w-md bg-black/60 backdrop-blur-xl border border-purple-700/40 shadow-2xl relative">
+        {/* Card Glow Effect */}
+        <div className="absolute inset-0 bg-gradient-to-r from-purple-600/20 to-indigo-600/20 rounded-lg blur-xl -z-10" />
+        
+        <CardHeader className="space-y-6 text-center pb-8">
+          <div className="flex items-center justify-center mb-6">
+            <div className="relative">
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-600 to-indigo-600 flex items-center justify-center shadow-lg">
+                <div className="w-4 h-4 rounded-full bg-white animate-pulse" />
+              </div>
+              <div className="absolute inset-0 bg-gradient-to-br from-purple-600 to-indigo-600 rounded-2xl blur-md opacity-50 -z-10" />
             </div>
           </div>
-          <CardTitle className="text-2xl text-center">Welcome back</CardTitle>
-          <CardDescription className="text-center">
-            Enter your email and password to sign in to your account
-          </CardDescription>
+          <div className="space-y-2">
+            <CardTitle className="text-3xl font-bold bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent">
+              Welcome Back
+            </CardTitle>
+            <CardDescription className="text-gray-400 text-base">
+              Sign in to continue to your account
+            </CardDescription>
+          </div>
         </CardHeader>
-        <CardContent className="grid gap-4">
-          <div className="grid grid-cols-2 gap-6">
-            <Button variant="outline" className="bg-black/30 border-purple-900/30">
-              <Icons.gitHub className="mr-2 h-4 w-4" />
-              Github
-            </Button>
-            <Button variant="outline" className="bg-black/30 border-purple-900/30">
-              <Icons.google className="mr-2 h-4 w-4" />
-              Google
-            </Button>
-          </div>
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t border-purple-900/30" />
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-background text-muted-foreground px-2">Or continue with</span>
-            </div>
-          </div>
+
+        <CardContent className="space-y-6 px-8 pb-8">
           {error && (
-            <div className="p-3 bg-red-500/20 border border-red-500/50 rounded-md text-red-200 text-sm">{error}</div>
+            <div className="p-4 bg-red-900/30 border border-red-700/50 rounded-lg text-red-200 text-sm backdrop-blur-sm">
+              <div className="flex items-center space-x-2">
+                <div className="w-4 h-4 rounded-full bg-red-500 flex-shrink-0" />
+                <span>{error}</span>
+              </div>
+            </div>
           )}
-          <form onSubmit={onSubmit}>
-            <div className="grid gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="email">Email</Label>
+
+          <form onSubmit={onSubmit} className="space-y-6">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="email" className="text-white font-medium">
+                  Email Address
+                </Label>
                 <Input
                   id="email"
                   type="email"
-                  placeholder="name@example.com"
+                  placeholder="Enter your email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   disabled={isLoading}
-                  className="bg-black/30 border-purple-900/30"
+                  className="h-12 bg-black/40 border-purple-700/40 text-white placeholder:text-gray-500 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all"
                   required
                 />
               </div>
-              <div className="grid gap-2">
+
+              <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label htmlFor="password">Password</Label>
-                  <Link href="/auth/reset-password" className="text-sm text-purple-400 hover:text-purple-300">
+                  <Label htmlFor="password" className="text-white font-medium">
+                    Password
+                  </Label>
+                  <Link 
+                    href="/auth/reset-password" 
+                    className="text-sm text-purple-400 hover:text-purple-300 transition-colors font-medium"
+                  >
                     Forgot password?
                   </Link>
                 </div>
                 <Input
                   id="password"
                   type="password"
+                  placeholder="Enter your password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   disabled={isLoading}
-                  className="bg-black/30 border-purple-900/30"
+                  className="h-12 bg-black/40 border-purple-700/40 text-white placeholder:text-gray-500 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all"
                   required
                 />
               </div>
-              <Button className="bg-purple-600 hover:bg-purple-700" disabled={isLoading} type="submit">
-                {isLoading && <Icons.spinner className="mr-2 h-4 w-4 animate-spin" />}
-                Sign In
-              </Button>
             </div>
+
+            <Button 
+              className="w-full h-12 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-semibold shadow-lg hover:shadow-purple-500/30 transition-all duration-300 transform hover:scale-[1.02]" 
+              disabled={isLoading} 
+              type="submit"
+            >
+              {isLoading && <Icons.spinner className="mr-2 h-5 w-5 animate-spin" />}
+              {isLoading ? "Signing In..." : "Sign In"}
+            </Button>
           </form>
         </CardContent>
-        <CardFooter className="flex flex-col gap-4">
-          <div className="text-sm text-muted-foreground text-center">
+
+        <CardFooter className="text-center pb-8 px-8">
+          <div className="text-gray-400">
             Don&apos;t have an account?{" "}
-            <Link href="/auth/register" className="text-purple-400 hover:text-purple-300 font-medium">
-              Sign up
+            <Link 
+              href="/auth/register" 
+              className="text-purple-400 hover:text-purple-300 font-semibold transition-colors hover:underline"
+            >
+              Create one here
             </Link>
           </div>
         </CardFooter>
