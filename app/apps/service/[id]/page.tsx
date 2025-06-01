@@ -1769,7 +1769,7 @@ export default function ServicePage() {
                 {(service?.average_token_usage || service?.run_time !== undefined) && (
                   <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:flex xl:flex-wrap gap-3 sm:gap-4 border-t border-white/20 pt-4">                    {service?.run_time !== undefined && (
                       <div className="text-xs bg-black/30 p-3 rounded-xl min-w-[100px] sm:min-w-[120px]">
-                        <span className="block text-white/70 text-xs">Avg. Run Time</span>
+                        <span className="block text-white/70 text-xs">Total Runs</span>
                         <span className="text-white font-bold text-base sm:text-lg">
                           {isNaN(service.run_time) ? "—" : Math.round(service.run_time)}
                         </span>
@@ -1786,7 +1786,7 @@ export default function ServicePage() {
                           </span>
                         </div>
                         <div className="text-xs bg-black/30 p-3 rounded-xl min-w-[100px] sm:min-w-[120px]">
-                          <span className="block text-white/70 text-xs">Completion</span>
+                          <span className="block text-white/70 text-xs">Completion Tokens</span>
                           <span className="text-white font-bold text-base sm:text-lg">
                             {getAgentsRequiringApiKey().length > 0 
                               ? (isNaN(service.average_token_usage.completion_tokens) ? "—" : Math.round(service.average_token_usage.completion_tokens))
