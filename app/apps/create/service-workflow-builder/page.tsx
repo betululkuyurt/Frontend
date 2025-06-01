@@ -32,6 +32,8 @@ import {
   X,
   ArrowLeft,
   AlertCircle,
+  Play,
+  Volume2,
 } from "lucide-react"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
@@ -39,6 +41,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Slider } from "@/components/ui/slider"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/components/ui/use-toast"
 import ReactFlow, {
@@ -258,6 +261,13 @@ export default function ServiceWorkflowBuilder() {
   // Within the ServiceWorkflowBuilder component
   const [translateLanguages, setTranslateLanguages] = useState<Language[]>([]);
   const [isLoadingLanguages, setIsLoadingLanguages] = useState(false);
+
+  // **[NEW STATE]** - Add TTS voices and test functionality
+  const [ttsVoices, setTtsVoices] = useState<Array<{code: string, name: string, gender: string, locale: string}>>([]);
+  const [isLoadingTtsVoices, setIsLoadingTtsVoices] = useState(false);
+  const [testText, setTestText] = useState("Hello, this is a test of the text-to-speech configuration.");
+  const [isTestingTts, setIsTestingTts] = useState(false);
+  const [testAudioUrl, setTestAudioUrl] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchAgentTypes = async () => {
@@ -1165,10 +1175,219 @@ export default function ServiceWorkflowBuilder() {
     }
   };
 
+  // **[NEW FUNCTION]** - Fetch available TTS voices from backend only
+  const fetchTtsVoices = async () => {
+    try {
+      setIsLoadingTtsVoices(true);
+      
+      const res = await fetch('http://127.0.0.1:8000/api/v1/agents/voices/tts', {
+        headers: {
+          "Authorization": `Bearer ${Cookies.get("access_token")}`,
+          "Content-Type": "application/json"
+        }
+      });
+
+      if (!res.ok) {
+        throw new Error(`Backend error: ${res.status} - ${res.statusText}`);
+      }
+      
+      const voicesData = await res.json();
+      
+      // Transform the voices data to match our interface
+      const voicesArray = voicesData.map((voice: any) => ({
+        code: voice.ShortName || voice.code || voice.name,
+        name: voice.DisplayName || voice.name || voice.ShortName,
+        gender: voice.Gender || voice.gender || 'Unknown',
+        locale: voice.Locale || voice.locale || voice.code
+      }));
+      
+      setTtsVoices(voicesArray);
+      
+      if (voicesArray.length === 0) {
+        toast({
+          variant: "destructive",
+          title: "No TTS Voices Available",
+          description: "Backend returned empty voice list. Please check the TTS service configuration.",
+        });
+      }
+      
+    } catch (err) {
+      console.error("Error fetching TTS voices:", err);
+      setTtsVoices([]); // Empty array instead of fallback
+      
+      toast({
+        variant: "destructive",
+        title: "TTS Voices Unavailable",
+        description: "Could not load voice options from backend. Please ensure the TTS service is running and try again.",
+      });
+    } finally {
+      setIsLoadingTtsVoices(false);
+    }
+  };
+
+  // **[NEW FUNCTION]** - Test TTS configuration
+  const testTtsConfiguration = async () => {
+    try {
+      setIsTestingTts(true);
+      
+      const config = {
+        voice: newAgentData.config.voice || "en-US",
+        rate: newAgentData.config.rate || "+0%",
+        volume: newAgentData.config.volume || "+0%",
+        pitch: newAgentData.config.pitch || "+0Hz"
+      };
+
+      console.log("Testing TTS with config:", config);
+      console.log("Test text:", testText);
+      console.log("Request payload:", JSON.stringify({
+        text: testText,
+        config: config
+      }, null, 2));
+
+      const response = await fetch(`http://127.0.0.1:8000/api/v1/agents/test-tts?current_user_id=${userId}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${Cookies.get("access_token")}`
+        },
+        body: JSON.stringify({
+          text: testText,
+          config: config
+        })
+      });
+
+      console.log("Response status:", response.status);
+      console.log("Response headers:", Object.fromEntries(response.headers.entries()));
+
+      if (!response.ok) {
+        // Handle different error types
+        if (response.status === 404) {
+          throw new Error("TTS test endpoint not available yet. The configuration will be saved and used when the agent is created.");
+        } else if (response.status === 500) {
+          throw new Error("TTS service temporarily unavailable. Please try again later.");
+        } else {
+          const errorData = await response.text().catch(() => "Unknown error");
+          throw new Error(`TTS test failed: ${errorData}`);
+        }
+      }
+
+      // Check content type
+      const contentType = response.headers.get('content-type');
+      console.log("Content-Type:", contentType);
+      
+      // Handle JSON response (test confirmation)
+      if (contentType && contentType.includes('application/json')) {
+        const jsonResponse = await response.json();
+        console.log("JSON Response:", jsonResponse);
+        
+        if (jsonResponse.success) {
+          // Check for voice mismatch
+          const requestedVoice = config.voice;
+          const usedVoice = jsonResponse.voice_used;
+          const voiceMatched = usedVoice && (
+            usedVoice === requestedVoice ||
+            usedVoice.includes(requestedVoice) ||
+            requestedVoice.includes(usedVoice)
+          );
+
+          console.log("Voice used:", jsonResponse.voice_used);
+          console.log("Voice info:", jsonResponse.voice_info);
+          console.log("Text length:", jsonResponse.text_length);
+          console.log("Voice match check:", {
+            requested: requestedVoice,
+            used: usedVoice,
+            matched: voiceMatched
+          });
+
+          if (!voiceMatched) {
+            toast({
+              variant: "destructive", 
+              title: "Voice Mismatch Warning",
+              description: `⚠️ Requested: ${requestedVoice}, but backend used: ${usedVoice}. Check backend voice mapping!`,
+            });
+          } else {
+            toast({
+              title: "TTS Configuration Valid",
+              description: `✅ Test successful! Voice: ${usedVoice}. Audio generation confirmed.`,
+            });
+          }
+          
+          return; // Exit successfully but without audio
+        } else {
+          throw new Error(jsonResponse.message || "TTS test failed");
+        }
+      }
+      
+      // Handle audio file response
+      if (!contentType || (!contentType.includes('audio') && !contentType.includes('octet-stream'))) {
+        console.warn("Unexpected content type:", contentType);
+        // Try to read as text to see what we got
+        const textResponse = await response.text();
+        console.log("Response body (as text):", textResponse);
+        throw new Error(`Expected audio file or JSON, but got: ${contentType}. Response: ${textResponse.substring(0, 200)}`);
+      }
+
+      // Get the audio blob
+      const audioBlob = await response.blob();
+      console.log("Audio blob size:", audioBlob.size, "bytes");
+      console.log("Audio blob type:", audioBlob.type);
+      
+      if (audioBlob.size === 0) {
+        throw new Error("Received empty audio file from server");
+      }
+
+      // Clean up previous audio URL
+      if (testAudioUrl) {
+        URL.revokeObjectURL(testAudioUrl);
+      }
+
+      // Create new audio URL
+      const audioUrl = URL.createObjectURL(audioBlob);
+      console.log("Created audio URL:", audioUrl);
+      setTestAudioUrl(audioUrl);
+
+      toast({
+        title: "TTS Test Successful",
+        description: `Audio generated successfully (${(audioBlob.size / 1024).toFixed(1)} KB). You can now play it.`,
+      });
+
+    } catch (error) {
+      console.error("Error testing TTS:", error);
+      
+      // Show user-friendly error message
+      const errorMessage = error instanceof Error ? error.message : "Failed to test TTS configuration";
+      
+      toast({
+        variant: "destructive",
+        title: "TTS Test Failed",
+        description: errorMessage,
+      });
+      
+      // If it's just a test endpoint issue, show info toast
+      if (errorMessage.includes("not available yet")) {
+        setTimeout(() => {
+          toast({
+            title: "Configuration Saved",
+            description: "Your TTS settings will be applied when the agent is created, even though testing is not available.",
+          });
+        }, 2000);
+      }
+    } finally {
+      setIsTestingTts(false);
+    }
+  };
+
   // Add this useEffect to call fetchTranslateLanguages when agent type is set to google_translate
   useEffect(() => {
     if (newAgentData.agentType === "google_translate") {
       fetchTranslateLanguages();
+    }
+  }, [newAgentData.agentType]);
+
+  // **[NEW USEEFFECT]** - Fetch TTS voices when agent type is set to edge_tts
+  useEffect(() => {
+    if (newAgentData.agentType === "edge_tts") {
+      fetchTtsVoices();
     }
   }, [newAgentData.agentType]);
 
@@ -2014,59 +2233,250 @@ export default function ServiceWorkflowBuilder() {
                         </div>
                       )}
 
-                      {newAgentData.agentType === "text2speech" && (
+                      {newAgentData.agentType === "edge_tts" && (
                         <div className="bg-black/40 p-4 rounded-lg border border-purple-900/30">
-                        <h4 className="text-sm font-medium text-purple-200 mb-3">Text to Speech Configuration</h4>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                          <Label htmlFor="voice" className="text-white font-medium">Voice</Label>
-                          <Select
-                            value={newAgentData.config.voice || ""}
-                            onValueChange={(value) =>
-                            setNewAgentData({
-                              ...newAgentData,
-                              config: { ...newAgentData.config, voice: value }
-                            })
-                            }
-                          >
-                            <SelectTrigger className="bg-black/50 border-purple-900/40 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all">
-                            <SelectValue placeholder="Select voice" />
-                            </SelectTrigger>
-                            <SelectContent className="max-h-[200px] overflow-y-auto">
-                            <div className="bg-black/90 border-purple-900/40 text-white"></div>
-                                  </SelectContent>
-                                </Select>
-                              </div>
+                          <h4 className="text-sm font-medium text-purple-200 mb-4 flex items-center">
+                            <Volume2 className="h-4 w-4 mr-2" />
+                            Text to Speech Configuration
+                          </h4>
+                          
+                          {/* Voice Selection */}
+                          <div className="space-y-4">
+                            <div className="space-y-2">
+                              <Label htmlFor="voice" className="text-white font-medium">Voice Language</Label>
+                              <Select
+                                value={newAgentData.config.voice || ""}
+                                onValueChange={(value) =>
+                                  setNewAgentData({
+                                    ...newAgentData,
+                                    config: { ...newAgentData.config, voice: value }
+                                  })
+                                }
+                              >
+                                <SelectTrigger className="bg-black/50 border-purple-900/40 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all">
+                                  <SelectValue placeholder="Select voice language" />
+                                </SelectTrigger>
+                                <SelectContent className="max-h-[200px] overflow-y-auto">
+                                  <div className="bg-black/90 border-purple-900/40 text-white">
+                                    {isLoadingTtsVoices ? (
+                                      <div className="p-2 text-center text-sm text-gray-400">Loading voices...</div>
+                                    ) : ttsVoices.length > 0 ? (
+                                      ttsVoices.map((voice) => (
+                                        <SelectItem key={voice.code} value={voice.code} className="hover:bg-purple-900/20">
+                                          <div className="flex items-center justify-between w-full">
+                                            <span>{voice.name}</span>
+                                            <Badge variant="outline" className="ml-2 text-xs">
+                                              {voice.gender}
+                                            </Badge>
+                                          </div>
+                                        </SelectItem>
+                                      ))
+                                    ) : (
+                                      <div className="p-2 text-center text-sm text-gray-400">
+                                        <div className="mb-2">No voices available</div>
+                                        <Button
+                                          onClick={fetchTtsVoices}
+                                          size="sm"
+                                          variant="outline"
+                                          className="text-xs border-purple-700/40 text-purple-300 hover:bg-purple-900/20"
+                                        >
+                                          Retry Loading Voices
+                                        </Button>
+                                      </div>
+                                    )}
+                                  </div>
+                                </SelectContent>
+                              </Select>
+                              
+                              {/* Show warning if no voices loaded */}
+                              {!isLoadingTtsVoices && ttsVoices.length === 0 && (
+                                <div className="bg-yellow-900/20 border border-yellow-800/30 rounded-md p-2">
+                                  <p className="text-yellow-300 text-xs">
+                                    ⚠️ Could not load voices from backend. Please ensure the TTS service is running.
+                                  </p>
+                                </div>
+                              )}
+                            </div>
 
-                              <div className="space-y-2">
-                                <Label htmlFor="rate" className="text-white font-medium">Speech Rate</Label>
-                                <Select
-                                  value={newAgentData.config.rate || "+0%"}
-                                  onValueChange={(value) =>
-                                    setNewAgentData({
-                                      ...newAgentData,
-                                      config: { ...newAgentData.config, rate: value }
-                                    })
-                                  }
-                                >
-                                  <SelectTrigger className="bg-black/50 border-purple-900/40 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all">
-                                    <SelectValue placeholder="Select rate" />
-                                  </SelectTrigger>
-                                  <SelectContent className="max-h-[200px] overflow-y-auto">
-                                    <div className="bg-black/90 border-purple-900/40 text-white">
-                                      <SelectItem value="-50%" className="hover:bg-purple-900/20">Very Slow</SelectItem>
-                                      <SelectItem value="-25%" className="hover:bg-purple-900/20">Slow</SelectItem>
-                                      <SelectItem value="+0%" className="hover:bg-purple-900/20">Normal</SelectItem>
-                                      <SelectItem value="+25%" className="hover:bg-purple-900/20">Fast</SelectItem>
-                                      <SelectItem value="+50%" className="hover:bg-purple-900/20">Very Fast</SelectItem>
+                            {/* Rate Slider */}
+                            <div className="space-y-3">
+                              <div className="flex items-center justify-between">
+                                <Label className="text-white font-medium">Speech Rate</Label>
+                                <span className="text-purple-300 text-sm font-mono">
+                                  {newAgentData.config.rate || "+0%"}
+                                </span>
+                              </div>
+                              <Slider
+                                value={[parseInt((newAgentData.config.rate || "+0%").replace(/[+%]/g, ""))]}
+                                onValueChange={(value) =>
+                                  setNewAgentData({
+                                    ...newAgentData,
+                                    config: { 
+                                      ...newAgentData.config, 
+                                      rate: value[0] >= 0 ? `+${value[0]}%` : `${value[0]}%`
+                                    }
+                                  })
+                                }
+                                max={50}
+                                min={-50}
+                                step={5}
+                                className="w-full"
+                              />
+                              <div className="flex justify-between text-xs text-gray-400">
+                                <span>Very Slow (-50%)</span>
+                                <span>Normal (0%)</span>
+                                <span>Very Fast (+50%)</span>
+                              </div>
+                            </div>
+
+                            {/* Volume Slider */}
+                            <div className="space-y-3">
+                              <div className="flex items-center justify-between">
+                                <Label className="text-white font-medium">Volume</Label>
+                                <span className="text-purple-300 text-sm font-mono">
+                                  {newAgentData.config.volume || "+0%"}
+                                </span>
+                              </div>
+                              <Slider
+                                value={[parseInt((newAgentData.config.volume || "+0%").replace(/[+%]/g, ""))]}
+                                onValueChange={(value) =>
+                                  setNewAgentData({
+                                    ...newAgentData,
+                                    config: { 
+                                      ...newAgentData.config, 
+                                      volume: value[0] >= 0 ? `+${value[0]}%` : `${value[0]}%`
+                                    }
+                                  })
+                                }
+                                max={100}
+                                min={-100}
+                                step={10}
+                                className="w-full"
+                              />
+                              <div className="flex justify-between text-xs text-gray-400">
+                                <span>Silent (-100%)</span>
+                                <span>Normal (0%)</span>
+                                <span>Loud (+100%)</span>
+                              </div>
+                            </div>
+
+                            {/* Pitch Slider */}
+                            <div className="space-y-3">
+                              <div className="flex items-center justify-between">
+                                <Label className="text-white font-medium">Pitch</Label>
+                                <span className="text-purple-300 text-sm font-mono">
+                                  {newAgentData.config.pitch || "+0Hz"}
+                                </span>
+                              </div>
+                              <Slider
+                                value={[parseInt((newAgentData.config.pitch || "+0Hz").replace(/[+Hz]/g, ""))]}
+                                onValueChange={(value) =>
+                                  setNewAgentData({
+                                    ...newAgentData,
+                                    config: { 
+                                      ...newAgentData.config, 
+                                      pitch: value[0] >= 0 ? `+${value[0]}Hz` : `${value[0]}Hz`
+                                    }
+                                  })
+                                }
+                                max={50}
+                                min={-50}
+                                step={5}
+                                className="w-full"
+                              />
+                              <div className="flex justify-between text-xs text-gray-400">
+                                <span>Lower (-50Hz)</span>
+                                <span>Normal (0Hz)</span>
+                                <span>Higher (+50Hz)</span>
+                              </div>
+                            </div>
+
+                            {/* Test Section */}
+                            <div className="mt-6 p-4 bg-black/30 rounded-lg border border-purple-900/20">
+                              <h5 className="text-sm font-medium text-purple-200 mb-3">Test Configuration</h5>
+                              <div className="space-y-3">
+                                <div className="space-y-2">
+                                  <Label className="text-white text-sm">Test Text</Label>
+                                  <Textarea
+                                    value={testText}
+                                    onChange={(e) => setTestText(e.target.value)}
+                                    placeholder="Enter text to test the voice configuration..."
+                                    className="bg-black/50 border-purple-900/40 text-white text-sm min-h-[60px] focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all"
+                                  />
+                                </div>
+                                
+                                <div className="flex flex-col sm:flex-row gap-2">
+                                  <Button
+                                    onClick={testTtsConfiguration}
+                                    disabled={isTestingTts || !testText.trim() || !newAgentData.config.voice}
+                                    className="bg-gradient-to-r from-purple-600 to-purple-800 text-white hover:opacity-90 transition-all duration-300 flex items-center"
+                                    size="sm"
+                                  >
+                                    {isTestingTts ? (
+                                      <>
+                                        <Loader2 className="h-3 w-3 mr-2 animate-spin" />
+                                        Testing...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Play className="h-3 w-3 mr-2" />
+                                        Test Voice
+                                      </>
+                                    )}
+                                  </Button>
+                                  
+                                  {testAudioUrl && (
+                                    <div className="flex-1 space-y-2">
+                                      <audio 
+                                        controls 
+                                        className="w-full h-8"
+                                        key={testAudioUrl}
+                                        onError={(e) => {
+                                          console.error("Audio playback error:", e);
+                                          toast({
+                                            variant: "destructive",
+                                            title: "Audio Playback Error",
+                                            description: "Could not play the audio file. Check browser console for details.",
+                                          });
+                                        }}
+                                        onLoadStart={() => console.log("Audio loading started")}
+                                        onCanPlay={() => console.log("Audio can play")}
+                                        onLoadedData={() => console.log("Audio data loaded")}
+                                      >
+                                        <source src={testAudioUrl} type="audio/mpeg" />
+                                        <source src={testAudioUrl} type="audio/wav" />
+                                        <source src={testAudioUrl} type="audio/ogg" />
+                                        <source src={testAudioUrl} type="audio/mp4" />
+                                        Your browser does not support the audio element.
+                                      </audio>
+                                      
+                                      {/* Debug info */}
+                                      <div className="text-xs text-gray-500">
+                                        Audio URL: {testAudioUrl.substring(0, 50)}...
+                                      </div>
+                                      
+                                      {/* Download link as fallback */}
+                                      <a 
+                                        href={testAudioUrl} 
+                                        download="tts-test.mp3"
+                                        className="text-xs text-purple-400 hover:text-purple-300 underline"
+                                      >
+                                        Download audio file
+                                      </a>
                                     </div>
-                                  </SelectContent>
-                                </Select>                              </div>
+                                  )}
+                                </div>
+                                
+                                {!newAgentData.config.voice && (
+                                  <p className="text-xs text-red-400">Please select a voice to test</p>
+                                )}
+                              </div>
                             </div>
                           </div>
-                        )}
+                        </div>
+                      )}
 
-                        <div className="space-y-2 bg-black/40 p-4 rounded-lg border border-purple-900/30">
+                      <div className="space-y-2 bg-black/40 p-4 rounded-lg border border-purple-900/30">
                                                 <div className="space-y-2 bg-black/40 p-4 rounded-lg border border-purple-900/30">
                           <div className="flex items-center justify-between">
                           
