@@ -5,20 +5,17 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Separator } from "@/components/ui/separator"
 import { NavBar } from "@/components/nav-bar"
-import { ChevronLeft, Upload, User, Copy, Check } from "lucide-react"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { ChevronLeft, User, Copy, Check, Loader2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import Cookies from "js-cookie"
 import { getAccessToken, decodeJWT } from "@/lib/auth"
 import { useToast } from "@/components/ui/use-toast"
 
 export default function ProfilePage() {
-  const [isLoading, setIsLoading] = useState(false)
   const [isFetching, setIsFetching] = useState(true)
   const [isCopied, setIsCopied] = useState(false)
+  const [isLoadingStats, setIsLoadingStats] = useState(false)
   const router = useRouter()
   const { toast } = useToast()
   const [userData, setUserData] = useState({
@@ -28,7 +25,102 @@ export default function ProfilePage() {
     username: "",
     appsCreated: 0,
     generations: 0,
+    totalTokensThisMonth: 0,
   })
+
+  // Function to fetch user statistics
+  const fetchUserStats = async () => {
+    setIsLoadingStats(true)
+    try {
+      const token = getAccessToken()
+      const userId = Cookies.get("user_id")
+
+      if (!token || !userId) {
+        console.error("No token or user ID found")
+        return
+      }
+
+      // Fetch Apps Created (mini-services where owner_id matches current user)
+      const miniServicesResponse = await fetch(`http://127.0.0.1:8000/api/v1/mini-services?current_user_id=${userId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        }
+      })
+
+      let appsCreated = 0
+      if (miniServicesResponse.ok) {
+        const miniServices = await miniServicesResponse.json()
+        // Count services where the owner_id matches the current user
+        appsCreated = miniServices.filter((service: any) => service.owner_id?.toString() === userId).length
+        console.log("Apps created:", appsCreated)
+      } else {
+        console.error("Failed to fetch mini-services:", miniServicesResponse.status)
+      }      // Fetch Generations (all processes for current user with high limit)
+      const processesResponse = await fetch(`http://127.0.0.1:8000/api/v1/processes/?skip=0&limit=10000&current_user_id=${userId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        }
+      })
+
+      let generations = 0
+      let totalTokensThisMonth = 0
+      if (processesResponse.ok) {
+        const processes = await processesResponse.json()
+        generations = processes.length
+        
+        // Calculate total tokens used this month
+        const currentDate = new Date()
+        const currentMonth = currentDate.getMonth()
+        const currentYear = currentDate.getFullYear()
+          // Filter processes for current month
+        const currentMonthProcesses = processes.filter((process: any) => {
+          const processDate = new Date(process.created_at)
+          return processDate.getMonth() === currentMonth && processDate.getFullYear() === currentYear
+        })
+        
+        console.log(`Current month: ${currentMonth + 1}/${currentYear}`)
+        console.log(`Total processes: ${processes.length}`)
+        console.log(`Current month processes: ${currentMonthProcesses.length}`)
+        
+        totalTokensThisMonth = currentMonthProcesses.reduce((total: number, process: any) => {
+          const tokens = process.total_tokens
+          if (tokens) {            // Always use total_tokens field as it's most reliable
+            let tokenCount = tokens.total_tokens ?? 0
+            
+            // Log token details for debugging
+            console.log(`Process ${process.id}: ${tokenCount} tokens (${process.created_at})`)
+            
+            return total + tokenCount
+          }
+          return total
+        }, 0)
+        
+        console.log("Generations:", generations)
+        console.log("Total tokens this month:", totalTokensThisMonth)
+      } else {
+        console.error("Failed to fetch processes:", processesResponse.status)
+      }
+
+      // Update userData with real statistics
+      setUserData(prevData => ({
+        ...prevData,
+        appsCreated,
+        generations,
+        totalTokensThisMonth
+      }))
+
+    } catch (error) {
+      console.error("Error fetching user stats:", error)
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to load user statistics"
+      })    } finally {
+      setIsLoadingStats(false)
+    }
+  }
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -36,7 +128,6 @@ export default function ProfilePage() {
       try {
         // Get user email from cookie
         const userEmail = Cookies.get("user_email")
-        const userId = Cookies.get("user_id")
         const token = getAccessToken()
 
         if (!token) {
@@ -54,10 +145,10 @@ export default function ProfilePage() {
 
           setUserData({
             ...userData,
-            email: decodedToken.email || userEmail || "",
-            username: decodedToken.username || "",
-            firstName: nameParts[0] || "",
-            lastName: nameParts.slice(1).join(" ") || "",
+            email: decodedToken.email ?? userEmail ?? "",
+            username: decodedToken.username ?? "",
+            firstName: nameParts[0] ?? "",
+            lastName: nameParts.slice(1).join(" ") ?? "",
             // You can add more fields here as needed
           })
         }
@@ -79,54 +170,12 @@ export default function ProfilePage() {
 
     fetchUserData()
   }, [router])
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
-
-    try {
-      const token = getAccessToken()
-      const userId = Cookies.get("user_id")
-
-      if (!token || !userId) {
-        throw new Error("Authentication required")
-      }
-
-      // Here you would make an API call to update the user's profile
-      // const response = await fetch(`http://127.0.0.1:8000/api/v1/users/${userId}`, {
-      //   method: 'PUT',
-      //   headers: {
-      //     'Content-Type': 'application/json',
-      //     'Authorization': `Bearer ${token}`
-      //   },
-      //   body: JSON.stringify({
-      //     firstName: userData.firstName,
-      //     lastName: userData.lastName,
-      //     email: userData.email,
-      //     bio: userData.bio,
-      //     website: userData.website
-      //   })
-      // })
-
-      // Simulate API call for now
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-
-      // Show success message or handle response
-      console.log("Profile updated successfully")
-    } catch (error) {
-      console.error("Error updating profile:", error)
-    } finally {
-      setIsLoading(false)
+  // Fetch user statistics after user data is loaded
+  useEffect(() => {
+    if (!isFetching && userData.email) {
+      fetchUserStats()
     }
-  }
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { id, value } = e.target
-    setUserData((prev) => ({
-      ...prev,
-      [id]: value,
-    }))
-  }
+  }, [isFetching, userData.email])
 
   const copyToClipboard = async (text: string) => {
     try {
@@ -218,23 +267,33 @@ export default function ProfilePage() {
                     <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div>
                     <span>Active</span>
                   </div>
-                </div>
-
-                {/* Enhanced Stats */}
+                </div>                {/* Enhanced Stats */}
                 <div className="grid grid-cols-2 gap-4 min-w-[280px]">
                   <div className="bg-gradient-to-br from-purple-900/30 to-purple-800/20 rounded-xl p-4 border border-purple-700/30 hover:border-purple-500/50 transition-all duration-300 group">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm text-gray-400 font-medium">Apps Created</span>
                       <div className="w-2 h-2 bg-purple-400 rounded-full group-hover:animate-pulse"></div>
                     </div>
-                    <div className="text-2xl font-bold text-white">{userData.appsCreated}</div>
+                    <div className="text-2xl font-bold text-white flex items-center">
+                      {isLoadingStats ? (
+                        <Loader2 className="h-6 w-6 animate-spin text-purple-400" />
+                      ) : (
+                        userData.appsCreated
+                      )}
+                    </div>
                   </div>
                   <div className="bg-gradient-to-br from-blue-900/30 to-blue-800/20 rounded-xl p-4 border border-blue-700/30 hover:border-blue-500/50 transition-all duration-300 group">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm text-gray-400 font-medium">Generations</span>
                       <div className="w-2 h-2 bg-blue-400 rounded-full group-hover:animate-pulse"></div>
                     </div>
-                    <div className="text-2xl font-bold text-white">{userData.generations}</div>
+                    <div className="text-2xl font-bold text-white flex items-center">
+                      {isLoadingStats ? (
+                        <Loader2 className="h-6 w-6 animate-spin text-blue-400" />
+                      ) : (
+                        userData.generations
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -312,17 +371,21 @@ export default function ProfilePage() {
                     Last updated: Now
                   </div>
                 </div>
-                
-                <div className="grid md:grid-cols-3 gap-6">
-                  <div className="bg-gradient-to-br from-purple-900/30 to-purple-800/20 rounded-xl p-6 border border-purple-700/30 hover:border-purple-500/50 transition-all duration-300 group relative overflow-hidden">
+                  <div className="grid md:grid-cols-3 gap-6">                  <div className="bg-gradient-to-br from-purple-900/30 to-purple-800/20 rounded-xl p-6 border border-purple-700/30 hover:border-purple-500/50 transition-all duration-300 group relative overflow-hidden">
                     <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-transparent"></div>
                     <div className="relative z-10">
                       <div className="flex items-center justify-between mb-3">
                         <div className="text-sm text-gray-400 font-medium">Total API Calls</div>
                         <div className="w-2 h-2 bg-purple-400 rounded-full group-hover:animate-pulse"></div>
                       </div>
-                      <div className="text-3xl font-bold text-white mb-2">12,543</div>
-                      <div className="text-xs text-green-400">+23% from last month</div>
+                      <div className="text-3xl font-bold text-white mb-2 flex items-center">
+                        {isLoadingStats ? (
+                          <Loader2 className="h-6 w-6 animate-spin text-purple-400" />
+                        ) : (
+                          userData.generations.toLocaleString()
+                        )}
+                      </div>
+                      <div className="text-xs text-green-400">All time</div>
                     </div>
                   </div>
                   
@@ -330,11 +393,17 @@ export default function ProfilePage() {
                     <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent"></div>
                     <div className="relative z-10">
                       <div className="flex items-center justify-between mb-3">
-                        <div className="text-sm text-gray-400 font-medium">Active API Keys</div>
+                        <div className="text-sm text-gray-400 font-medium">Apps Created</div>
                         <div className="w-2 h-2 bg-blue-400 rounded-full group-hover:animate-pulse"></div>
                       </div>
-                      <div className="text-3xl font-bold text-white mb-2">3</div>
-                      <div className="text-xs text-gray-400">2 production, 1 development</div>
+                      <div className="text-3xl font-bold text-white mb-2 flex items-center">
+                        {isLoadingStats ? (
+                          <Loader2 className="h-6 w-6 animate-spin text-blue-400" />
+                        ) : (
+                          userData.appsCreated
+                        )}
+                      </div>
+                      <div className="text-xs text-gray-400">Total services</div>
                     </div>
                   </div>
                   
@@ -342,11 +411,17 @@ export default function ProfilePage() {
                     <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent"></div>
                     <div className="relative z-10">
                       <div className="flex items-center justify-between mb-3">
-                        <div className="text-sm text-gray-400 font-medium">Usage This Month</div>
+                        <div className="text-sm text-gray-400 font-medium">Tokens This Month</div>
                         <div className="w-2 h-2 bg-emerald-400 rounded-full group-hover:animate-pulse"></div>
                       </div>
-                      <div className="text-3xl font-bold text-white mb-2">2.1GB</div>
-                      <div className="text-xs text-emerald-400">67% of quota used</div>
+                      <div className="text-3xl font-bold text-white mb-2 flex items-center">
+                        {isLoadingStats ? (
+                          <Loader2 className="h-6 w-6 animate-spin text-emerald-400" />
+                        ) : (
+                          userData.totalTokensThisMonth.toLocaleString()
+                        )}
+                      </div>
+                      <div className="text-xs text-emerald-400">API usage</div>
                     </div>
                   </div>
                 </div>
