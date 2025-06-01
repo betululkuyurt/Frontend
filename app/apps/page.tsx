@@ -1053,7 +1053,7 @@ export default function DashboardPage() {
                   Create New Mini Service
                 </Button>
               </div>              {/* Scrollable container for services */}              <div 
-                className="max-h-[700px] overflow-y-auto pr-2 custom-scrollbar px-4 py-6"
+                className="max-h-[700px] overflow-y-auto pr-2 custom-scrollbar px-4 py-6 bg-black/60 backdrop-blur-md rounded-xl border border-purple-900/30"
                 style={{
                   scrollbarWidth: 'thin',
                   scrollbarColor: '#8b5cf6 transparent'
