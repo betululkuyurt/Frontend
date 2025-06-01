@@ -978,7 +978,7 @@ export default function DashboardPage() {
                     className="data-[state=active]:bg-purple-600 data-[state=active]:text-white flex items-center gap-2"
                   >
                     <Star className="h-4 w-4" />
-                    Favourites
+                    Favorites
                   </TabsTrigger>
                   <TabsTrigger 
                     value="created" 
@@ -1097,7 +1097,7 @@ export default function DashboardPage() {
               <div className="w-16 h-16 bg-purple-600/10 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Star className="h-8 w-8 text-purple-400 opacity-60" />
               </div>
-              <h3 className="text-white font-medium text-lg mb-1">No favourites yet</h3>
+              <h3 className="text-white font-medium text-lg mb-1">No favorites yet</h3>
               <p className="text-gray-400">
                 Star your favourite services to see them here.
               </p>
