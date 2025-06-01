@@ -871,8 +871,7 @@ export default function DashboardPage() {
                       <SelectItem value="all">All Inputs</SelectItem>
                       <SelectItem value="text">Text</SelectItem>
                       <SelectItem value="image">Image</SelectItem>
-                      <SelectItem value="audio">Audio</SelectItem>
-                      <SelectItem value="video">Video</SelectItem>
+                      <SelectItem value="sound">Audio/Video</SelectItem>
                       <SelectItem value="document">Document</SelectItem>
                     </SelectContent>
                   </Select>
@@ -885,8 +884,7 @@ export default function DashboardPage() {
                       <SelectItem value="all">All Outputs</SelectItem>
                       <SelectItem value="text">Text</SelectItem>
                       <SelectItem value="image">Image</SelectItem>
-                      <SelectItem value="audio">Audio</SelectItem>
-                      <SelectItem value="video">Video</SelectItem>
+                      <SelectItem value="sound">Audio/Video</SelectItem>
                       <SelectItem value="document">Document</SelectItem>
                     </SelectContent>
                   </Select>

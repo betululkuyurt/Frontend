@@ -372,7 +372,7 @@ export function MiniAppCard({
                   </div>
                 </div>                {/* Enhanced "Run Service" button with modern glassmorphism */}
                 <button
-                  className="absolute bottom-0 left-0 right-0 text-center py-4 bg-gradient-to-r from-purple-600/90 via-blue-600/90 to-purple-600/90 hover:from-purple-500 hover:via-blue-500 hover:to-purple-500 text-white transition-all duration-200 border-t border-purple-400/30 text-sm font-semibold flex items-center justify-center group/button rounded-b-xl backdrop-blur-sm hover:backdrop-blur-md shadow-lg hover:shadow-purple-500/25"
+                  className="absolute bottom-0 left-0 right-0 text-center py-4 bg-gradient-to-r from-purple-600/20 via-blue-600/15 to-purple-600/20 hover:from-purple-500/30 hover:via-blue-500/25 hover:to-purple-500/30 text-white transition-all duration-200 border-t border-purple-400/20 text-sm font-semibold flex items-center justify-center group/button rounded-b-xl backdrop-blur-md hover:backdrop-blur-lg shadow-lg hover:shadow-purple-500/15"
                 >
                   <div className="flex items-center space-x-2 relative z-10">
                     <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center transition-all duration-200 group-hover/button:bg-white/30">
