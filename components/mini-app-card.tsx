@@ -360,6 +360,8 @@ export function MiniAppCard({
                       <span className="text-orange-300 text-[10px] font-medium">0 favorites</span>
                     </div>
                     
+                    
+                    
                     {is_enhanced === true && (
                       <div className="inline-flex items-center bg-gradient-to-r from-yellow-500/10 to-orange-500/10 border border-yellow-400/20 rounded-full px-2 py-1">
                         <span className="text-yellow-400 text-xs">✨</span>
@@ -467,12 +469,26 @@ export function MiniAppCard({
                   <div className="relative z-10">
                     <span className="block text-blue-300 text-[10px] font-medium mb-1">Avg. API Token Usage</span>
                     <span className="text-gray-200 text-[10px] font-semibold">
-                      {usageStats?.average_token_usage?.total_tokens !== undefined && 
-                       !isNaN(usageStats.average_token_usage.total_tokens) && 
-                       usageStats.average_token_usage.total_tokens > 0 
-                        ? Math.round(usageStats.average_token_usage.total_tokens).toLocaleString()
-                        : "—"
-                      }
+                      {(() => {
+                        const hasTokenUsage = usageStats?.average_token_usage?.total_tokens !== undefined && 
+                                            !isNaN(usageStats.average_token_usage.total_tokens) && 
+                                            usageStats.average_token_usage.total_tokens > 0;
+                        const hasRuns = usageStats?.run_time !== undefined && 
+                                       !isNaN(usageStats.run_time) && 
+                                       usageStats.run_time > 0;
+                        
+                        if (hasTokenUsage) {
+                          return Math.round(usageStats.average_token_usage.total_tokens).toLocaleString();
+                        } else if (hasRuns && !hasTokenUsage) {
+                          return (
+                            <span className="text-emerald-300 text-[9px] leading-tight">
+                              No API keys required
+                            </span>
+                          );
+                        } else {
+                          return "—";
+                        }
+                      })()}
                     </span>
                   </div>
                 </div>
