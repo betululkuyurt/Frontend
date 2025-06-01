@@ -69,6 +69,7 @@ interface Service {
   color: string
   isCustom?: boolean
   owner_id?: number
+  owner_username?: string
   onDelete?: (id: number) => Promise<boolean> | boolean
   usageStats?: {
     average_token_usage: {
@@ -97,6 +98,7 @@ interface MiniService {
   input_type: string
   output_type: string
   owner_id: number
+  owner_username?: string
   average_token_usage: any
   run_time: number
   is_enhanced: boolean
@@ -383,9 +385,7 @@ export default function DashboardPage() {
               iconName = "Headphones"
             } else if (service.input_type === "image" || service.output_type === "image") {
               iconName = "ImageIcon"
-            }
-
-            // Get color based on service type
+            }            // Get color based on service type
             const color = getColorForService(service.input_type, service.output_type)
 
             return {
@@ -397,6 +397,7 @@ export default function DashboardPage() {
               color,
               isCustom: true, // Mark as custom so it can be deleted
               owner_id: service.owner_id, // Add owner_id for filtering
+              owner_username: service.owner_username, // Add owner_username from API
               onDelete: handleMiniServiceDelete, // Add delete handler
               usageStats: {
                 average_token_usage: service.average_token_usage,
@@ -1051,9 +1052,8 @@ export default function DashboardPage() {
                   <Sparkles className="h-4 w-4 mr-2" />
                   Create New Mini Service
                 </Button>
-              </div>              {/* Scrollable container for services */}
-              <div 
-                className="max-h-[650px] overflow-y-auto pr-2 custom-scrollbar px-4 py-6"
+              </div>              {/* Scrollable container for services */}              <div 
+                className="max-h-[700px] overflow-y-auto pr-2 custom-scrollbar px-4 py-6"
                 style={{
                   scrollbarWidth: 'thin',
                   scrollbarColor: '#8b5cf6 transparent'
@@ -1065,12 +1065,11 @@ export default function DashboardPage() {
                     Array.from({ length: 6 }).map((_, index) => (
                       <div
                         key={`placeholder-${index}`}
-                        className="h-[220px] bg-black/40 backdrop-blur-sm rounded-xl border border-purple-900/30 animate-pulse"
+                        className="h-[320px] bg-black/40 backdrop-blur-sm rounded-xl border border-purple-900/30 animate-pulse"
                       />
                     ))
                   ) : (
-                    getFilteredMiniServices().map((service) => (
-                      <MiniAppCard
+                    getFilteredMiniServices().map((service) => (                      <MiniAppCard
                         key={`mini-service-${service.id}`}
                         title={service.name}
                         description={service.description}
@@ -1083,6 +1082,7 @@ export default function DashboardPage() {
                         usageStats={service.usageStats}
                         is_enhanced={service.is_enhanced}
                         requiresApiKey={service.requiresApiKey}
+                        owner_username={service.owner_username}
                       />
                     ))
                   )}

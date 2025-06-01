@@ -3,8 +3,8 @@
 import type React from "react"
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { ArrowRight, Trash2, Loader2, Clock, Cpu, Info, Play, RotateCcw } from "lucide-react"
-import { useState, useEffect, useCallback } from "react"
+import { ArrowRight, Trash2, Loader2, Info, Play, RotateCcw } from "lucide-react"
+import { useState, useEffect, useRef } from "react"
 import { deleteMiniService } from "@/lib/services"
 import {
   AlertDialog,
@@ -43,8 +43,9 @@ interface MiniAppCardProps {
   id?: number
   onDelete?: (id: number) => Promise<boolean> | boolean
   usageStats?: UsageStats
-  is_enhanced?: boolean
+  is_enhanced?: boolean | null
   requiresApiKey?: boolean
+  owner_username?: string
 }
 
 export function MiniAppCard({
@@ -60,12 +61,34 @@ export function MiniAppCard({
   usageStats,
   is_enhanced,
   requiresApiKey,
+  owner_username,
 }: Readonly<MiniAppCardProps>) {
   const router = useRouter()
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [isHovering, setIsHovering] = useState(false)
   const [isFlipped, setIsFlipped] = useState(false)
+  const [titleNeedsAnimation, setTitleNeedsAnimation] = useState(false)
+  const [backTitleNeedsAnimation, setBackTitleNeedsAnimation] = useState(false)
+  const titleRef = useRef<HTMLSpanElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const backTitleRef = useRef<HTMLSpanElement>(null)
+  const backContainerRef = useRef<HTMLDivElement>(null)
+
+  // Check if title needs animation on mount and when title changes
+  useEffect(() => {
+    if (titleRef.current && containerRef.current && !isAddCard) {
+      const titleWidth = titleRef.current.scrollWidth
+      const containerWidth = containerRef.current.clientWidth - 80 // Account for buttons and padding
+      setTitleNeedsAnimation(titleWidth > containerWidth)
+    }
+    
+    if (backTitleRef.current && backContainerRef.current && !isAddCard) {
+      const titleWidth = backTitleRef.current.scrollWidth
+      const containerWidth = backContainerRef.current.clientWidth - 40 // Account for back button
+      setBackTitleNeedsAnimation(titleWidth > containerWidth)
+    }
+  }, [title, isAddCard, isFlipped])
 
   const handleClick = () => {
     if (isAddCard) {
@@ -149,14 +172,13 @@ export function MiniAppCard({
       setIsDeleting(false);
     }
   };  return (
-    <>
-      <div
+    <>      <div
         onClick={handleClick}
         onMouseEnter={() => setIsHovering(true)}
         onMouseLeave={() => setIsHovering(false)}
-        className="cursor-pointer group relative h-72 transform transition-all duration-300 p-3"
+        className="cursor-pointer group relative h-80 transform transition-all duration-300 p-3"
         style={{ perspective: '1000px' }}
-      >        {/* Background glow effects - positioned behind everything */}
+      >{/* Background glow effects - positioned behind everything */}
         <div
           className={cn(
             "absolute -inset-1 rounded-3xl bg-gradient-to-br opacity-0 group-hover:opacity-20 transition-all duration-700 blur-2xl",
@@ -221,10 +243,9 @@ export function MiniAppCard({
                   </h3>
                   <p className="text-gray-400 text-sm leading-relaxed max-w-xs">
                     Build a custom AI workflow with our intuitive drag-and-drop builder
-                  </p>
-                  <div className="inline-flex items-center text-purple-400 text-xs font-medium bg-purple-500/10 px-3 py-1 rounded-full">
+                  </p>                  <div className="inline-flex items-center text-purple-400 text-xs font-medium bg-purple-500/10 px-3 py-1 rounded-full">
                     <span className="w-2 h-2 bg-purple-400 rounded-full mr-2 animate-pulse"></span>
-                    Click to get started
+                    {" "}Click to get started
                   </div>
                 </div>
               </>
@@ -240,29 +261,43 @@ export function MiniAppCard({
                       {icon}
                     </div>
                   </div>
-                  
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between mb-1">
-                      <h3 className="text-base font-bold text-white tracking-wide flex items-center bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
-                        <span className="truncate">{title}</span>
-                        {is_enhanced && (
-                          <span className="ml-2 text-yellow-400 animate-pulse" title="Enhanced Service">
+                    <div className="flex-1 min-w-0 pr-20" ref={containerRef}>                    <div className="flex items-center mb-1">
+                      <h3 className="text-base font-bold text-white tracking-wide flex items-center bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent overflow-hidden">
+                        <span 
+                          ref={titleRef}
+                          className={cn(
+                            "whitespace-nowrap",
+                            titleNeedsAnimation && "title-slide"
+                          )}
+                        >
+                          {title}
+                        </span>
+                        {is_enhanced === true && (
+                          <span className="ml-2 text-yellow-400 animate-pulse flex-shrink-0" title="Enhanced Service">
                             ✨
                           </span>
                         )}
                       </h3>
                     </div>
                     
+                    {/* Owner username display */}
+                    {owner_username && (
+                      <div className="mb-2">
+                        <span className="text-xs text-gray-500">by </span>
+                        <span className="text-xs font-medium text-purple-300">{owner_username}</span>
+                      </div>
+                    )}
+                    
                     {/* Service type indicators */}
                     <div className="flex items-center space-x-2 mb-2">
                       <div className="inline-flex items-center text-xs font-medium text-gray-400 bg-gray-800/50 px-2 py-1 rounded-md">
                         <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full mr-1.5"></span>
-                        {usageStats?.input_type || "Text"}
+                        {usageStats?.input_type ?? "Text"}
                       </div>
                       <span className="text-gray-500">→</span>
                       <div className="inline-flex items-center text-xs font-medium text-gray-400 bg-gray-800/50 px-2 py-1 rounded-md">
                         <span className="w-1.5 h-1.5 bg-blue-400 rounded-full mr-1.5"></span>
-                        {usageStats?.output_type || "Text"}
+                        {usageStats?.output_type ?? "Text"}
                       </div>
                     </div>
                   </div>
@@ -300,9 +335,8 @@ export function MiniAppCard({
                     <div className="flex items-center justify-between mb-1">
                       <span className="block text-gray-400 text-xs font-medium">Tokens</span>
                       <div className="w-1.5 h-1.5 bg-purple-400 rounded-full group-hover/stat:animate-pulse"></div>
-                    </div>
-                    <span className="text-white font-bold text-lg">
-                      {usageStats?.average_token_usage?.total_tokens !== undefined ?
+                    </div>                    <span className="text-white font-bold text-lg">
+                      {usageStats?.average_token_usage?.total_tokens !== undefined && !isNaN(usageStats.average_token_usage.total_tokens) ?
                         Math.round(usageStats.average_token_usage.total_tokens) :
                         "—"
                       }
@@ -315,7 +349,7 @@ export function MiniAppCard({
                       <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full group-hover/stat:animate-pulse"></div>
                     </div>
                     <span className="text-white font-bold text-lg">
-                      {usageStats?.run_time !== undefined ?
+                      {usageStats?.run_time !== undefined && !isNaN(usageStats.run_time) ?
                         Math.round(usageStats.run_time) :
                         "—"
                       }
@@ -359,24 +393,37 @@ export function MiniAppCard({
                 >
                   <RotateCcw className="h-3 w-3" />
                 </button>
-              </div>
-
-              {/* Title */}
+              </div>              {/* Title */}
               <div className="flex items-center space-x-3 mb-4">
                 <div className={cn(
                   "w-8 h-8 rounded-lg flex items-center justify-center bg-gradient-to-br shadow-md",
                   color
                 )}>
                   {icon}
-                </div>
-                <h3 className="text-sm font-semibold text-white tracking-wide flex items-center">
-                  {title}
-                  {is_enhanced && (
-                    <span className="ml-2 text-yellow-400" title="Enhanced Service">
-                      ✨
+                </div>                <div className="flex-1 min-w-0" ref={backContainerRef}>
+                  <h3 className="text-sm font-semibold text-white tracking-wide flex items-center overflow-hidden">
+                    <span 
+                      ref={backTitleRef}
+                      className={cn(
+                        "whitespace-nowrap",
+                        backTitleNeedsAnimation && "title-slide"
+                      )}
+                    >
+                      {title}
                     </span>
+                    {is_enhanced === true && (
+                      <span className="ml-2 text-yellow-400 flex-shrink-0" title="Enhanced Service">
+                        ✨
+                      </span>
+                    )}
+                  </h3>
+                  {owner_username && (
+                    <div className="mt-1">
+                      <span className="text-[10px] text-gray-500">by </span>
+                      <span className="text-[10px] font-medium text-purple-300">{owner_username}</span>
+                    </div>
                   )}
-                </h3>
+                </div>
               </div>
 
               {/* Description */}
@@ -425,16 +472,28 @@ export function MiniAppCard({
             >
               {isDeleting ? "Deleting..." : "Yes, Delete"}
             </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <style jsx>{`
+          </AlertDialogFooter>        </AlertDialogContent>
+      </AlertDialog>      <style>{`
         .rotate-y-180 {
           transform: rotateY(180deg);
         }
         .transform-style-preserve-3d {
           transform-style: preserve-3d;
+        }
+        .title-slide {
+          display: inline-block;
+          animation: slide-text 10s linear infinite;
+        }
+        .title-slide:hover {
+          animation-play-state: paused;
+        }
+        @keyframes slide-text {
+          0%, 15% {
+            transform: translateX(0);
+          }
+          85%, 100% {
+            transform: translateX(calc(-100% + 120px));
+          }
         }
       `}</style>
     </>
