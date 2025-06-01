@@ -3,7 +3,7 @@
 import type React from "react"
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { ArrowRight, Trash2, Loader2, Info, Play, RotateCcw } from "lucide-react"
+import { ArrowRight, Trash2, Loader2, Info, Play, RotateCcw, Star } from "lucide-react"
 import { useState, useEffect, useRef } from "react"
 import { deleteMiniService } from "@/lib/services"
 import {
@@ -17,6 +17,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { toast } from "@/components/ui/use-toast"
+import { getAccessToken, decodeJWT } from "@/lib/auth"
 
 interface UsageStats {
   average_token_usage: {
@@ -75,17 +76,35 @@ export function MiniAppCard({
   const backTitleRef = useRef<HTMLSpanElement>(null)
   const backContainerRef = useRef<HTMLDivElement>(null)
 
+  // Check if current user is the owner of the service
+  const isCurrentUserOwner = (): boolean => {
+    if (!owner_username) return true // If no owner specified, allow delete (backward compatibility)
+    
+    try {
+      const token = getAccessToken()
+      if (!token) return false
+      
+      const decodedToken = decodeJWT(token)
+      if (!decodedToken?.username) return false
+      
+      return decodedToken.username === owner_username
+    } catch (error) {
+      console.error("Error checking user ownership:", error)
+      return false
+    }
+  }
+
   // Check if title needs animation on mount and when title changes
   useEffect(() => {
     if (titleRef.current && containerRef.current && !isAddCard) {
       const titleWidth = titleRef.current.scrollWidth
-      const containerWidth = containerRef.current.clientWidth - 80 // Account for buttons and padding
+      const containerWidth = containerRef.current.clientWidth - 60 // Account for smaller buttons and padding
       setTitleNeedsAnimation(titleWidth > containerWidth)
     }
     
     if (backTitleRef.current && backContainerRef.current && !isAddCard) {
       const titleWidth = backTitleRef.current.scrollWidth
-      const containerWidth = backContainerRef.current.clientWidth - 40 // Account for back button
+      const containerWidth = backContainerRef.current.clientWidth - 30 // Account for smaller back button
       setBackTitleNeedsAnimation(titleWidth > containerWidth)
     }
   }, [title, isAddCard, isFlipped])
@@ -176,20 +195,12 @@ export function MiniAppCard({
         onClick={handleClick}
         onMouseEnter={() => setIsHovering(true)}
         onMouseLeave={() => setIsHovering(false)}
-        className="cursor-pointer group relative h-80 transform transition-all duration-300 p-3"
+        className="cursor-pointer group relative h-64 transform transition-all duration-200 p-2"
         style={{ perspective: '1000px' }}
-      >{/* Background glow effects - positioned behind everything */}
+      >        {/* Lightweight background glow */}
         <div
           className={cn(
-            "absolute -inset-1 rounded-3xl bg-gradient-to-br opacity-0 group-hover:opacity-20 transition-all duration-700 blur-2xl",
-            color,
-          )}
-        />
-        
-        {/* Secondary glow layer for depth */}
-        <div
-          className={cn(
-            "absolute inset-0 rounded-2xl bg-gradient-to-br opacity-0 group-hover:opacity-10 transition-all duration-500 delay-100 blur-xl",
+            "absolute -inset-1 rounded-3xl bg-gradient-to-br opacity-0 group-hover:opacity-10 transition-opacity duration-200 blur-lg",
             color,
           )}
         />
@@ -197,72 +208,78 @@ export function MiniAppCard({
         {/* Card container with flip animation */}
         <div
           className={cn(
-            "h-full transform-style-preserve-3d transition-transform duration-700 relative z-10",
+            "h-full transform-style-preserve-3d transition-transform duration-400 relative z-10",
             isFlipped && "rotate-y-180"
           )}
           style={{ transformStyle: 'preserve-3d' }}
-        >{/* Front side of card */}          <div
+        >          {/* Front side of card */}          <div
             className={cn(
-              "h-full bg-transparent rounded-2xl border border-gray-700/50 flex flex-col transition-all duration-500 relative overflow-hidden absolute inset-3 shadow-2xl",
-              isHovering && "scale-[1.01] shadow-purple-900/30 border-purple-600/60",
-              isAddCard ? "p-6 justify-center items-center" : "p-5"
+              "h-full bg-gradient-to-br from-gray-900/40 via-gray-800/30 to-gray-900/40 backdrop-blur-xl rounded-xl border border-gray-600/30 flex flex-col transition-all duration-200 relative overflow-hidden absolute inset-2 shadow-2xl",
+              isHovering && "border-purple-500/50 from-gray-900/60 via-gray-800/50 to-gray-900/60",
+              isAddCard ? "p-4 justify-center items-center" : "p-4"
             )}
             style={{ backfaceVisibility: 'hidden' }}
           >
-            {/* Background glow effect on hover */}
+            {/* Lightweight background glow effect on hover */}
             <div 
               className={cn(
-                "absolute inset-0 rounded-2xl bg-gradient-to-br opacity-0 transition-all duration-700",
-                isHovering && "opacity-20",
+                "absolute inset-0 rounded-2xl bg-gradient-to-br opacity-0 transition-opacity duration-200",
+                isHovering && "opacity-10",
                 color
               )}
-            />            {/* Animated background gradient mesh */}
+            />            {/* Subtle static background with depth */}
             <div className="absolute inset-0 opacity-10">
-              <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-purple-500/20 via-transparent to-indigo-500/20 animate-pulse"></div>
-              <div className="absolute top-0 right-0 w-1/2 h-1/2 bg-gradient-to-bl from-pink-500/10 to-transparent rounded-full"></div>
-              <div className="absolute bottom-0 left-0 w-1/2 h-1/2 bg-gradient-to-tr from-blue-500/10 to-transparent rounded-full"></div>
+              <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-purple-500/20 via-transparent to-blue-500/20"></div>
+              <div className="absolute top-0 right-0 w-3/4 h-3/4 bg-gradient-to-bl from-pink-500/15 to-transparent rounded-full blur-xl"></div>
+              <div className="absolute bottom-0 left-0 w-3/4 h-3/4 bg-gradient-to-tr from-cyan-500/15 to-transparent rounded-full blur-xl"></div>
+              <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent"></div>
             </div>
 
-            {/* Enhanced border highlights */}
-            <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-transparent via-purple-500/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-            <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-purple-400/50 to-transparent"></div>            {isAddCard ? (
-              // Enhanced "Create New" card
-              <>
-                <div className={cn(
-                  "w-20 h-20 rounded-2xl flex items-center justify-center bg-gradient-to-br shadow-xl transition-all duration-500 group-hover:scale-110 group-hover:rotate-3 mb-6 relative overflow-hidden",
-                  color
+            {/* Simplified border effects */}
+            <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-transparent via-purple-500/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200"></div>
+            <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-purple-400/50 to-transparent group-hover:via-purple-300/70 transition-all duration-200"></div>
+            <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-blue-400/30 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-200"></div>            {isAddCard ? (
+              // Modern "Create New" card
+              <>                <div className={cn(
+                    "w-20 h-20 rounded-2xl flex items-center justify-center bg-gradient-to-br shadow-2xl transition-all duration-200 group-hover:scale-105 mb-6 relative overflow-hidden border border-white/10",
+                    color
                 )}>
-                  <div className="absolute inset-0 bg-white/10 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                  <div className="relative z-10 transform transition-transform duration-300 group-hover:scale-110">
+                  <div className="absolute inset-0 bg-white/10 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-200"></div>
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent rounded-2xl"></div>
+                  <div className="relative z-10 transform transition-transform duration-200 group-hover:scale-110">
                     {icon}
                   </div>
+                  {/* Static particles effect */}
+                  <div className="absolute top-2 right-2 w-1 h-1 bg-white/60 rounded-full"></div>
+                  <div className="absolute bottom-3 left-3 w-1.5 h-1.5 bg-purple-400/80 rounded-full"></div>
                 </div>
-                <div className="text-center space-y-3">
-                  <h3 className="text-white text-xl font-bold tracking-wide bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
+                <div className="text-center space-y-3 relative z-10">
+                  <h3 className="text-white text-xl font-bold tracking-wide bg-gradient-to-r from-white via-purple-100 to-blue-100 bg-clip-text text-transparent">
                     Create New Service
                   </h3>
-                  <p className="text-gray-400 text-sm leading-relaxed max-w-xs">
+                  <p className="text-gray-300 text-sm leading-relaxed max-w-xs mx-auto">
                     Build a custom AI workflow with our intuitive drag-and-drop builder
-                  </p>                  <div className="inline-flex items-center text-purple-400 text-xs font-medium bg-purple-500/10 px-3 py-1 rounded-full">
-                    <span className="w-2 h-2 bg-purple-400 rounded-full mr-2 animate-pulse"></span>
-                    {" "}Click to get started
+                  </p>                  <div className="inline-flex items-center text-purple-300 text-sm font-medium bg-gradient-to-r from-purple-500/10 via-blue-500/10 to-purple-500/10 backdrop-blur-sm border border-purple-400/20 px-4 py-2 rounded-full hover:border-purple-400/40 transition-all duration-200">
+                    <span className="w-2 h-2 bg-gradient-to-r from-purple-400 to-blue-400 rounded-full mr-2"></span>
+                    Click to get started
                   </div>
                 </div>
               </>
             ) : (              // Enhanced regular service card
               <>
-                {/* Service icon and title section with better visual hierarchy */}                <div className="flex items-start space-x-4 mb-4 relative z-10">
+                {/* Modern service icon and title section with glassmorphism */}                <div className="flex items-start space-x-3 mb-4 relative z-10">
                   <div className={cn(
-                    "w-12 h-12 rounded-xl flex items-center justify-center bg-gradient-to-br shadow-lg transition-all duration-500 group-hover:scale-110 relative overflow-hidden",
+                    "w-12 h-12 rounded-xl flex items-center justify-center bg-gradient-to-br shadow-xl transition-all duration-200 group-hover:scale-105 relative overflow-hidden flex-shrink-0 border border-white/10",
                     color
                   )}>
-                    <div className="absolute inset-0 bg-white/20 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                    <div className="relative z-10 transform transition-transform duration-300 group-hover:scale-110">
+                    <div className="absolute inset-0 bg-white/20 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200"></div>
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent rounded-xl"></div>
+                    <div className="relative z-10 transform transition-transform duration-200 group-hover:scale-105">
                       {icon}
                     </div>
                   </div>
-                    <div className="flex-1 min-w-0 pr-20" ref={containerRef}>                    <div className="flex items-center mb-1">
-                      <h3 className="text-base font-bold text-white tracking-wide flex items-center bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent overflow-hidden">
+                    <div className="flex-1 min-w-0 pr-16" ref={containerRef}>                    <div className="flex items-center mb-2">
+                      <h3 className="text-base font-bold text-white tracking-wide flex items-center bg-gradient-to-r from-white via-gray-100 to-gray-200 bg-clip-text text-transparent overflow-hidden">
                         <span 
                           ref={titleRef}
                           className={cn(
@@ -272,52 +289,50 @@ export function MiniAppCard({
                         >
                           {title}
                         </span>
-                        {is_enhanced === true && (
-                          <span className="ml-2 text-yellow-400 animate-pulse flex-shrink-0" title="Enhanced Service">
-                            ✨
-                          </span>
-                        )}
                       </h3>
                     </div>
                     
-                    {/* Owner username display */}
+                    {/* Owner username with modern styling */}
                     {owner_username && (
                       <div className="mb-2">
-                        <span className="text-xs text-gray-500">by </span>
-                        <span className="text-xs font-medium text-purple-300">{owner_username}</span>
+                        <div className="inline-flex items-center bg-gradient-to-r from-purple-500/10 to-blue-500/10 border border-purple-400/20 rounded-full px-2 py-1">
+                          <div className="w-1.5 h-1.5 bg-purple-400 rounded-full mr-1.5"></div>
+                          <span className="text-[11px] text-gray-400">created by </span>
+                          <span className="text-[11px] font-medium text-purple-300 ml-1">{owner_username}</span>
+                        </div>
                       </div>
                     )}
                     
-                    {/* Service type indicators */}
-                    <div className="flex items-center space-x-2 mb-2">
-                      <div className="inline-flex items-center text-xs font-medium text-gray-400 bg-gray-800/50 px-2 py-1 rounded-md">
+                    {/* Modern service type indicators with glassmorphism */}
+                    <div className="flex items-center space-x-2">
+                      <div className="inline-flex items-center text-[11px] font-medium text-gray-300 bg-gradient-to-r from-emerald-500/10 to-green-500/10 border border-emerald-400/20 px-2 py-1 rounded-full backdrop-blur-sm">
                         <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full mr-1.5"></span>
                         {usageStats?.input_type ?? "Text"}
                       </div>
-                      <span className="text-gray-500">→</span>
-                      <div className="inline-flex items-center text-xs font-medium text-gray-400 bg-gray-800/50 px-2 py-1 rounded-md">
+                      <div className="text-gray-500 text-xs">→</div>
+                      <div className="inline-flex items-center text-[11px] font-medium text-gray-300 bg-gradient-to-r from-blue-500/10 to-cyan-500/10 border border-blue-400/20 px-2 py-1 rounded-full backdrop-blur-sm">
                         <span className="w-1.5 h-1.5 bg-blue-400 rounded-full mr-1.5"></span>
                         {usageStats?.output_type ?? "Text"}
                       </div>
                     </div>
                   </div>
 
-                  {/* Action buttons */}
-                  <div className="absolute top-0 right-0 flex gap-1.5">                    {/* Info button */}
+                  {/* Modern action buttons with glassmorphism */}
+                  <div className="absolute top-0 right-0 flex gap-1.5">                    {/* Info button with modern design */}
                     <button
                       onClick={handleInfoClick}
-                      className="p-2 rounded-xl bg-gray-800/60 text-gray-400 hover:text-blue-400 hover:bg-blue-500/20 transition-all duration-300 hover:scale-110 border border-gray-700/50 hover:border-blue-500/50"
+                      className="p-2 rounded-xl bg-gradient-to-r from-gray-800/60 to-gray-900/60 backdrop-blur-sm text-gray-400 hover:text-blue-400 hover:from-blue-500/20 hover:to-blue-600/20 transition-all duration-150 border border-gray-600/30 hover:border-blue-500/50 shadow-lg"
                       aria-label="Show description"
                       title="Show description"
                     >
                       <Info className="h-3.5 w-3.5" />
                     </button>
                     
-                    {/* Delete button */}
-                    {isCustom && (
+                    {/* Delete button with modern design */}
+                    {isCustom && isCurrentUserOwner() && (
                       <button
                         onClick={handleDeleteClick}
-                        className="p-2 rounded-xl bg-gray-800/60 text-gray-400 hover:text-red-400 hover:bg-red-500/20 transition-all duration-300 hover:scale-110 border border-gray-700/50 hover:border-red-500/50"
+                        className="p-2 rounded-xl bg-gradient-to-r from-gray-800/60 to-gray-900/60 backdrop-blur-sm text-gray-400 hover:text-red-400 hover:from-red-500/20 hover:to-red-600/20 transition-all duration-150 border border-gray-600/30 hover:border-red-500/50 shadow-lg"
                         aria-label="Delete service"
                         disabled={isDeleting}
                       >
@@ -329,45 +344,47 @@ export function MiniAppCard({
                       </button>
                     )}
                   </div>
-                </div>                {/* Stats with enhanced visual design */}
-                <div className="grid grid-cols-2 gap-3 mb-6 relative z-10">
-                  <div className="bg-gradient-to-br from-gray-800/80 to-gray-900/80 rounded-xl p-3 border border-gray-700/30 hover:border-purple-500/30 transition-all duration-300 group/stat">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="block text-gray-400 text-xs font-medium">Tokens</span>
-                      <div className="w-1.5 h-1.5 bg-purple-400 rounded-full group-hover/stat:animate-pulse"></div>
-                    </div>                    <span className="text-white font-bold text-lg">
-                      {usageStats?.average_token_usage?.total_tokens !== undefined && !isNaN(usageStats.average_token_usage.total_tokens) ?
-                        Math.round(usageStats.average_token_usage.total_tokens) :
-                        "—"
-                      }
-                    </span>
+                </div>                {/* Modern stats badge with gradient background */}
+                <div className="flex justify-between items-center mb-4 relative z-10">
+                  {/* Runtime badge */}
+                  <div className="inline-flex items-center space-x-2 bg-gradient-to-r from-purple-500/10 via-blue-500/10 to-purple-500/10 backdrop-blur-sm border border-purple-400/20 rounded-full px-3 py-1.5 hover:border-purple-400/40 transition-all duration-150 group/stat">
+                    <div className="w-2 h-2 bg-gradient-to-r from-emerald-400 to-blue-400 rounded-full"></div>
+                    <span className="text-xs font-medium text-gray-300">{usageStats?.run_time !== undefined && !isNaN(usageStats.run_time) ? `${Math.round(usageStats.run_time)} runs` : "No runs"}</span>
                   </div>
                   
-                  <div className="bg-gradient-to-br from-gray-800/80 to-gray-900/80 rounded-xl p-3 border border-gray-700/30 hover:border-purple-500/30 transition-all duration-300 group/stat">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="block text-gray-400 text-xs font-medium">Runs</span>
-                      <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full group-hover/stat:animate-pulse"></div>
+                  {/* Status indicator */}
+                  <div className="flex items-center space-x-1">
+                    {/* Favorites badge */}
+                    <div className="inline-flex items-center bg-gradient-to-r from-orange-500/10 to-amber-500/10 border border-orange-400/20 rounded-full px-2 py-1">
+                      <Star className="h-3 w-3 text-orange-400 mr-1" />
+                      <span className="text-orange-300 text-[10px] font-medium">0 favorites</span>
                     </div>
-                    <span className="text-white font-bold text-lg">
-                      {usageStats?.run_time !== undefined && !isNaN(usageStats.run_time) ?
-                        Math.round(usageStats.run_time) :
-                        "—"
-                      }
-                    </span>
+                    
+                    {is_enhanced === true && (
+                      <div className="inline-flex items-center bg-gradient-to-r from-yellow-500/10 to-orange-500/10 border border-yellow-400/20 rounded-full px-2 py-1">
+                        <span className="text-yellow-400 text-xs">✨</span>
+                        <span className="text-yellow-300 text-[10px] font-medium ml-1">Enhanced</span>
+                      </div>
+                    )}
+                   
                   </div>
-                </div>                {/* Enhanced "Run Service" button with better hover effects */}
+                </div>                {/* Enhanced "Run Service" button with modern glassmorphism */}
                 <button
-                  className="absolute bottom-0 left-0 right-0 text-center py-4 bg-gradient-to-r from-purple-600/80 via-purple-700/80 to-purple-600/80 hover:from-purple-500/90 hover:via-purple-600/90 hover:to-purple-500/90 text-white transition-all duration-300 border-t border-purple-500/40 text-sm font-semibold flex items-center justify-center group/button"
+                  className="absolute bottom-0 left-0 right-0 text-center py-4 bg-gradient-to-r from-purple-600/90 via-blue-600/90 to-purple-600/90 hover:from-purple-500 hover:via-blue-500 hover:to-purple-500 text-white transition-all duration-200 border-t border-purple-400/30 text-sm font-semibold flex items-center justify-center group/button rounded-b-xl backdrop-blur-sm hover:backdrop-blur-md shadow-lg hover:shadow-purple-500/25"
                 >
                   <div className="flex items-center space-x-2 relative z-10">
-                    <Play className="h-4 w-4 transition-transform duration-300 group-hover/button:scale-110" />
-                    <span>Run Service</span>
-                    <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover/button:translate-x-1" />
+                    <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center transition-all duration-200 group-hover/button:bg-white/30">
+                      <Play className="h-3 w-3 fill-current" />
+                    </div>
+                    <span className="tracking-wide">Go to Service</span>
+                    <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover/button:translate-x-1" />
                   </div>
 
-                  {/* Enhanced shine effect */}
-                  <div className="absolute inset-0 opacity-0 group-hover/button:opacity-100 bg-gradient-to-r from-transparent via-white/10 to-transparent transition-opacity duration-700 ease-in-out"></div>
-                  <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent opacity-0 group-hover/button:opacity-100 transition-opacity duration-300"></div>
+                  {/* Subtle shimmer effect */}
+                  <div className="absolute inset-0 opacity-0 group-hover/button:opacity-100 bg-gradient-to-r from-transparent via-white/10 to-transparent transition-all duration-600 ease-in-out rounded-b-xl transform -skew-x-12 group-hover/button:translate-x-full"></div>
+                  
+                  {/* Top highlight */}
+                  <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/50 to-transparent opacity-60"></div>
                 </button>
               </>
             )}
@@ -375,76 +392,89 @@ export function MiniAppCard({
 
           {/* Back side of card (description) */}          {!isAddCard && (            <div
               className={cn(
-                "h-full bg-transparent rounded-xl border border-purple-900/40 flex flex-col transition-all duration-300 relative overflow-hidden absolute inset-2 p-4 rotate-y-180",
-                isHovering && "scale-[1.01] shadow-lg shadow-purple-900/20 z-10 border-purple-600/40"
+                "h-full bg-gradient-to-br from-gray-900/40 via-gray-800/30 to-gray-900/40 backdrop-blur-xl rounded-xl border flex flex-col transition-all duration-200 relative overflow-hidden absolute inset-2 p-4 rotate-y-180 shadow-2xl",
+                "border-gray-600/30 group-hover:border-purple-500/50"
               )}
               style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}
             >
-              {/* Subtle background pattern */}
-              <div className="absolute inset-0 opacity-5 bg-[radial-gradient(circle_at_center,_rgba(255,255,255,0.15)_0%,_transparent_70%)]"></div>
+              {/* Lightweight background glow effect on hover */}
+              <div 
+                className={cn(
+                  "absolute inset-0 rounded-2xl bg-gradient-to-br opacity-0 transition-opacity duration-200",
+                  isHovering && "opacity-10",
+                  color
+                )}
+              />
 
-              {/* Back button */}
-              <div className="absolute top-3 right-3">
+              {/* Subtle static background with depth */}
+              <div className="absolute inset-0 opacity-10">
+                <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-purple-500/20 via-transparent to-blue-500/20"></div>
+                <div className="absolute top-0 right-0 w-3/4 h-3/4 bg-gradient-to-bl from-pink-500/15 to-transparent rounded-full blur-xl"></div>
+                <div className="absolute bottom-0 left-0 w-3/4 h-3/4 bg-gradient-to-tr from-cyan-500/15 to-transparent rounded-full blur-xl"></div>
+                <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent"></div>
+              </div>
+
+              {/* RGB gradient border effects for whole card */}
+              <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-red-500/10 via-green-500/10 to-blue-500/10"></div>
+              <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-red-400/30 via-green-400/30 to-blue-400/30"></div>
+              <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-blue-400/30 via-purple-400/30 to-red-400/30"></div>
+              <div className="absolute left-0 top-0 bottom-0 w-px bg-gradient-to-b from-green-400/30 via-blue-400/30 to-purple-400/30"></div>
+              <div className="absolute right-0 top-0 bottom-0 w-px bg-gradient-to-b from-purple-400/30 via-red-400/30 to-green-400/30"></div>
+
+              {/* Modern back button with glassmorphism */}
+              <div className="absolute top-3 right-3 z-20">
                 <button
                   onClick={handleInfoClick}
-                  className="p-1.5 rounded-full bg-black/60 text-gray-400 hover:text-blue-400 hover:bg-black/80 transition-all hover:scale-110 z-10"
+                  className="p-2 rounded-xl bg-gradient-to-r from-gray-800/60 to-gray-900/60 backdrop-blur-sm text-gray-400 hover:text-blue-400 hover:from-blue-500/20 hover:to-blue-600/20 transition-all duration-150 border border-gray-600/30 hover:border-blue-500/50 shadow-lg"
                   aria-label="Go back"
                   title="Go back"
                 >
-                  <RotateCcw className="h-3 w-3" />
+                  <RotateCcw className="h-3.5 w-3.5" />
                 </button>
-              </div>              {/* Title */}
-              <div className="flex items-center space-x-3 mb-4">
-                <div className={cn(
-                  "w-8 h-8 rounded-lg flex items-center justify-center bg-gradient-to-br shadow-md",
-                  color
-                )}>
-                  {icon}
-                </div>                <div className="flex-1 min-w-0" ref={backContainerRef}>
-                  <h3 className="text-sm font-semibold text-white tracking-wide flex items-center overflow-hidden">
-                    <span 
-                      ref={backTitleRef}
-                      className={cn(
-                        "whitespace-nowrap",
-                        backTitleNeedsAnimation && "title-slide"
-                      )}
-                    >
-                      {title}
-                    </span>
-                    {is_enhanced === true && (
-                      <span className="ml-2 text-yellow-400 flex-shrink-0" title="Enhanced Service">
-                        ✨
-                      </span>
-                    )}
-                  </h3>
-                  {owner_username && (
-                    <div className="mt-1">
-                      <span className="text-[10px] text-gray-500">by </span>
-                      <span className="text-[10px] font-medium text-purple-300">{owner_username}</span>
+              </div>
+
+              {/* Modern description section - always show with fallback */}
+              <div className="flex-1 mb-3 relative z-10">
+                <div className="bg-gradient-to-br from-gray-900/60 via-gray-800/40 to-gray-900/60 backdrop-blur-sm rounded-xl p-4 h-full transition-all duration-200 relative overflow-hidden">
+                  <div className="relative z-10">
+                    <h4 className="text-sm font-semibold text-gray-200 mb-3 flex items-center">
+                      <div className="w-2 h-2 bg-gradient-to-r from-purple-400 to-blue-400 rounded-full mr-2"></div>
+                      Service Description
+                    </h4>
+                    <p className={`text-sm leading-relaxed ${description && description.trim() ? 'text-gray-300' : 'text-gray-500 italic'}`}>
+                      {description && description.trim() ? description : 'This service does not have any description.'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Compact stats grid without borders */}
+              <div className="grid grid-cols-2 gap-3 relative z-10 h-16">
+                {/* Service Type Card */}
+                <div className="bg-gradient-to-br from-gray-900/60 via-gray-800/40 to-gray-900/60 backdrop-blur-sm rounded-xl p-2 text-center transition-all duration-200 relative overflow-hidden h-full flex flex-col justify-center">
+                  <div className="relative z-10">
+                    <span className="block text-emerald-300 text-[10px] font-medium mb-1">Service Type</span>
+                    <div className="flex items-center justify-center space-x-1">
+                      <span className="text-gray-200 text-[10px] font-semibold">{usageStats?.input_type ?? "Text"}</span>
+                      <div className="text-emerald-400 text-[10px]">→</div>
+                      <span className="text-gray-200 text-[10px] font-semibold">{usageStats?.output_type ?? "Text"}</span>
                     </div>
-                  )}
+                  </div>
                 </div>
-              </div>
 
-              {/* Description */}
-              <div className="flex-1 overflow-y-auto">
-                <div className="bg-black/40 rounded-md p-3 h-full">
-                  <h4 className="text-xs font-medium text-purple-300 mb-2">Description</h4>
-                  <p className="text-gray-300 text-xs leading-relaxed">{description}</p>
-                </div>
-              </div>
-
-              {/* Quick stats on back */}
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <div className="bg-black/40 rounded-md p-2 text-center">
-                  <span className="block text-purple-300/80 text-[10px] font-medium">Type</span>
-                  <span className="text-gray-200 text-xs font-semibold">
-                    {usageStats?.input_type} → {usageStats?.output_type}
-                  </span>
-                </div>
-                <div className="bg-black/40 rounded-md p-2 text-center">
-                  <span className="block text-purple-300/80 text-[10px] font-medium">Status</span>
-                  <span className="text-green-400 text-xs font-semibold">Active</span>
+                {/* Tokens Usage Card */}
+                <div className="bg-gradient-to-br from-gray-900/60 via-gray-800/40 to-gray-900/60 backdrop-blur-sm rounded-xl p-2 text-center transition-all duration-200 relative overflow-hidden h-full flex flex-col justify-center">
+                  <div className="relative z-10">
+                    <span className="block text-blue-300 text-[10px] font-medium mb-1">Avg. API Token Usage</span>
+                    <span className="text-gray-200 text-[10px] font-semibold">
+                      {usageStats?.average_token_usage?.total_tokens !== undefined && 
+                       !isNaN(usageStats.average_token_usage.total_tokens) && 
+                       usageStats.average_token_usage.total_tokens > 0 
+                        ? Math.round(usageStats.average_token_usage.total_tokens).toLocaleString()
+                        : "—"
+                      }
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
