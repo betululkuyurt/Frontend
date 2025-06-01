@@ -27,6 +27,7 @@ export default function ProfilePage() {
     generations: 0,
     totalTokensThisMonth: 0,
   })
+  const [recentProcesses, setRecentProcesses] = useState<any[]>([])
 
   // Function to fetch user statistics
   const fetchUserStats = async () => {
@@ -96,9 +97,12 @@ export default function ProfilePage() {
           }
           return total
         }, 0)
-        
-        console.log("Generations:", generations)
+          console.log("Generations:", generations)
         console.log("Total tokens this month:", totalTokensThisMonth)
+        
+        // Store recent processes (last 10)
+        const recentProcessesList = processes.slice(0, 10)
+        setRecentProcesses(recentProcessesList)
       } else {
         console.error("Failed to fetch processes:", processesResponse.status)
       }
@@ -422,17 +426,93 @@ export default function ProfilePage() {
                         )}
                       </div>
                       <div className="text-xs text-emerald-400">API usage</div>
+                    </div>                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Recent Processes Section */}
+            <div className="bg-black/60 backdrop-blur-sm rounded-2xl border border-purple-900/30 p-8 relative overflow-hidden">
+              {/* Background decoration */}
+              <div className="absolute inset-0 bg-gradient-to-br from-indigo-900/10 via-transparent to-purple-900/10"></div>
+              
+              <div className="relative z-10">
+                <div className="flex items-center justify-between mb-8">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-indigo-600 to-indigo-800 flex items-center justify-center">
+                      <div className="w-3 h-3 border border-white rounded-sm"></div>
                     </div>
+                    <h2 className="text-xl font-semibold text-white">Recent Processes</h2>
+                  </div>
+                  <div className="text-xs text-gray-400 bg-gray-800/50 px-3 py-1 rounded-full">
+                    Last 10 processes
                   </div>
                 </div>
-                
-                {/* Usage chart placeholder */}
-                <div className="mt-8 bg-black/40 rounded-xl p-6 border border-gray-800/50">
-                  <h3 className="text-sm font-medium text-gray-300 mb-4">Monthly Usage Trend</h3>
-                  <div className="h-32 bg-gradient-to-r from-purple-500/10 via-blue-500/10 to-emerald-500/10 rounded-lg flex items-end justify-center">
-                    <div className="text-gray-500 text-sm">Chart visualization coming soon</div>
+
+                {isLoadingStats ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="h-8 w-8 animate-spin text-indigo-400" />
                   </div>
-                </div>
+                ) : recentProcesses.length === 0 ? (
+                  <div className="text-center py-12 text-gray-400">
+                    <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-800/50 flex items-center justify-center">
+                      <div className="w-8 h-8 border border-gray-600 rounded-sm"></div>
+                    </div>
+                    <p>No recent processes found</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {recentProcesses.map((process, index) => (
+                      <div 
+                        key={process.id} 
+                        className="bg-gradient-to-r from-gray-900/50 to-gray-800/30 rounded-xl p-4 border border-gray-700/30 hover:border-indigo-500/50 transition-all duration-300 group"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-4">
+                            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-indigo-600 to-indigo-800 flex items-center justify-center text-white font-semibold text-sm">
+                              {index + 1}
+                            </div>
+                            <div className="flex-grow">
+                              <div className="flex items-center space-x-3 mb-1">
+                                <span className="text-white font-medium">Process #{process.id}</span>
+                                {process.mini_service_id && (
+                                  <span className="text-xs text-indigo-400 bg-indigo-900/30 px-2 py-1 rounded-full">
+                                    Service: {process.mini_service_id}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center space-x-4 text-sm text-gray-400">
+                                <span>User: {process.user_id}</span>
+                                <span>•</span>
+                                <span>
+                                  {new Date(process.created_at).toLocaleDateString('en-US', {
+                                    month: 'short',
+                                    day: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  })}
+                                </span>
+                              </div>
+                            </div>
+                          </div>                          <div className="text-right">
+                            <div className="text-lg font-semibold text-white">
+                              {(() => {
+                                const tokens = process.total_tokens
+                                if (tokens) {
+                                  // Always use total_tokens field as it's most reliable
+                                  const tokenCount = tokens.total_tokens ?? 0
+                                  return tokenCount.toLocaleString()
+                                }
+                                return 'N/A'
+                              })()}
+                            </div>
+                            <div className="text-xs text-gray-400">tokens</div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>
