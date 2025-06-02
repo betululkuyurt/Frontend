@@ -2323,7 +2323,7 @@ export default function ServiceWorkflowBuilder() {
                     {/* --- END REACT FLOW CANVAS --- */}
                     {/* Agent Selection Panel - Modern Transparent Design */}
                     {selectedAgent && (
-                      <div className="fixed inset-6 bg-black/50 backdrop-blur-[100px] z-50 rounded-3xl border border-white/15 shadow-2xl shadow-purple-500/20 overflow-hidden">
+                      <div className="fixed inset-6 bg-black/50 backdrop-blur-[100px] z-50 rounded-3xl border border-white/15 shadow-2xl shadow-purple-500/20 overflow-hidden" >
                         {/* Subtle background effects */}
                         <div className="absolute inset-0 bg-gradient-to-br from-purple-600/8 via-black/10 to-blue-600/8"></div>
                         <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(147,51,234,0.08),transparent_60%)]"></div>
@@ -2740,7 +2740,7 @@ export default function ServiceWorkflowBuilder() {
                     </DialogTrigger>
 
                     <DialogContent
-                      className="bg-black/80 backdrop-blur-md border border-purple-700/50 text-white w-[95vw] sm:w-[90vw] md:w-[80vw] lg:w-[70vw] xl:w-[60vw] max-w-4xl shadow-xl relative rounded-xl z-50 overflow-y-auto max-h-[90vh]"
+                      className="bg-black/50 backdrop-blur-xl border border-white/20 text-white w-[95vw] sm:w-[90vw] md:w-[80vw] lg:w-[70vw] xl:w-[60vw] max-w-4xl shadow-2xl shadow-purple-500/30 relative rounded-2xl z-50 overflow-y-auto max-h-[90vh] backdrop-saturate-150"
                       style={{
                       top: "50%",
                       left: "50%",
@@ -2750,8 +2750,9 @@ export default function ServiceWorkflowBuilder() {
                     >
                       {/* Glow effects, placed inside and behind content */}
                       <div className="pointer-events-none absolute inset-0 z-0">
-                      <div className="absolute -top-24 -right-24 w-64 h-64 bg-purple-600/20 rounded-full blur-3xl" />
-                      <div className="absolute -bottom-32 -left-32 w-96 h-96 bg-indigo-600/20 rounded-full blur-3xl" />
+                      <div className="absolute -top-24 -right-24 w-64 h-64 bg-purple-600/10 rounded-full blur-3xl" />
+                      <div className="absolute -bottom-32 -left-32 w-96 h-96 bg-indigo-600/10 rounded-full blur-3xl" />
+                      <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-full h-full bg-gradient-to-br from-purple-600/5 via-transparent to-indigo-600/5 rounded-2xl" />
                       </div>
                       <DialogHeader className="relative z-10">
                       <DialogTitle className="text-xl font-semibold bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent">Create New Agent</DialogTitle>
@@ -2809,7 +2810,7 @@ export default function ServiceWorkflowBuilder() {
                             </div>
 
                             {/* Agent type grid */}
-                            <div className="max-h-[300px] overflow-y-auto bg-black/30 rounded-lg border border-purple-900/30 p-3">
+                            <div className="max-h-[300px] overflow-y-auto bg-black/50 backdrop-blur-sm rounded-lg border border-purple-900/40 p-3">
                               {isLoadingAgentTypes ? (
                                 <div className="p-2 text-center text-sm text-gray-400">
                                   <Loader2 className="h-5 w-5 animate-spin mx-auto mb-2" />
