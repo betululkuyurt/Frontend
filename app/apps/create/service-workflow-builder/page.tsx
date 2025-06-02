@@ -2222,56 +2222,10 @@ export default function ServiceWorkflowBuilder() {
                     />
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="icon" className="text-white font-medium">
-                        Icon
-                      </Label>
-                      <Select value={serviceData.icon} onValueChange={(value) => handleChange("icon", value)}>
-                        <SelectTrigger id="icon" className="bg-black/50 border-purple-900/50 text-white">
-                          <SelectValue placeholder="Select an icon" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <div className="bg-black/90 border-purple-900/50 text-white">
-                            {iconOptions.map((icon) => (
-                              <SelectItem key={icon.value} value={icon.value} className="flex items-center hover:bg-purple-900/20">
-                                <div className="flex items-center">
-                                  <icon.icon className="h-4 w-4 mr-2" />
-                                  <span>{icon.label}</span>
-                                </div>
-                              </SelectItem>
-                            ))}
-                          </div>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
+                  
 
-                  <div className="space-y-2">
-                    <Label htmlFor="placeholder" className="text-white font-medium">
-                      Input Placeholder
-                    </Label>
-                    <Input
-                      id="placeholder"
-                      value={serviceData.placeholder}
-                      onChange={(e) => handleChange("placeholder", e.target.value)}
-                      placeholder="E.g., Enter your prompt here..."
-                      className="bg-black/50 border-purple-900/50 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="buttonText" className="text-white font-medium">
-                      Button Text
-                    </Label>
-                    <Input
-                      id="buttonText"
-                      value={serviceData.buttonText}
-                      onChange={(e) => handleChange("buttonText", e.target.value)}
-                      placeholder="E.g., Generate"
-                      className="bg-black/50 border-purple-900/50 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all"
-                    />
-                  </div>
+                 
+                  
 
                   <div className="flex flex-col sm:flex-row justify-between items-center mt-8 gap-4">
                     <Button
@@ -2367,69 +2321,98 @@ export default function ServiceWorkflowBuilder() {
                       </div>
                     </ReactFlowProvider>
                     {/* --- END REACT FLOW CANVAS --- */}
-                    {/* Agent Selection Panel - Redesigned to be nearly full-screen */}
+                    {/* Agent Selection Panel - Modern Transparent Design */}
                     {selectedAgent && (
-                      <div className="fixed inset-4 bg-black/90 backdrop-blur-2xl z-50 rounded-2xl border border-purple-500/30 shadow-2xl shadow-purple-500/20 overflow-hidden">
-                        {/* Enhanced background effects */}
-                        <div className="absolute inset-0 bg-gradient-to-br from-purple-900/20 via-black/80 to-blue-900/20 backdrop-blur-3xl"></div>
-                        <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(147,51,234,0.1),transparent_50%)] animate-pulse"></div>
+                      <div className="fixed inset-6 bg-black/50 backdrop-blur-[100px] z-50 rounded-3xl border border-white/15 shadow-2xl shadow-purple-500/20 overflow-hidden">
+                        {/* Subtle background effects */}
+                        <div className="absolute inset-0 bg-gradient-to-br from-purple-600/8 via-black/10 to-blue-600/8"></div>
+                        <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(147,51,234,0.08),transparent_60%)]"></div>
                         
                         <div className="relative h-full flex flex-col">
-                          {/* Header with enhanced styling */}
-                          <div className="flex items-center justify-between p-6 border-b border-purple-500/20 bg-black/30 backdrop-blur-sm">
+                          {/* Compact Header */}
+                          <div className="flex items-center justify-between p-4 border-b border-white/15 bg-black/15 backdrop-blur-[80px]">
                             <div>
-                              <h3 className="text-2xl font-bold text-white mb-1">Select Agent</h3>
-                              <p className="text-gray-400 text-sm">Choose an agent to add to your workflow</p>
+                              <h3 className="text-lg font-semibold text-white/95">Select Agent</h3>
+                              <p className="text-gray-300/80 text-xs">Choose an agent to add to your workflow</p>
                             </div>
                             <Button 
                               variant="ghost" 
                               size="sm" 
-                              className="text-gray-400 hover:text-white hover:bg-purple-900/30 rounded-full h-10 w-10 p-0"
+                              className="text-gray-300/80 hover:text-white hover:bg-white/15 rounded-full h-8 w-8 p-0"
                               onClick={() => setSelectedAgent(null)}
                             >
-                              <X className="h-5 w-5" />
+                              <X className="h-4 w-4" />
                             </Button>
                           </div>
 
-                          {/* Main content area */}
-                          <div className="flex-1 p-6 space-y-6 overflow-y-auto">                            {/* Search and Filter Controls */}
-                            <div className="space-y-4">
-                              {/* Search input with enhanced styling */}
-                              <div className="relative w-full max-w-md">
+                          {/* Main content area - Compact */}
+                          <div 
+                            className="flex-1 p-4 space-y-4 overflow-y-auto"
+                            style={{
+                              scrollbarWidth: 'thin',
+                              scrollbarColor: 'rgba(147, 51, 234, 0.3) transparent',
+                            }}
+                          >
+                            <style jsx>{`
+                              div::-webkit-scrollbar {
+                                width: 8px;
+                              }
+                              div::-webkit-scrollbar-track {
+                                background: transparent;
+                              }
+                              div::-webkit-scrollbar-thumb {
+                                background: rgba(147, 51, 234, 0.3);
+                                border-radius: 4px;
+                                border: 2px solid transparent;
+                                background-clip: content-box;
+                              }
+                              div::-webkit-scrollbar-thumb:hover {
+                                background: rgba(147, 51, 234, 0.5);
+                                background-clip: content-box;
+                              }
+                            `}</style>
+                            {/* Search and Filter Controls - Compact */}
+                            <div className="space-y-3">
+                              {/* Compact Search input */}
+                              <div className="relative w-full max-w-sm">
                                 <div className="relative">
                                   <Input
                                     type="text"
                                     placeholder="Search agents..."
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="h-12 text-base border-0 bg-black/40 backdrop-blur-sm focus-visible:ring-2 focus-visible:ring-purple-500 text-white w-full pl-12 pr-10 rounded-xl border border-purple-500/30"
+                                    className="h-9 text-sm !bg-white/8 backdrop-blur-[60px] focus-visible:ring-1 focus-visible:ring-purple-400/60 text-white/95 w-full pl-9 pr-8 rounded-lg border border-white/15 placeholder:text-gray-400/80"
+                                    style={{ 
+                                      backgroundColor: 'rgba(255, 255, 255, 0.08) !important',
+                                      backdropFilter: 'blur(60px)',
+                                    }}
                                   />
-                                  <Search className="h-5 w-5 text-gray-400 absolute left-4 top-1/2 transform -translate-y-1/2" />
+                                  <Search className="h-4 w-4 text-gray-300/80 absolute left-3 top-1/2 transform -translate-y-1/2" />
                                   {searchQuery && (
                                     <Button
                                       variant="ghost"
                                       size="icon"
-                                      className="h-8 w-8 p-0 absolute right-2 top-1/2 transform -translate-y-1/2 hover:bg-purple-900/30"
+                                      className="h-6 w-6 p-0 absolute right-1 top-1/2 transform -translate-y-1/2 hover:bg-white/15"
                                       onClick={() => setSearchQuery("")}
                                     >
-                                      <X className="h-4 w-4 text-gray-400" />
+                                      <X className="h-3 w-3 text-gray-300/80" />
                                     </Button>
                                   )}
                                 </div>
                               </div>
 
-                              {/* Agent Ownership Filter Tabs */}
-                              <div className="space-y-3">
-                                <h4 className="text-sm font-medium text-gray-300">Agent Collection</h4>
-                                <div className="flex flex-wrap gap-2">
+                              {/* Compact Agent Ownership Filter Tabs */}
+                              <div className="space-y-2">
+                                <h4 className="text-xs font-medium text-gray-300/90">Agent Collection</h4>
+                                <div className="flex flex-wrap gap-1">
                                   {["All Agents", "My Agents", "My Favorites"].map((filter) => (
                                     <button
                                       key={filter}
                                       onClick={() => setAgentOwnershipFilter(filter as "All Agents" | "My Agents" | "My Favorites")}
-                                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                                      className={`px-3 py-1 rounded-md text-xs font-medium transition-all duration-200 ${
                                         agentOwnershipFilter === filter
-                                          ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/30 border border-purple-400'
-                                          : 'bg-black/40 text-gray-300 hover:text-white hover:bg-purple-900/30 border border-purple-900/30'
+                                          ? 'bg-purple-500/40 text-white/95 border border-purple-400/60'
+                                          : 'bg-white/8 text-gray-300/80 hover:text-white/95 hover:bg-white/15 border border-white/10'
                                       }`}
                                     >
                                       {filter}
@@ -2438,18 +2421,18 @@ export default function ServiceWorkflowBuilder() {
                                 </div>
                               </div>
 
-                              {/* Agent Type Filter Tabs */}
-                              <div className="space-y-3">
-                                <h4 className="text-sm font-medium text-gray-300">Filter by Agent Type</h4>
-                                <div className="flex flex-wrap gap-2">
+                              {/* Compact Agent Type Filter Tabs */}
+                              <div className="space-y-2">
+                                <h4 className="text-xs font-medium text-gray-300/90">Filter by Agent Type</h4>
+                                <div className="flex flex-wrap gap-1">
                                   {["All", "Gemini", "ChatGPT", "Claude", "TTS", "Media", "Document", "Translation", "Custom"].map((type) => (
                                     <button
                                       key={type}
                                       onClick={() => setAgentTypeFilter(type)}
-                                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                                      className={`px-3 py-1 rounded-md text-xs font-medium transition-all duration-200 ${
                                         agentTypeFilter === type
-                                          ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/30 border border-purple-400'
-                                          : 'bg-black/40 text-gray-300 hover:text-white hover:bg-purple-900/30 border border-purple-900/30'
+                                          ? 'bg-purple-500/40 text-white/95 border border-purple-400/60'
+                                          : 'bg-white/8 text-gray-300/80 hover:text-white/95 hover:bg-white/15 border border-white/10'
                                       }`}
                                     >
                                       {type}
@@ -2458,34 +2441,32 @@ export default function ServiceWorkflowBuilder() {
                                 </div>
                               </div>
 
-                              {/* Sorting Options */}
-                              <div className="flex items-center justify-between">
-                                <h4 className="text-sm font-medium text-gray-300">Sort by</h4>
-                                <Select value={agentSortBy} onValueChange={(value: any) => setAgentSortBy(value)}>
-                                  <SelectTrigger className="w-48 bg-black/40 border-purple-500/30 text-white h-10 rounded-lg">
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent className="bg-black/90 border-purple-500/30 backdrop-blur-xl">
-                                    <div className="bg-black/90 border-purple-900/30 text-white">
-                                      <SelectItem value="mostFavorited">Most Favorited</SelectItem>
-                                      <SelectItem value="trending">Trending</SelectItem>
-                                      <SelectItem value="recentlyAdded">Recently Added</SelectItem>
-                                    </div>
-                                  </SelectContent>
-                                </Select>
-                              </div>
+                              {/* Compact Sorting and Filter Options */}
+                              <div className="grid grid-cols-3 gap-2">
+                                <div className="col-span-1">
+                                  <Select value={agentSortBy} onValueChange={(value: any) => setAgentSortBy(value)}>
+                                    <SelectTrigger className="h-8 bg-white/8 border-white/15 text-white/95 text-xs rounded-md">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-black/60 border-white/25 backdrop-blur-[100px]">
+                                      <div className="bg-black/70 border-white/15 text-white/95">
+                                        <SelectItem value="mostFavorited">Most Favorited</SelectItem>
+                                        <SelectItem value="trending">Trending</SelectItem>
+                                        <SelectItem value="recentlyAdded">Recently Added</SelectItem>
+                                      </div>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
 
-                              {/* Input/Output Type Filters */}
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <Select
                                   value={filterTypes.inputType}
                                   onValueChange={handleInputTypeChange}
                                 >
-                                  <SelectTrigger className="bg-black/40 border-purple-500/30 text-white h-10 rounded-lg">
+                                  <SelectTrigger className="h-8 bg-white/10 backdrop-blur-[60px] border-white/15 text-white/95 text-xs rounded-md">
                                     <SelectValue placeholder="Input Type" />
                                   </SelectTrigger>
-                                  <SelectContent className="bg-black/90 border-purple-500/30 backdrop-blur-xl">
-                                    <div className="bg-black/90 border-purple-900/30 text-white">
+                                  <SelectContent className="bg-black/40 border-white/25 backdrop-blur-[120px]">
+                                    <div className="bg-black/30 border-white/15 text-white/95">
                                       <SelectItem value="select">All Inputs</SelectItem>
                                       {inputTypes.map((type) => (
                                         <SelectItem key={type.value} value={type.value}>
@@ -2502,11 +2483,11 @@ export default function ServiceWorkflowBuilder() {
                                   value={filterTypes.outputType}
                                   onValueChange={handleOutputTypeChange}
                                 >
-                                  <SelectTrigger className="bg-black/40 border-purple-500/30 text-white h-10 rounded-lg">
+                                  <SelectTrigger className="h-8 bg-white/10 backdrop-blur-[60px] border-white/15 text-white/95 text-xs rounded-md">
                                     <SelectValue placeholder="Output Type" />
                                   </SelectTrigger>
-                                  <SelectContent className="bg-black/90 border-purple-500/30 backdrop-blur-xl">
-                                    <div className="bg-black/90 border-purple-900/30 text-white">
+                                  <SelectContent className="bg-black/40 border-white/25 backdrop-blur-[120px]">
+                                    <div className="bg-black/30 border-white/15 text-white/95">
                                       <SelectItem value="select">All Outputs</SelectItem>
                                       {outputTypes.map((type) => (
                                         <SelectItem key={type.value} value={type.value}>
@@ -2520,83 +2501,83 @@ export default function ServiceWorkflowBuilder() {
                                   </SelectContent>
                                 </Select>
                               </div>
-                            </div>                            {/* Agent List with enhanced layout */}
+                            </div>                            {/* Agent List with compact transparent layout */}
                             <div className="flex-1">
                               {isLoading ? (
-                                <div className="flex items-center justify-center p-12">
-                                  <Loader2 className="h-8 w-8 animate-spin mr-3 text-purple-400" />
-                                  <span className="text-gray-400 text-lg">Loading available agents...</span>
+                                <div className="flex items-center justify-center p-8">
+                                  <Loader2 className="h-6 w-6 animate-spin mr-2 text-purple-400/70" />
+                                  <span className="text-gray-300/70 text-sm">Loading available agents...</span>
                                 </div>
                               ) : (
-                                <div className="space-y-6">
+                                <div className="space-y-4">
                                   {/* Handle My Favorites special case */}
                                   {agentOwnershipFilter === "My Favorites" ? (
                                     // **[UPDATED]** - Show actual favorites or empty state
                                     getFilteredAgents().allAgents.length > 0 ? (
                                       <div>
-                                        <h5 className="text-lg font-semibold text-white mb-4 flex items-center">
-                                          <div className="w-3 h-3 bg-yellow-500 rounded-full mr-3"></div>
+                                        <h5 className="text-sm font-medium text-white/90 mb-3 flex items-center">
+                                          <div className="w-2 h-2 bg-yellow-400/60 rounded-full mr-2"></div>
                                           My Favorites ({getFilteredAgents().allAgents.length})
                                         </h5>
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-4">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                                           {getFilteredAgents().allAgents.map((agent) => (
                                             <div
                                               key={agent.id}
-                                              className="bg-black/50 backdrop-blur-sm rounded-xl border border-purple-500/30 p-4 cursor-pointer hover:border-purple-400 hover:bg-black/60 transition-all duration-200 hover:scale-105 hover:shadow-lg hover:shadow-purple-500/20 group relative"
+                                              className="bg-white/3 backdrop-blur-xl rounded-lg border border-white/10 p-3 cursor-pointer hover:border-white/20 hover:bg-white/8 transition-all duration-200 hover:scale-[1.02] group relative"
                                               onClick={() => addAgentToWorkflow(agent.id)}
                                             >
-                                              {/* Info and Favorite Buttons */}
-                                              <div className="absolute top-3 right-3 flex items-center gap-1 z-10">
-                                                <span className="text-xs text-yellow-300 font-medium">
+                                              {/* Info and Favorite Buttons - Compact */}
+                                              <div className="absolute top-2 right-2 flex items-center gap-1 z-10">
+                                                <span className="text-xs text-yellow-300/80 font-medium">
                                                   {agentFavoriteCounts[agent.id] || agent.favorites || 0}
                                                 </span>
                                                 
                                                 <button
                                                   onClick={(e) => toggleFavorite(agent.id, e)}
-                                                  className={`w-7 h-7 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110 ${
+                                                  className={`w-6 h-6 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110 ${
                                                     favoritedAgents.has(agent.id)
-                                                      ? 'bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30'
-                                                      : 'bg-black/40 text-yellow-400/60 hover:bg-yellow-500/10 hover:text-yellow-400'
+                                                      ? 'bg-yellow-400/20 text-yellow-400/90 hover:bg-yellow-400/30'
+                                                      : 'bg-white/10 text-yellow-400/60 hover:bg-yellow-400/10 hover:text-yellow-400/80'
                                                   }`}
                                                   title={favoritedAgents.has(agent.id) ? "Remove from favorites" : "Add to favorites"}
                                                 >
                                                   <Star 
-                                                    className={`h-4 w-4 transition-all duration-200 ${
-                                                      favoritedAgents.has(agent.id) ? 'fill-yellow-400' : 'stroke-2'
+                                                    className={`h-3 w-3 transition-all duration-200 ${
+                                                      favoritedAgents.has(agent.id) ? 'fill-yellow-400/90' : 'stroke-2'
                                                     }`}
                                                   />
                                                 </button>
                                               </div>
                                                 
-                                              <div className="flex items-start space-x-3">
+                                              <div className="flex items-start space-x-2">
                                                 <div
-                                                  className={`w-8 h-8 rounded-xl bg-gradient-to-br ${agent.color} flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-200`}
+                                                  className={`w-7 h-7 rounded-lg bg-gradient-to-br ${agent.color} flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-200`}
                                                 >
-                                                  {agent.icon && <agent.icon className="h-5 w-5 text-white" />}
+                                                  {agent.icon && <agent.icon className="h-4 w-4 text-white" />}
                                                 </div>
 
-                                                <div className="flex-1 min-w-0 pr-8">
+                                                <div className="flex-1 min-w-0 pr-6">
                                                   <div className="flex items-center gap-1 mb-1">
-                                                    <h6 className="text-white font-medium truncate">{agent.name}</h6>
+                                                    <h6 className="text-white/90 font-medium truncate text-sm">{agent.name}</h6>
                                                     <button
                                                       onClick={(e) => {
                                                         e.stopPropagation();
                                                         fetchAgentDetails(agent.id);
                                                         setAgentInfoOpen(agent.id);
                                                       }}
-                                                      className="w-5 h-5 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110 bg-black/40 text-blue-400/70 hover:bg-blue-500/10 hover:text-blue-400 flex-shrink-0 ml-1"
+                                                      className="w-4 h-4 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110 bg-white/10 text-blue-400/70 hover:bg-blue-400/10 hover:text-blue-400/90 flex-shrink-0 ml-1"
                                                       title="View agent details"
                                                     >
-                                                      <Info className="h-3 w-3" />
+                                                      <Info className="h-2.5 w-2.5" />
                                                     </button>
                                                   </div>
-                                                  <p className="text-gray-400 text-sm line-clamp-2 mb-2">{agent.description}</p>
+                                                  <p className="text-gray-300/60 text-xs line-clamp-2 mb-2">{agent.description}</p>
                                                   <div className="flex flex-wrap gap-1">
-                                                    <Badge variant="outline" className="bg-purple-900/20 text-purple-300 text-xs px-2 py-0.5 border-purple-500/30">
+                                                    <Badge variant="outline" className="bg-purple-400/10 text-purple-300/80 text-xs px-2 py-0.5 border-purple-400/20">
                                                       {agent.inputType} → {agent.outputType}
                                                     </Badge>
                                                     {agent.type && (
-                                                      <Badge variant="outline" className="bg-blue-900/20 text-blue-300 text-xs px-2 py-0.5 border-blue-500/30">
+                                                      <Badge variant="outline" className="bg-blue-400/10 text-blue-300/80 text-xs px-2 py-0.5 border-blue-400/20">
                                                         {getAgentTypeDisplayName(agent.type || "")}
                                                       </Badge>
                                                     )}
@@ -2608,12 +2589,12 @@ export default function ServiceWorkflowBuilder() {
                                         </div>
                                       </div>
                                     ) : (
-                                      <div className="text-center py-16 bg-black/30 rounded-xl border border-purple-900/30">
-                                        <div className="w-16 h-16 bg-yellow-600/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                                          <Star className="h-8 w-8 text-yellow-400" />
+                                      <div className="text-center py-12 bg-white/3 rounded-lg border border-white/10">
+                                        <div className="w-12 h-12 bg-yellow-400/10 rounded-full flex items-center justify-center mx-auto mb-3">
+                                          <Star className="h-6 w-6 text-yellow-400/60" />
                                         </div>
-                                        <h3 className="text-white font-medium text-lg mb-2">No Favorites Yet</h3>
-                                        <p className="text-gray-400 mb-4">
+                                        <h3 className="text-white/90 font-medium text-sm mb-1">No Favorites Yet</h3>
+                                        <p className="text-gray-300/60 text-xs mb-3">
                                           {isLoadingFavorites 
                                             ? "Loading your favorite agents..."
                                             : "You haven't favorited any agents yet. Click the star icon on any agent to add it to your favorites."
@@ -2622,8 +2603,9 @@ export default function ServiceWorkflowBuilder() {
                                         {!isLoadingFavorites && (
                                           <Button
                                             variant="outline"
+                                            size="sm"
                                             onClick={() => setAgentOwnershipFilter("All Agents")}
-                                            className="bg-black/40 border-purple-500/30 text-purple-300 hover:bg-purple-900/30"
+                                            className="bg-white/5 border-white/20 text-white/80 hover:bg-white/8 text-xs h-7"
                                           >
                                             Browse All Agents
                                           </Button>
@@ -2631,66 +2613,66 @@ export default function ServiceWorkflowBuilder() {
                                       </div>
                                     )
                                   ) : getFilteredAgents().allAgents.length > 0 ? (
-                                    /* All Agents Grid */
+                                    /* All Agents Grid - Compact */
                                     <div>
-                                      <h5 className="text-lg font-semibold text-white mb-4 flex items-center">
-                                        <div className="w-3 h-3 bg-purple-500 rounded-full mr-3"></div>
+                                      <h5 className="text-sm font-medium text-white/90 mb-3 flex items-center">
+                                        <div className="w-2 h-2 bg-purple-400/60 rounded-full mr-2"></div>
                                         {agentOwnershipFilter} ({getFilteredAgents().allAgents.length})
                                       </h5>
-                                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-4">
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                                         {getFilteredAgents().allAgents.map((agent) => (                                          <div
                                             key={agent.id}
-                                            className="bg-black/50 backdrop-blur-sm rounded-xl border border-purple-500/30 p-4 cursor-pointer hover:border-purple-400 hover:bg-black/60 transition-all duration-200 hover:scale-105 hover:shadow-lg hover:shadow-purple-500/20 group relative"
+                                            className="bg-white/3 backdrop-blur-xl rounded-lg border border-white/10 p-3 cursor-pointer hover:border-white/20 hover:bg-white/8 transition-all duration-200 hover:scale-[1.02] group relative"
                                             onClick={() => addAgentToWorkflow(agent.id)}
-                                          >                                            {/* Info and Favorite Buttons */}
-                                            <div className="absolute top-3 right-3 flex items-center gap-1 z-10">
-                                              <span className="text-xs text-yellow-300 font-medium">
+                                          >                                            {/* Info and Favorite Buttons - Compact */}
+                                            <div className="absolute top-2 right-2 flex items-center gap-1 z-10">
+                                              <span className="text-xs text-yellow-300/80 font-medium">
                                                 {agentFavoriteCounts[agent.id] || agent.favorites || 0}
                                               </span>
                                               
                                               <button
                                                 onClick={(e) => toggleFavorite(agent.id, e)}
-                                                className={`w-7 h-7 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110 ${
+                                                className={`w-6 h-6 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110 ${
                                                   favoritedAgents.has(agent.id)
-                                                    ? 'bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30'
-                                                    : 'bg-black/40 text-yellow-400/60 hover:bg-yellow-500/10 hover:text-yellow-400'
+                                                    ? 'bg-yellow-400/20 text-yellow-400/90 hover:bg-yellow-400/30'
+                                                    : 'bg-white/10 text-yellow-400/60 hover:bg-yellow-400/10 hover:text-yellow-400/80'
                                                 }`}
                                                 title={favoritedAgents.has(agent.id) ? "Remove from favorites" : "Add to favorites"}
                                               >
                                                 <Star 
-                                                  className={`h-4 w-4 transition-all duration-200 ${
-                                                    favoritedAgents.has(agent.id) ? 'fill-yellow-400' : 'stroke-2'
+                                                  className={`h-3 w-3 transition-all duration-200 ${
+                                                    favoritedAgents.has(agent.id) ? 'fill-yellow-400/90' : 'stroke-2'
                                                   }`}
                                                 />
                                               </button>
                                             </div>
                                               
-                                            <div className="flex items-start space-x-3">
+                                            <div className="flex items-start space-x-2">
                                               <div
-                                                className={`w-8 h-8 rounded-xl bg-gradient-to-br ${agent.color} flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-200`}
+                                                className={`w-7 h-7 rounded-lg bg-gradient-to-br ${agent.color} flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-200`}
                                               >
-                                                {agent.icon && <agent.icon className="h-5 w-5 text-white" />}
-                                              </div>                                              <div className="flex-1 min-w-0 pr-8">
+                                                {agent.icon && <agent.icon className="h-4 w-4 text-white" />}
+                                              </div>                                              <div className="flex-1 min-w-0 pr-6">
                                                 <div className="flex items-center gap-1 mb-1">
-                                                  <h6 className="text-white font-medium truncate">{agent.name}</h6>
+                                                  <h6 className="text-white/90 font-medium truncate text-sm">{agent.name}</h6>
                                                   <button
                                                     onClick={(e) => {
                                                       e.stopPropagation();
                                                       fetchAgentDetails(agent.id);
                                                       setAgentInfoOpen(agent.id);
                                                     }}
-                                                    className="w-5 h-5 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110 bg-black/40 text-blue-400/70 hover:bg-blue-500/10 hover:text-blue-400 flex-shrink-0 ml-1"
+                                                    className="w-4 h-4 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110 bg-white/10 text-blue-400/70 hover:bg-blue-400/10 hover:text-blue-400/90 flex-shrink-0 ml-1"
                                                     title="View agent details"
                                                   >
-                                                    <Info className="h-3 w-3" />
+                                                    <Info className="h-2.5 w-2.5" />
                                                   </button>
                                                 </div>
-                                                <p className="text-gray-400 text-sm line-clamp-2 mb-2">{agent.description}</p>
+                                                <p className="text-gray-300/60 text-xs line-clamp-2 mb-2">{agent.description}</p>
                                                 <div className="flex flex-wrap gap-1">
-                                                  <Badge variant="outline" className="bg-purple-900/20 text-purple-300 text-xs px-2 py-0.5 border-purple-500/30">
+                                                  <Badge variant="outline" className="bg-purple-400/10 text-purple-300/80 text-xs px-2 py-0.5 border-purple-400/20">
                                                     {agent.inputType} → {agent.outputType}
                                                   </Badge>                                                  {agent.type && (
-                                                    <Badge variant="outline" className="bg-blue-900/20 text-blue-300 text-xs px-2 py-0.5 border-blue-500/30">
+                                                    <Badge variant="outline" className="bg-blue-400/10 text-blue-300/80 text-xs px-2 py-0.5 border-blue-400/20">
                                                       {getAgentTypeDisplayName(agent.type || "")}
                                                     </Badge>
                                                   )}
@@ -2704,13 +2686,13 @@ export default function ServiceWorkflowBuilder() {
                                       </div>
                                     </div>
                                   ) : (
-                                    /* No results state */
-                                    <div className="text-center py-16 bg-black/30 rounded-xl border border-purple-900/30">
-                                      <div className="w-16 h-16 bg-purple-600/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                                        <Search className="h-8 w-8 text-purple-400 opacity-60" />
+                                    /* No results state - Compact */
+                                    <div className="text-center py-12 bg-white/3 rounded-lg border border-white/10">
+                                      <div className="w-12 h-12 bg-purple-400/10 rounded-full flex items-center justify-center mx-auto mb-3">
+                                        <Search className="h-6 w-6 text-purple-400/60" />
                                       </div>
-                                      <h3 className="text-white font-medium text-lg mb-2">No agents found</h3>
-                                      <p className="text-gray-400 mb-4">
+                                      <h3 className="text-white/90 font-medium text-sm mb-1">No agents found</h3>
+                                      <p className="text-gray-300/60 text-xs mb-3">
                                         No agents match your current filters and search criteria.
                                       </p>
                                       <div className="flex gap-2 justify-center">
@@ -2719,9 +2701,9 @@ export default function ServiceWorkflowBuilder() {
                                             variant="outline"
                                             size="sm"
                                             onClick={() => setSearchQuery("")}
-                                            className="bg-black/40 border-purple-500/30 text-purple-300 hover:bg-purple-900/30"
+                                            className="bg-white/5 border-white/20 text-white/80 hover:bg-white/8 text-xs h-7"
                                           >
-                                            <X className="h-4 w-4 mr-2" /> Clear Search
+                                            <X className="h-3 w-3 mr-1" /> Clear Search
                                           </Button>
                                         )}
                                         {(agentTypeFilter !== "All" || agentOwnershipFilter !== "All Agents") && (
@@ -2732,9 +2714,9 @@ export default function ServiceWorkflowBuilder() {
                                               setAgentTypeFilter("All")
                                               setAgentOwnershipFilter("All Agents")
                                             }}
-                                            className="bg-black/40 border-purple-500/30 text-purple-300 hover:bg-purple-900/30"
+                                            className="bg-white/5 border-white/20 text-white/80 hover:bg-white/8 text-xs h-7"
                                           >
-                                            <X className="h-4 w-4 mr-2" /> Clear Filters
+                                            <X className="h-3 w-3 mr-1" /> Clear Filters
                                           </Button>
                                         )}
                                       </div>
