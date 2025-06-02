@@ -28,13 +28,20 @@
  *    - Handles different response types
  *    - Manages API keys and authentication tokens
 
- * 
- * API Endpoints Used:
+ *  * API Endpoints Used:
  * ------------------
  * - GET    /api/v1/mini-services/{id} - Fetch service details
  * - POST   /api/v1/mini-services/{id}/run - Run service
+ * - POST   /api/v1/mini-services/upload - Upload files (NEW unified upload endpoint)
  * - DELETE /api/v1/mini-services/{id} - Delete service
  * - GET    /api/v1/mini-services/audio/{processId} - Get audio output
+ * 
+ * Upload Workflow:
+ * ---------------
+ * For services requiring file upload (e.g., transcribe agents):
+ * 1. Upload file via POST /api/v1/mini-services/upload
+ * 2. Get saved_as filename from upload response
+ * 3. Run service with saved filename as input via POST /api/v1/mini-services/{id}/run
  * 
 
  */
@@ -109,29 +116,25 @@ interface AgentTypeConfig {
   maxFileSize: number; // in MB
   hasSpecialUI?: boolean;
   processingMessage?: string;
+  requiresUpload?: boolean; // Flag for agents that need file upload first
+  useMiniServiceEndpoint?: boolean; // Flag to use mini service endpoint instead of direct agent endpoint
 }
 
 // **[UNIFIED APPROACH]** - Central configuration for all file upload agent types
 const AGENT_TYPE_CONFIGS: { [agentType: string]: AgentTypeConfig } = {
   rag: {
-    endpoint: (agentId: number) => `http://127.0.0.1:8000/api/v1/agents/${agentId}/run/rag_document`,
+    endpoint: "mini-service", // Use the regular mini service endpoint
     fileFieldName: "file", // Not used for RAG query endpoint
-    additionalFields: {
-      input: (query: string) => query, // Backend expects 'input', not 'query'
-      api_key: (apiKeys: any) => {
-        // Backend expects single 'api_key' string, not 'api_keys' JSON
-        // Extract the Gemini API key directly
-        return apiKeys.gemini || Object.values(apiKeys)[0] || "";
-      }
-    },
+    additionalFields: {},
     requiresApiKey: true,
     supportedFileTypes: [".pdf", ".docx", ".txt"],
     maxFileSize: 10,
     hasSpecialUI: true,
-    processingMessage: "Processing document query..."
+    processingMessage: "Processing document query...",
+    useMiniServiceEndpoint: true // Flag to use mini service endpoint instead of direct agent endpoint
   },
   transcribe: {
-    endpoint: (agentId: number) => `http://127.0.0.1:8000/api/v1/agents/${agentId}/transcribe`,
+    endpoint: "upload", // Use the new unified upload endpoint
     fileFieldName: "file",
     additionalFields: {
       language: "en",
@@ -139,9 +142,10 @@ const AGENT_TYPE_CONFIGS: { [agentType: string]: AgentTypeConfig } = {
     },
     requiresApiKey: false,
     supportedFileTypes: [".mp3", ".wav", ".m4a", ".mp4", ".mov"],
-    maxFileSize: 50,
+    maxFileSize: 200, // Updated to match backend limit
     hasSpecialUI: true,
-    processingMessage: "Transcribing audio/video content..."
+    processingMessage: "Uploading and transcribing audio/video content...",
+    requiresUpload: true // Flag to indicate this requires file upload first
   },
   image_analyzer: {
     endpoint: (agentId: number) => `http://127.0.0.1:8000/api/v1/agents/${agentId}/run/image`,
@@ -537,7 +541,6 @@ export default function ServicePage() {
       
     return fileUploadAgents;
   }, [service?.workflow, agentDetails]);
-
   // **[UNIFIED FUNCTION]** - Generic file upload handler
   const handleUnifiedFileUpload = async () => {
     const fileUploadAgents = getFileUploadAgents();
@@ -552,115 +555,217 @@ export default function ServicePage() {
     const config = primaryAgent.config;
 
     try {
-        setDocumentProcessingState({
-          isProcessing: true,
-          stage: 'uploading',
+      setDocumentProcessingState({
+        isProcessing: true,
+        stage: 'uploading',
         message: config.processingMessage || 'Processing file...'
-        });
+      });
         
       const token = localStorage.getItem("token") || localStorage.getItem("accessToken") || Cookies.get("accessToken");
-      const currentUserId = Cookies.get("user_id");
-
-      const formData = new FormData();
-        
-      // **[SPECIAL HANDLING]** - RAG agents work differently
+      const currentUserId = Cookies.get("user_id");      // **[SPECIAL HANDLING]** - RAG agents work differently (use mini service endpoint)
       if (primaryAgent.type === 'rag' || primaryAgent.type === 'rag_agent') {
-        // RAG agents only need query and API key, no file upload for querying
+        // RAG agents only need query and API key, use mini service endpoint
         if (!userInput || !userInput.trim()) {
           throw new Error("Please provide a query for the RAG agent");
         }
         
         // Get the API keys for backend
         const apiKeysForBackend = getApiKeysForBackend();
-        const geminiApiKey = apiKeysForBackend[primaryAgent.id];
         
-        if (!geminiApiKey) {
-          throw new Error("Gemini API key is required for RAG document queries");
+        if (Object.keys(apiKeysForBackend).length === 0) {
+          throw new Error("API key is required for RAG document queries");
         }
 
-        // Add required fields for RAG endpoint
-        formData.append("input", userInput); // Backend expects 'input'
-        formData.append("api_key", geminiApiKey); // Backend expects single 'api_key' string
-        
-        // Only log in development mode
-        // if (process.env.NODE_ENV === 'development') {
-        //   console.log("RAG query request:", {
-        //     input: userInput,
-        //     hasApiKey: !!geminiApiKey,
-        //     agentId: primaryAgent.id
-        //   });
-        // }
-      } else {
-        // Regular file upload agents
-        if (uploadedFile) {
-          formData.append(config.fileFieldName, uploadedFile, uploadedFile.name);
-        }
+        // Use the mini service endpoint with JSON body
+        const processBody = {
+          input: userInput,
+          api_keys: apiKeysForBackend
+        };
 
-        // Add text input if provided and not a pure file processing agent
-        if (userInput && !config.hasSpecialUI) {
-          formData.append("input", userInput);
-            }
-            
-        // Add additional fields based on agent type
-        Object.entries(config.additionalFields || {}).forEach(([fieldName, fieldValue]) => {
-          if (typeof fieldValue === 'function') {
-            // Dynamic field value based on context
-            if (fieldName === 'filename' && uploadedFile) {
-              formData.append(fieldName, fieldValue(uploadedFile));
-            } else if (fieldName === 'api_keys' && config.requiresApiKey) {
-              const apiKeysForBackend = getApiKeysForBackend();
-              formData.append(fieldName, fieldValue(apiKeysForBackend));
-            } else if (fieldName === 'include_timestamps') {
-              formData.append(fieldName, fieldValue(transcriptionOptions));
-            }
-          } else {
-            // Static field value
-            formData.append(fieldName, fieldValue);
-          }
+        console.log("🔍 RAG query request:", {
+          input: userInput,
+          api_keys: Object.keys(apiKeysForBackend),
+          serviceId
         });
 
-        // Handle special query field for non-RAG agents
-        if (config.hasSpecialUI && userInput && userInput.trim()) {
-          formData.append("query", userInput);
+        const response = await fetch(
+          `http://127.0.0.1:8000/api/v1/mini-services/${serviceId}/run?current_user_id=${currentUserId}`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify(processBody),
+            signal: AbortSignal.timeout(300000) // 5 minute timeout
+          }
+        );
+            
+        if (!response.ok) {
+          let errorDetail = "Unknown error";
+          try {
+            const errorData = await response.json();
+            errorDetail = errorData?.detail || JSON.stringify(errorData);
+          } catch (parseError) {
+            errorDetail = response.statusText;
+          }
+          throw new Error(`Server error: ${response.status} ${errorDetail}`);
         }
+            
+        const data = await response.json();
+        setResult(data);
+        return;
       }
 
-      // Make the API call
+      // **[NEW UPLOAD WORKFLOW]** - For agents that require file upload (like transcribe)
+      if (config.requiresUpload && uploadedFile) {
+        // Step 1: Upload the file first using the new /upload endpoint
+        setDocumentProcessingState({
+          isProcessing: true,
+          stage: 'uploading',
+          message: 'Uploading file to server...'
+        });
+
+        const uploadFormData = new FormData();
+        uploadFormData.append("file", uploadedFile, uploadedFile.name);
+
+        const uploadResponse = await fetch(
+          `http://127.0.0.1:8000/api/v1/mini-services/upload?current_user_id=${currentUserId}`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+            body: uploadFormData,
+            signal: AbortSignal.timeout(300000) // 5 minute timeout
+          }
+        );
+
+        if (!uploadResponse.ok) {
+          let errorDetail = "Unknown error";
+          try {
+            const errorData = await uploadResponse.json();
+            errorDetail = errorData?.detail || JSON.stringify(errorData);
+          } catch (parseError) {
+            errorDetail = uploadResponse.statusText;
+          }
+          throw new Error(`Upload failed: ${uploadResponse.status} ${errorDetail}`);
+        }
+
+        const uploadData = await uploadResponse.json();
+        console.log("📁 File uploaded successfully:", uploadData);
+
+        // Step 2: Use the uploaded filename to run the mini service
+        setDocumentProcessingState({
+          isProcessing: true,
+          stage: 'processing',
+          message: 'Processing uploaded file...'
+        });
+
+        const processBody = {
+          input: uploadData.saved_as, // Use the generated filename from upload
+          api_keys: getApiKeysForBackend() // Include API keys if needed
+        };
+
+        const processResponse = await fetch(
+          `http://127.0.0.1:8000/api/v1/mini-services/${serviceId}/run?current_user_id=${currentUserId}`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify(processBody),
+            signal: AbortSignal.timeout(300000) // 5 minute timeout
+          }
+        );
+
+        if (!processResponse.ok) {
+          let errorDetail = "Unknown error";
+          try {
+            const errorData = await processResponse.json();
+            errorDetail = errorData?.detail || JSON.stringify(errorData);
+          } catch (parseError) {
+            errorDetail = processResponse.statusText;
+          }
+          throw new Error(`Processing failed: ${processResponse.status} ${errorDetail}`);
+        }
+
+        const processData = await processResponse.json();
+        setResult(processData);
+        return;
+      }
+
+      // **[LEGACY DIRECT UPLOAD]** - For agents that still use direct file upload endpoints
+      const formData = new FormData();
+      
+      if (uploadedFile) {
+        formData.append(config.fileFieldName, uploadedFile, uploadedFile.name);
+      }
+
+      // Add text input if provided and not a pure file processing agent
+      if (userInput && !config.hasSpecialUI) {
+        formData.append("input", userInput);
+      }
+            
+      // Add additional fields based on agent type
+      Object.entries(config.additionalFields || {}).forEach(([fieldName, fieldValue]) => {
+        if (typeof fieldValue === 'function') {
+          // Dynamic field value based on context
+          if (fieldName === 'filename' && uploadedFile) {
+            formData.append(fieldName, fieldValue(uploadedFile));
+          } else if (fieldName === 'api_keys' && config.requiresApiKey) {
+            const apiKeysForBackend = getApiKeysForBackend();
+            formData.append(fieldName, fieldValue(apiKeysForBackend));
+          } else if (fieldName === 'include_timestamps') {
+            formData.append(fieldName, fieldValue(transcriptionOptions));
+          }
+        } else {
+          // Static field value
+          formData.append(fieldName, fieldValue);
+        }
+      });
+
+      // Handle special query field for non-RAG agents
+      if (config.hasSpecialUI && userInput && userInput.trim()) {
+        formData.append("query", userInput);
+      }
+
+      // Make the API call to legacy endpoint
       const endpoint = typeof config.endpoint === 'function' 
         ? config.endpoint(primaryAgent.id) 
         : config.endpoint;
 
       const response = await fetch(
         `${endpoint}?current_user_id=${currentUserId}`,
-              {
-                method: "POST",
-                headers: {
-                  Authorization: `Bearer ${token}`,
-                },
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
           body: formData,
           signal: AbortSignal.timeout(300000) // 5 minute timeout
-              }
-            );
+        }
+      );
             
       if (!response.ok) {
-              let errorDetail = "Unknown error";
-              try {
+        let errorDetail = "Unknown error";
+        try {
           const errorData = await response.json();
           errorDetail = errorData?.detail || JSON.stringify(errorData);
-              } catch (parseError) {
-                errorDetail = response.statusText;
-              }
-              throw new Error(`Server error: ${response.status} ${errorDetail}`);
-            }
+        } catch (parseError) {
+          errorDetail = response.statusText;
+        }
+        throw new Error(`Server error: ${response.status} ${errorDetail}`);
+      }
             
       const data = await response.json();
-      // console.log("🎯 Backend RAG response:", data);
       setResult(data);
 
-          } catch (error: any) {
+    } catch (error: any) {
       console.error(`Error in ${primaryAgent.type} processing:`, error);
       
-      // **[IMPROVED ERROR HANDLING]** - Better error messages for RAG
+      // **[IMPROVED ERROR HANDLING]** - Better error messages for different agent types
       if (primaryAgent.type === 'rag' || primaryAgent.type === 'rag_agent') {
         if (error.message.includes('api_key') || error.message.includes('API key')) {
           setError("API key error: Please check that you've selected a valid Gemini API key for document processing.");
@@ -669,15 +774,23 @@ export default function ServicePage() {
         } else {
           setError(error.message || "An error occurred while processing your query");
         }
-            } else {
+      } else if (primaryAgent.type === 'transcribe') {
+        if (error.message.includes('Upload failed')) {
+          setError("Failed to upload file. Please check the file size (max 200MB) and format, then try again.");
+        } else if (error.message.includes('Processing failed')) {
+          setError("Failed to process the uploaded file. Please try again or contact support.");
+        } else {
+          setError(error.message || "An error occurred while transcribing your file");
+        }
+      } else {
         setError(error.message || "An error occurred while processing your file");
       }
     } finally {
-              setDocumentProcessingState({
+      setDocumentProcessingState({
         isProcessing: false,
         stage: 'complete',
         message: ''
-              });
+      });
     }
   };
 
