@@ -234,6 +234,28 @@ export default function ServiceWorkflowBuilder() {
     outputType: "select"
   });
 
+  // **[NEW STATE]** - Add TTS voices and test functionality
+  const [ttsVoices, setTtsVoices] = useState<Array<{code: string, name: string, gender: string, locale: string}>>([]);
+  const [isLoadingTtsVoices, setIsLoadingTtsVoices] = useState(false);
+  const [testText, setTestText] = useState("Hello, this is a test of the text-to-speech configuration.");
+  const [isTestingTts, setIsTestingTts] = useState(false);
+  const [testAudioUrl, setTestAudioUrl] = useState<string | null>(null);
+
+  // **[NEW STATE]** - Filter tabs and agent type selection grid auto-close
+  const [activeFilterTab, setActiveFilterTab] = useState("All");
+  const [isAgentTypeGridOpen, setIsAgentTypeGridOpen] = useState(false);
+
+  // **[AGENT TYPE CATEGORIES]** - Define categories for filtering
+  const agentTypeCategories = {
+    "All": [],
+    "LLM": ["gemini", "openai", "claude", "custom_endpoint_llm"],
+    "Image Generation": ["gemini_text2image", "midjourney", "dalle"],
+    "Media": ["edge_tts", "bark_tts", "whisper", "transcribe"],
+    "Document": ["rag", "pdf_reader", "document_analyzer"],
+    "Translate": ["google_translate"],
+    "TTS": ["edge_tts", "bark_tts"]
+  };
+
   const [workflow, setWorkflow] = useState<WorkflowStep[]>([])
   const [newAgentData, setNewAgentData] = useState({
     name: "",
@@ -261,13 +283,6 @@ export default function ServiceWorkflowBuilder() {
   // Within the ServiceWorkflowBuilder component
   const [translateLanguages, setTranslateLanguages] = useState<Language[]>([]);
   const [isLoadingLanguages, setIsLoadingLanguages] = useState(false);
-
-  // **[NEW STATE]** - Add TTS voices and test functionality
-  const [ttsVoices, setTtsVoices] = useState<Array<{code: string, name: string, gender: string, locale: string}>>([]);
-  const [isLoadingTtsVoices, setIsLoadingTtsVoices] = useState(false);
-  const [testText, setTestText] = useState("Hello, this is a test of the text-to-speech configuration.");
-  const [isTestingTts, setIsTestingTts] = useState(false);
-  const [testAudioUrl, setTestAudioUrl] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchAgentTypes = async () => {
@@ -1599,6 +1614,98 @@ export default function ServiceWorkflowBuilder() {
     setEdges(edgeArr);
   }, [workflow, availableAgents, serviceData.inputType, serviceData.outputType]);
 
+  // Helper function to get human-readable display names for agent types
+  const getAgentTypeDisplayName = (agentType: string): string => {
+    const displayNameMap: Record<string, string> = {
+      // Core AI models
+      'gemini': 'Gemini (Google)',
+      'openai': 'ChatGPT (OpenAI)',
+      'claude': 'Claude (Anthropic)',
+      
+      // Specialized agents
+      'gemini_text2image': 'Imagen (Google Text-to-Image)',
+      'gpt_vision': 'GPT Vision (OpenAI)',
+      'midjourney': 'Midjourney Image Generation',
+      'dalle': 'DALL-E Image Generation',
+      
+      // TTS and Audio
+      'edge_tts': 'EdgeTTS - Multilingual TTS',
+      'bark_tts': 'BarkTTS - English (Suno)',
+      'whisper': 'Whisper (OpenAI)',
+      'transcribe': 'Audio Transcription',
+      
+      // Document processing
+      'rag': 'RAG Document Q&A',
+      'pdf_reader': 'PDF Document Reader',
+      'document_analyzer': 'Document Analysis',
+      'ocr': 'Text Recognition (OCR)',
+      
+      // Translation and language
+      'google_translate': 'Google Translate',
+      
+      // Image analysis  
+      'image_analysis': 'Image Analysis',
+      'vision': 'Vision Analysis',
+      
+      // Custom and specialized
+      'custom_endpoint_llm': 'Custom LLM Endpoint',
+      'openai_assistant': 'OpenAI Assistant',
+      'youtube_transcript': 'YouTube Transcript',
+      'web_scraper': 'Web Scraper',
+      'text_summarizer': 'Text Summarizer',
+      'sentiment_analysis': 'Sentiment Analysis',
+      'keyword_extractor': 'Keyword Extractor',
+      'language_detector': 'Language Detector',
+      'text_classifier': 'Text Classifier',
+      'entity_extractor': 'Entity Extractor',
+      'search_engine': 'Search Engine',
+      'email_generator': 'Email Generator',
+      'code_generator': 'Code Generator'
+    };
+    
+    // If we have a specific display name, use it
+    if (displayNameMap[agentType]) {
+      return displayNameMap[agentType];
+    }
+    
+    // Otherwise, format the agent type nicely
+    return agentType
+      .split('_')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+  };
+  // **[NEW FUNCTION]** - Filter agent types based on selected tab
+  const getFilteredAgentTypes = (): AgentType[] => {
+    if (activeFilterTab === "All") {
+      return agentTypes;
+    }
+    
+    const categoryTypes = (agentTypeCategories as any)[activeFilterTab] || [];
+    return agentTypes.filter(type => categoryTypes.includes(type.type));
+  };
+
+  // **[NEW FUNCTION]** - Reset agent dialog state
+  const resetAgentDialog = () => {
+    setNewAgentData({
+      name: "",
+      description: "",
+      inputType: "text",
+      outputType: "text",
+      systemInstruction: "",
+      config: {} as Record<string, any>,
+      isPublic: false,
+      agentType: "",
+      enhancePrompt: false,
+    });
+    setRagDocumentFile(null);
+    setSelectedApiKey("");
+    setCustomApiKey("");
+    setUseCustomApiKey(false);
+    setActiveFilterTab("All");
+    setIsAgentTypeGridOpen(true); // Always show grid when opening dialog
+    setSearchQuery(""); // Clear search
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-black via-purple-950/20 to-black">
       <NavBar />
@@ -2031,9 +2138,7 @@ export default function ServiceWorkflowBuilder() {
                       </div>
                     )}
                   </div>
-                  
-
-                   {/* Create Agent Dialog */}
+                      {/* Create Agent Dialog */}
                     <Dialog open={isAgentDialogOpen} onOpenChange={setIsAgentDialogOpen}>
                     <DialogTrigger asChild>
                       <Button className="w-full bg-gradient-to-r from-purple-600 to-purple-800 text-white hover:opacity-90 transition-all duration-300 hover:shadow-purple-500/30">
@@ -2043,7 +2148,7 @@ export default function ServiceWorkflowBuilder() {
                     </DialogTrigger>
 
                     <DialogContent
-                      className="bg-black/80 backdrop-blur-md border border-purple-700/50 text-white w-[95vw] sm:w-[90vw] md:w-[80vw] lg:w-[70vw] xl:w-[60vw] max-w-3xl shadow-xl relative rounded-xl z-50 overflow-y-auto max-h-[90vh]"
+                      className="bg-black/80 backdrop-blur-md border border-purple-700/50 text-white w-[95vw] sm:w-[90vw] md:w-[80vw] lg:w-[70vw] xl:w-[60vw] max-w-4xl shadow-xl relative rounded-xl z-50 overflow-y-auto max-h-[90vh]"
                       style={{
                       top: "50%",
                       left: "50%",
@@ -2061,71 +2166,165 @@ export default function ServiceWorkflowBuilder() {
                       <p className="text-gray-400 text-sm mt-1">Configure a new AI agent for your workflow</p>
                       </DialogHeader>
 
-                     
-                      {/* Agent Type Selection */}
-                      <div className="space-y-2">
-                        <Label htmlFor="agentType" className="text-white font-medium">
+                       {/* Agent Type Selection */}
+                      <div className="space-y-3">
+                        <Label className="text-white font-medium">
                         Agent Type <span className="text-red-500">*</span>
                         </Label>
-                        <Select
-                        value={newAgentData.agentType}
-                        onValueChange={(value) => {
-                          const selectedType = agentTypes.find(type => type.type === value);
-                          if (selectedType) {
-                          setNewAgentData({
-                            ...newAgentData,
-                            agentType: value,
-                            inputType: selectedType.input_type,
-                            outputType: selectedType.output_type
-                          });
-                          }
-                        }}
-                        >
-                        <SelectTrigger id="agentType" className="bg-black/50 border-purple-900/40 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all">
-                          <SelectValue placeholder="Select agent type" />
-                        </SelectTrigger>
-                        <SelectContent className="max-h-[200px] overflow-y-auto">
-                          <div className="bg-black/90 border-purple-900/40 text-white">
-                          {isLoadingAgentTypes ? (
-                            <div className="p-2 text-center text-sm text-gray-400">Loading...</div>
-                          ) : agentTypes.length > 0 ? (
-                            agentTypes.map((type) => (
-                            <SelectItem key={type.type} value={type.type} className="hover:bg-purple-900/20">
-                              {type.type}
-                            </SelectItem>
-                            ))
-                          ) : (
-                            <div className="p-2 text-center text-sm text-gray-400">No agent types found</div>
-                          )}
+                        
+                        {/* Show selected agent type or button to open grid */}
+                        {newAgentData.agentType && !isAgentTypeGridOpen ? (
+                          <div 
+                            onClick={() => setIsAgentTypeGridOpen(true)}
+                            className="p-3 bg-purple-600/20 border border-purple-500 rounded-lg cursor-pointer hover:bg-purple-600/30 transition-all"
+                          >
+                            <div className="text-sm font-medium text-white">
+                              Agent Type: {getAgentTypeDisplayName(newAgentData.agentType)}
+                            </div>
+                            <div className="text-xs text-purple-300 mt-1">
+                              Click to change selection
+                            </div>
                           </div>
-                        </SelectContent>
-                        </Select>
+                        ) : (
+                          <div className="space-y-3">
+                            {/* Filter tabs */}
+                            <div className="flex gap-1 p-1 bg-black/40 rounded-lg border border-purple-900/30">
+                              {Object.keys(agentTypeCategories).map((tab) => (
+                                <button
+                                  key={tab}
+                                  onClick={() => setActiveFilterTab(tab)}
+                                  className={`px-3 py-2 rounded-md text-xs font-medium transition-all duration-200 flex-1 ${
+                                    activeFilterTab === tab
+                                      ? 'bg-purple-600 text-white shadow-lg'
+                                      : 'text-gray-400 hover:text-white hover:bg-purple-900/30'
+                                  }`}
+                                >
+                                  {tab}
+                                </button>
+                              ))}
+                            </div>
+
+                            {/* Search for agent types */}
+                            <div className="relative">
+                              <Input
+                                type="text"
+                                placeholder="Search agent types..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="bg-black/50 border-purple-900/40 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all pl-10"
+                              />
+                              <Search className="h-4 w-4 text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2" />
+                            </div>
+
+                            {/* Agent type grid */}
+                            <div className="max-h-[300px] overflow-y-auto bg-black/30 rounded-lg border border-purple-900/30 p-3">
+                              {isLoadingAgentTypes ? (
+                                <div className="p-2 text-center text-sm text-gray-400">
+                                  <Loader2 className="h-5 w-5 animate-spin mx-auto mb-2" />
+                                  Loading agent types...
+                                </div>
+                              ) : getFilteredAgentTypes().length > 0 ? (
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                  {getFilteredAgentTypes()
+                                    .filter(type => {
+                                      const displayName = getAgentTypeDisplayName(type.type);
+                                      return displayName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                                             type.type.toLowerCase().includes(searchQuery.toLowerCase());
+                                    })
+                                    .map((type) => (
+                                    <div
+                                      key={type.type}
+                                      onClick={() => {
+                                        setNewAgentData({
+                                          ...newAgentData,
+                                          agentType: type.type,
+                                          inputType: type.input_type,
+                                          outputType: type.output_type
+                                        });
+                                        setIsAgentTypeGridOpen(false); // Auto-close grid after selection
+                                      }}
+                                      className={`p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:scale-105 ${
+                                        newAgentData.agentType === type.type
+                                          ? 'bg-purple-600/20 border-purple-500 shadow-lg shadow-purple-500/20'
+                                          : 'bg-black/40 border-purple-900/40 hover:bg-purple-900/20 hover:border-purple-500/50'
+                                      }`}
+                                    >
+                                      <div className="text-sm font-medium text-white mb-1">
+                                        {getAgentTypeDisplayName(type.type)}
+                                      </div>
+                                      <div className="text-xs text-gray-400">
+                                        {type.input_type} → {type.output_type}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="p-2 text-center text-sm text-gray-400">
+                                  {activeFilterTab === "All" ? "No agent types found" : `No ${activeFilterTab} agent types found`}
+                                </div>
+                              )}
+                              
+                              {/* No results message */}
+                              {!isLoadingAgentTypes && getFilteredAgentTypes().length > 0 && 
+                               getFilteredAgentTypes().filter(type => {
+                                 const displayName = getAgentTypeDisplayName(type.type);
+                                 return displayName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                                        type.type.toLowerCase().includes(searchQuery.toLowerCase());
+                               }).length === 0 && (
+                                <div className="p-2 text-center text-sm text-gray-400">
+                                  No agent types match "{searchQuery}"
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                        
                         {!newAgentData.agentType && (
                         <p className="text-xs text-red-500">Please select an agent type</p>
                         )}
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      </div><div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className="space-y-2">
                         <Label htmlFor="agentName" className="text-white font-medium">Agent Name</Label>
-                        <Input
-                          id="agentName"
-                          value={newAgentData.name}
-                          onChange={(e) => setNewAgentData({ ...newAgentData, name: e.target.value })}
-                          placeholder="My Custom Agent"
-                          className="bg-black/50 border-purple-900/40 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all"
-                        />
+                        <div className="relative">
+                          <Input
+                            id="agentName"
+                            value={newAgentData.name}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              if (value.length <= 50) {
+                                setNewAgentData({ ...newAgentData, name: value });
+                              }
+                            }}
+                            placeholder="My Custom Agent"
+                            className="bg-black/50 border-purple-900/40 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all pr-12"
+                            maxLength={50}
+                          />
+                          <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-xs text-gray-400">
+                            {newAgentData.name.length}/50
+                          </span>
+                        </div>
                         </div>
 
                         <div className="space-y-2">
                         <Label htmlFor="agentDescription" className="text-white font-medium">Description</Label>
-                        <Input
-                          id="agentDescription"
-                          value={newAgentData.description}
-                          onChange={(e) => setNewAgentData({ ...newAgentData, description: e.target.value })}
-                          placeholder="What does this agent do?"
-                          className="bg-black/50 border-purple-900/40 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all"
-                        />
+                        <div className="relative">
+                          <Input
+                            id="agentDescription"
+                            value={newAgentData.description}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              if (value.length <= 100) {
+                                setNewAgentData({ ...newAgentData, description: value });
+                              }
+                            }}
+                            placeholder="What does this agent do?"
+                            className="bg-black/50 border-purple-900/40 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all pr-16"
+                            maxLength={100}
+                          />
+                          <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-xs text-gray-400">
+                            {newAgentData.description.length}/100
+                          </span>
+                        </div>
                         </div>
                       </div>
 
@@ -2148,26 +2347,154 @@ export default function ServiceWorkflowBuilder() {
                           </p>
                         </div>
                         </div>
-                      </div>
+                      </div>                      {/* System Instruction - only for specific agent types */}
+                      {(newAgentData.agentType === "gemini" || newAgentData.agentType === "openai" || newAgentData.agentType === "gemini_text2image") && (
+                        <div className="space-y-2">
+                          <div className="flex items-center space-x-2">
+                          <Label htmlFor="systemInstruction" className="text-white font-medium">System Instruction</Label>
+                          {newAgentData.enhancePrompt && (
+                            <Badge className="bg-purple-600/30 border-purple-500 text-purple-200 text-xs px-2 py-0.5">
+                            Enhanced
+                            </Badge>
+                          )}
+                          </div>
+                          <Textarea
+                          id="systemInstruction"
+                          value={newAgentData.systemInstruction}
+                          onChange={(e) => setNewAgentData({ ...newAgentData, systemInstruction: e.target.value })}
+                          placeholder="Instructions for the agent..."
+                          className={`bg-black/50 border-purple-900/40 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all ${newAgentData.enhancePrompt ? 'min-h-[200px]' : 'min-h-[80px]'}`}
+                          />
+                          <p className="text-gray-400 text-xs">Provide instructions to guide the agent's behavior</p>
+                          
+                          {/* Enhance System Prompt Section */}
+                          <div className="bg-gradient-to-r from-black/40 to-purple-950/20 p-4 rounded-xl border border-purple-900/30 backdrop-blur-sm relative overflow-hidden">
+                            {/* Subtle glow effect */}
+                            <div className="absolute inset-0 bg-gradient-to-r from-purple-600/5 to-indigo-600/5 rounded-xl"></div>
+                            
+                            <div className="relative z-10">
+                              <div className="flex items-center justify-between mb-3">
+                                <div className="flex items-center space-x-3">
+                                  <div className="p-2 bg-purple-600/20 rounded-lg">
+                                    <Wand2 className="h-4 w-4 text-purple-300" />
+                                  </div>
+                                  <div>
+                                    <h4 className="text-white font-semibold text-sm">AI Enhancement</h4>
+                                    <p className="text-gray-400 text-xs">Improve your system prompt with AI</p>
+                                  </div>
+                                </div>
+                                
+                                <Button 
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={async () => {
+                                    if (!newAgentData.systemInstruction) {
+                                      toast({
+                                        variant: "destructive",
+                                        title: "System instruction is empty",
+                                        description: "Please add a system instruction first"
+                                      });
+                                      return;
+                                    }
 
-                      <div className="space-y-2">
-                        <div className="flex items-center space-x-2">
-                        <Label htmlFor="systemInstruction" className="text-white font-medium">System Instruction</Label>
-                        {newAgentData.enhancePrompt && (
-                          <Badge className="bg-purple-600/30 border-purple-500 text-purple-200 text-xs px-2 py-0.5">
-                          Enhanced
-                          </Badge>
-                        )}
+                                    // Show loading toast
+                                    const loadingToast = toast({
+                                      title: "Enhancing system prompt",
+                                      description: "Please wait...",
+                                    });
+
+                                    try {
+                                      const response = await fetch(`http://127.0.0.1:8000/api/v1/agents/enhance_system_prompt?current_user_id=${userId}`, {
+                                        method: "POST",
+                                        headers: {
+                                          "Content-Type": "application/json",
+                                          Authorization: `Bearer ${Cookies.get("access_token")}`,
+                                        },
+                                        body: JSON.stringify({
+                                          system_prompt: newAgentData.systemInstruction,
+                                          name: newAgentData.name || "empty",
+                                      description: newAgentData.description || "empty",
+                                      input_type: newAgentData.inputType || "empty", 
+                                      output_type: newAgentData.outputType || "empty",
+                                      agent_type: newAgentData.agentType || "empty"
+                                        }),
+                                      });
+
+                                      if (!response.ok) {
+                                        const errorData = await response.json().catch(() => null);
+                                        throw new Error(errorData?.detail || "Failed to enhance system prompt");
+                                      }
+
+                                      const result = await response.json();
+                                      
+                                      // Update the system instruction with the enhanced version with typing animation
+                                      const enhancedPrompt = result.enhanced_prompt;
+                                      const typingSpeed = Math.max(10, Math.floor(3000 / enhancedPrompt.length)); // Calculate speed to complete in ~3 seconds
+
+                                      let currentText = '';
+                                      let charIndex = 0;
+
+                                      // Clear the system instruction first
+                                      setNewAgentData({
+                                        ...newAgentData,
+                                        systemInstruction: '',
+                                        enhancePrompt: true
+                                      });
+
+                                      // Create typing animation using interval
+                                      const typingInterval = setInterval(() => {
+                                        if (charIndex < enhancedPrompt.length) {
+                                          currentText += enhancedPrompt.charAt(charIndex);
+                                          setNewAgentData(prev => ({
+                                            ...prev,
+                                            systemInstruction: currentText
+                                          }));
+                                          charIndex++;
+                                        } else {
+                                          clearInterval(typingInterval);
+                                        }
+                                      }, typingSpeed);
+
+                                      // Clean up interval if component unmounts
+                                      return () => clearInterval(typingInterval);
+
+                                      // Dismiss loading toast and show success
+                                      loadingToast.dismiss();
+                                      toast({
+                                        title: "System prompt enhanced",
+                                        description: "Your system instruction has been improved"
+                                      });
+                                    } catch (error) {
+                                      console.error("Error enhancing system prompt:", error);
+                                      
+                                      // Dismiss loading toast and show error
+                                      loadingToast.dismiss();
+                                      toast({
+                                        variant: "destructive",
+                                        title: "Enhancement failed",
+                                        description: error instanceof Error ? error.message : "Failed to enhance system prompt. Please try again."
+                                      });
+                                    }
+                                  }}
+                                  className="bg-gradient-to-r from-purple-600/80 to-purple-700/80 text-white border-purple-500/30 hover:from-purple-600 hover:to-purple-700 transition-all duration-300 shadow-lg hover:shadow-purple-500/20"
+                                >
+                                  <Wand2 className="h-3.5 w-3.5 mr-2" />
+                                  Enhance
+                                </Button>
+                              </div>
+                              
+                              <div className="bg-purple-950/30 rounded-lg p-3 border border-purple-800/20">
+                                <div className="flex items-start space-x-2">
+                                  <div className="w-1.5 h-1.5 bg-purple-400 rounded-full mt-2 flex-shrink-0"></div>
+                                  <p className="text-purple-200/80 text-xs leading-relaxed">
+                                    AI will analyze your prompt and suggest improvements for clarity, specificity, and effectiveness.
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
                         </div>
-                        <Textarea
-                        id="systemInstruction"
-                        value={newAgentData.systemInstruction}
-                        onChange={(e) => setNewAgentData({ ...newAgentData, systemInstruction: e.target.value })}
-                        placeholder="Instructions for the agent..."
-                        className={`bg-black/50 border-purple-900/40 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all ${newAgentData.enhancePrompt ? 'min-h-[200px]' : 'min-h-[80px]'}`}
-                        />
-                        <p className="text-gray-400 text-xs">Provide instructions to guide the agent's behavior</p>
-                      </div>
+                      )}
 
                       {/* Agent type specific fields */}
                       {newAgentData.agentType === "gemini" && (
@@ -2187,8 +2514,17 @@ export default function ServiceWorkflowBuilder() {
                           </SelectTrigger>
                           <SelectContent className="max-h-[200px] overflow-y-auto">
                           <div className="bg-black/90 border-purple-900/40 text-white">
+                            <SelectItem value="gemini-2.5-pro-preview-05-06" className="hover:bg-purple-900/20">Gemini 2.5 Pro Preview</SelectItem>
+                            <SelectItem value="gemini-2.5-flash-preview-05-20" className="hover:bg-purple-900/20">Gemini 2.5 Flash Preview 05-20</SelectItem>
+                            <SelectItem value="gemini-2.0-flash" className="hover:bg-purple-900/20">Gemini 2.0 Flash</SelectItem>
+                            <SelectItem value="gemini-2.0-flash-lite" className="hover:bg-purple-900/20">Gemini 2.0 Flash-Lite</SelectItem>
+                            <SelectItem value="gemini-1.5-pro" className="hover:bg-purple-900/20">Gemini 1.5 Pro</SelectItem>
+                            <SelectItem value="gemini-1.5-flash-8b" className="hover:bg-purple-900/20">Gemini 1.5 Flash-8B</SelectItem>
+                            <SelectItem value="gemini-1.5-flash" className="hover:bg-purple-900/20">Gemini 1.5 Flash</SelectItem>
+                            <SelectItem value="gemini-1.0-pro-latest" className="hover:bg-purple-900/20">Gemini 1.0 Pro (Latest)</SelectItem>
                             <SelectItem value="gemini-pro" className="hover:bg-purple-900/20">Gemini Pro</SelectItem>
-                            <SelectItem value="gemini-pro-vision" className="hover:bg-purple-900/20">Gemini Pro Vision</SelectItem>
+                            <SelectItem value="gemini-embedding-exp" className="hover:bg-purple-900/20">Gemini Embedding</SelectItem>
+                        
                           </div>
                           </SelectContent>
                         </Select>
@@ -2474,155 +2810,9 @@ export default function ServiceWorkflowBuilder() {
                             </div>
                           </div>
                         </div>
-                      )}
+                      )}                     
 
-                      <div className="space-y-2 bg-black/40 p-4 rounded-lg border border-purple-900/30">
-                                                <div className="space-y-2 bg-black/40 p-4 rounded-lg border border-purple-900/30">
-                          <div className="flex items-center justify-between">
-                          
-                            <div>
-                              <Label className="text-white font-medium">
-                               Enhance System Prompt
-                              </Label>
-                           
-                            </div>
-                            
-                            <Button 
-                              variant="outline"
-                              size="sm"
-                              onClick={async () => {
-                                if (!newAgentData.systemInstruction) {
-                                  toast({
-                                    variant: "destructive",
-                                    title: "System instruction is empty",
-                                    description: "Please add a system instruction first"
-                                  });
-                                  return;
-                                }
-
-                                // Show loading toast
-                                const loadingToast = toast({
-                                  title: "Enhancing system prompt",
-                                  description: "Please wait...",
-                                });                                try {
-                                  const response = await fetch(`http://127.0.0.1:8000/api/v1/agents/enhance_system_prompt?current_user_id=${userId}`, {
-                                    method: "POST",
-                                    headers: {
-                                      "Content-Type": "application/json",
-                                      Authorization: `Bearer ${Cookies.get("access_token")}`,
-                                    },
-                                    body: JSON.stringify({
-                                      system_prompt: newAgentData.systemInstruction,
-                                      name: newAgentData.name || "empty",
-                                  description: newAgentData.description || "empty",
-                                  input_type: newAgentData.inputType || "empty", 
-                                  output_type: newAgentData.outputType || "empty",
-                                  agent_type: newAgentData.agentType || "empty"
-                                    }),
-                                  });if (!response.ok) {
-                                    const errorData = await response.json().catch(() => null);
-                                    throw new Error(errorData?.detail || "Failed to enhance system prompt");
-                                  }
-
-                                  const result = await response.json();
-                                  
-                                  // Update the system instruction with the enhanced version with typing animation
-                                  const enhancedPrompt = result.enhanced_prompt;
-                                  const typingSpeed = Math.max(10, Math.floor(3000 / enhancedPrompt.length)); // Calculate speed to complete in ~3 seconds
-
-                                  let currentText = '';
-                                  let charIndex = 0;
-
-                                  // Clear the system instruction first
-                                  setNewAgentData({
-                                    ...newAgentData,
-                                    systemInstruction: '',
-                                    enhancePrompt: true
-                                  });
-
-                                  // Create typing animation using interval
-                                  const typingInterval = setInterval(() => {
-                                    if (charIndex < enhancedPrompt.length) {
-                                      currentText += enhancedPrompt.charAt(charIndex);
-                                      setNewAgentData(prev => ({
-                                        ...prev,
-                                        systemInstruction: currentText
-                                      }));
-                                      charIndex++;
-                                    } else {
-                                      clearInterval(typingInterval);
-                                    }
-                                  }, typingSpeed);
-
-                                  // Clean up interval if component unmounts
-                                  return () => clearInterval(typingInterval);
-
-                                  // Dismiss loading toast and show success
-                                  loadingToast.dismiss();
-                                  toast({
-                                    title: "System prompt enhanced",
-                                    description: "Your system instruction has been improved"
-                                  });                                } catch (error) {
-                                  console.error("Error enhancing system prompt:", error);
-                                  
-                                  // Dismiss loading toast and show error
-                                  loadingToast.dismiss();
-                                  toast({
-                                    variant: "destructive",
-                                    title: "Enhancement failed",
-                                    description: error instanceof Error ? error.message : "Failed to enhance system prompt. Please try again."
-                                  });
-                                }                              }}
-                              className="bg-gradient-to-r from-purple-600 to-purple-800 text-white border-0 hover:opacity-90"
-                            >
-                              <Wand2 className="h-3.5 w-3.5 mr-1" />  Enhance
-                            </Button>
-                          </div>
-                          <p className="text-gray-400 text-xs">Automatically improve system prompt using AI</p>
-                        </div>
-
-                        <div className="flex justify-end pt-4">
-                          <Button
-                            onClick={async () => {
-                              setIsCreatingAgent(true);
-                              try {
-                                const result = await createAgent();
-                                if (result) {
-                                  setIsAgentDialogOpen(false);
-                                }
-                              } catch (error) {
-                                console.error("Agent creation error:", error);
-                              } finally {
-                                setIsCreatingAgent(false);
-                              }
-                            }}                            className="bg-gradient-to-r from-purple-600 to-purple-800 text-white hover:opacity-90 transition-all duration-300 hover:shadow-purple-500/30 hover:scale-105 w-full sm:w-auto"
-                            disabled={
-                              isCreatingAgent || 
-                              !newAgentData.name || 
-                              !newAgentData.agentType ||
-                              (newAgentData.agentType === "google_translate" && !newAgentData.config.target_language) ||
-                              (newAgentData.agentType === "rag" && !ragDocumentFile)
-                            }
-                          >
-                            {isCreatingAgent ? (
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            ) : null}
-                            {!newAgentData.name ? (
-                              "Enter agent name"
-                            ) : !newAgentData.agentType ? (
-                              "Select agent type"
-                            ) : newAgentData.agentType === "google_translate" && !newAgentData.config.target_language ? (
-                              "Select target language"
-                            ) : newAgentData.agentType === "rag" && !ragDocumentFile ? (
-                              "Upload RAG document"
-                            ) : (
-                              "Create Agent"
-                            )}
-                          </Button>
-                        </div>
-                      </div>
-
-                      {/* RAG Agent Configuration */}
+                        {/* RAG Agent Configuration */}
                       {newAgentData.agentType === "rag" && (
                         <div className="bg-black/40 p-4 rounded-lg border border-purple-900/30">
                           <h4 className="text-sm font-medium text-purple-200 mb-3 flex items-center">
@@ -2707,7 +2897,50 @@ export default function ServiceWorkflowBuilder() {
                             </div>
                           </div>
                         </div>
-                      )}
+                      )}                      
+
+                      <div className="flex justify-end pt-4">
+                          <Button
+                            onClick={async () => {
+                              setIsCreatingAgent(true);
+                              try {
+                                const result = await createAgent();
+                                if (result) {
+                                  setIsAgentDialogOpen(false);
+                                }
+                              } catch (error) {
+                                console.error("Agent creation error:", error);
+                              } finally {
+                                setIsCreatingAgent(false);
+                              }
+                            }}                            className="bg-gradient-to-r from-purple-600 to-purple-800 text-white hover:opacity-90 transition-all duration-300 hover:shadow-purple-500/30 hover:scale-105 w-full sm:w-auto"
+                            disabled={
+                              isCreatingAgent || 
+                              !newAgentData.name || 
+                              !newAgentData.agentType ||
+                              (newAgentData.agentType === "google_translate" && !newAgentData.config.target_language) ||
+                              (newAgentData.agentType === "rag" && !ragDocumentFile)
+                            }
+                          >
+                            {isCreatingAgent ? (
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : null}
+                            {!newAgentData.name ? (
+                              "Enter agent name"
+                            ) : !newAgentData.agentType ? (
+                              "Select agent type"
+                            ) : newAgentData.agentType === "google_translate" && !newAgentData.config.target_language ? (
+                              "Select target language"
+                            ) : newAgentData.agentType === "rag" && !ragDocumentFile ? (
+                              "Upload RAG document"
+                            ) : (
+                              "Create Agent"
+                            )}
+                          </Button>
+                        </div>
+                    
+
+                      
                     </DialogContent>
                   </Dialog>
 
