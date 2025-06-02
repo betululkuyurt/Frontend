@@ -287,3 +287,110 @@ input[type='range'].accent-purple-600::-ms-fill-upper {
   scrollbar-color: #8b5cf6 rgba(0, 0, 0, 0.2);
 }
 
+/* Flowing Gradient Animation for Textarea */
+@keyframes gradient-flow {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes flowing-glow {
+  0% {
+    box-shadow: 
+      2px 0 8px rgba(139, 92, 246, 0.4),
+      0 0 16px rgba(139, 92, 246, 0.2);
+  }
+  25% {
+    box-shadow: 
+      0 2px 8px rgba(167, 139, 250, 0.4),
+      0 0 16px rgba(167, 139, 250, 0.2);
+  }
+  50% {
+    box-shadow: 
+      -2px 0 8px rgba(196, 181, 253, 0.4),
+      0 0 16px rgba(196, 181, 253, 0.2);
+  }
+  75% {
+    box-shadow: 
+      0 -2px 8px rgba(167, 139, 250, 0.4),
+      0 0 16px rgba(167, 139, 250, 0.2);
+  }
+  100% {
+    box-shadow: 
+      2px 0 8px rgba(139, 92, 246, 0.4),
+      0 0 16px rgba(139, 92, 246, 0.2);
+  }
+}
+
+.system-instruction {
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+.system-instruction.enhancing {
+  pointer-events: none !important;
+  user-select: none !important;
+  cursor: not-allowed !important;
+  position: relative;
+  border: 2px solid transparent !important;
+  border-radius: 8px !important;
+  background: 
+    linear-gradient(rgba(0, 0, 0, 0.95), rgba(0, 0, 0, 0.95)) padding-box,
+    linear-gradient(90deg, 
+      rgba(139, 92, 246, 0.6),
+      rgba(167, 139, 250, 0.8),
+      rgba(196, 181, 253, 0.6),
+      rgba(167, 139, 250, 0.8),
+      rgba(139, 92, 246, 0.6)
+    ) border-box !important;
+  background-size: 300% 100% !important;
+  animation: gradient-flow 3s ease-in-out infinite, flowing-glow 2s ease-in-out infinite !important;
+  transition: all 0.3s ease !important;
+}
+
+.system-instruction.enhancing::before {
+  content: '';
+  position: absolute;
+  top: -3px;
+  left: -3px;
+  right: -3px;
+  bottom: -3px;
+  background: linear-gradient(90deg, 
+    rgba(139, 92, 246, 0.2),
+    rgba(167, 139, 250, 0.3),
+    rgba(196, 181, 253, 0.2),
+    rgba(167, 139, 250, 0.3),
+    rgba(139, 92, 246, 0.2)
+  );
+  background-size: 300% 100%;
+  border-radius: 10px;
+  z-index: -1;
+  filter: blur(6px);
+  animation: gradient-flow 3s ease-in-out infinite;
+}
+
+.system-instruction.enhancing::after {
+  display: none;
+}
+
+.system-instruction.enhancing:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Make sure the textarea itself has the right styling when enhancing */
+textarea.system-instruction.enhancing {
+  background: rgba(0, 0, 0, 0.95) !important;
+  color: white !important;
+  border: none !important;
+  outline: none !important;
+  z-index: 1;
+  position: relative;
+}
+

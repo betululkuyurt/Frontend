@@ -277,6 +277,9 @@ export default function ServiceWorkflowBuilder() {
   // **[NEW STATE]** - Add file upload state for RAG agents
   const [ragDocumentFile, setRagDocumentFile] = useState<File | null>(null);
 
+  // **[NEW STATE]** - Add state for RGB border animation during prompt enhancement
+  const [isEnhancingPrompt, setIsEnhancingPrompt] = useState<boolean>(false);
+
   const { toast } = useToast()
 
   const [agentTypes, setAgentTypes] = useState<AgentType[]>([]);
@@ -2953,13 +2956,16 @@ export default function ServiceWorkflowBuilder() {
                             </Badge>
                           )}
                           </div>
-                          <Textarea
-                          id="systemInstruction"
-                          value={newAgentData.systemInstruction}
-                          onChange={(e) => setNewAgentData({ ...newAgentData, systemInstruction: e.target.value })}
-                          placeholder="Instructions for the agent..."
-                          className={`bg-black/50 border-purple-900/40 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all ${newAgentData.enhancePrompt ? 'min-h-[200px]' : 'min-h-[80px]'}`}
-                          />
+                          <div className={`relative ${isEnhancingPrompt ? 'system-instruction enhancing' : ''}`}>
+                            <Textarea
+                            id="systemInstruction"
+                            value={newAgentData.systemInstruction}
+                            onChange={(e) => setNewAgentData({ ...newAgentData, systemInstruction: e.target.value })}
+                            placeholder="Instructions for the agent..."
+                            className={`${isEnhancingPrompt ? 'pointer-events-none' : ''} bg-black/50 border-purple-900/40 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all ${newAgentData.enhancePrompt ? 'min-h-[200px]' : 'min-h-[80px]'}`}
+                            disabled={isEnhancingPrompt}
+                            />
+                          </div>
                           <p className="text-gray-400 text-xs">Provide instructions to guide the agent's behavior</p>
                           
                           {/* Enhance System Prompt Section */}
@@ -2982,6 +2988,7 @@ export default function ServiceWorkflowBuilder() {
                                 <Button 
                                   variant="outline"
                                   size="sm"
+                                  disabled={isEnhancingPrompt}
                                   onClick={async () => {
                                     if (!newAgentData.systemInstruction) {
                                       toast({
@@ -2991,6 +2998,9 @@ export default function ServiceWorkflowBuilder() {
                                       });
                                       return;
                                     }
+
+                                    // Start RGB border animation
+                                    setIsEnhancingPrompt(true);
 
                                     // Show loading toast
                                     const loadingToast = toast({
@@ -3047,20 +3057,25 @@ export default function ServiceWorkflowBuilder() {
                                           charIndex++;
                                         } else {
                                           clearInterval(typingInterval);
+                                          
+                                          // Wait a moment before stopping the RGB border animation to let it be visible
+                                          setTimeout(() => {
+                                            setIsEnhancingPrompt(false);
+                                            
+                                            // Dismiss loading toast and show success
+                                            loadingToast.dismiss();
+                                            toast({
+                                              title: "System prompt enhanced",
+                                              description: "Your system instruction has been improved"
+                                            });
+                                          }, 1000); // Wait 1 second after typing completes
                                         }
                                       }, typingSpeed);
-
-                                      // Clean up interval if component unmounts
-                                      return () => clearInterval(typingInterval);
-
-                                      // Dismiss loading toast and show success
-                                      loadingToast.dismiss();
-                                      toast({
-                                        title: "System prompt enhanced",
-                                        description: "Your system instruction has been improved"
-                                      });
                                     } catch (error) {
                                       console.error("Error enhancing system prompt:", error);
+                                      
+                                      // Stop RGB border animation on error
+                                      setIsEnhancingPrompt(false);
                                       
                                       // Dismiss loading toast and show error
                                       loadingToast.dismiss();
@@ -3073,8 +3088,17 @@ export default function ServiceWorkflowBuilder() {
                                   }}
                                   className="bg-gradient-to-r from-purple-600/80 to-purple-700/80 text-white border-purple-500/30 hover:from-purple-600 hover:to-purple-700 transition-all duration-300 shadow-lg hover:shadow-purple-500/20"
                                 >
-                                  <Wand2 className="h-3.5 w-3.5 mr-2" />
-                                  Enhance
+                                  {isEnhancingPrompt ? (
+                                    <>
+                                      <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />
+                                      Enhancing...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Wand2 className="h-3.5 w-3.5 mr-2" />
+                                      Enhance
+                                    </>
+                                  )}
                                 </Button>
                               </div>
                               
