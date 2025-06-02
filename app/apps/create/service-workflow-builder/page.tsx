@@ -2348,7 +2348,7 @@ export default function ServiceWorkflowBuilder() {
                         </div>
                         </div>
                       </div>                      {/* System Instruction - only for specific agent types */}
-                      {(newAgentData.agentType === "gemini" || newAgentData.agentType === "openai" || newAgentData.agentType === "gemini_text2image") && (
+                      {(newAgentData.agentType === "gemini" || newAgentData.agentType==="claude" || newAgentData.agentType === "openai" || newAgentData.agentType === "gemini_text2image") && (
                         <div className="space-y-2">
                           <div className="flex items-center space-x-2">
                           <Label htmlFor="systemInstruction" className="text-white font-medium">System Instruction</Label>
@@ -2529,7 +2529,40 @@ export default function ServiceWorkflowBuilder() {
                           </SelectContent>
                         </Select>
                         </div>
-                      )}                        {newAgentData.agentType === "google_translate" && (
+                      )}             
+                       {newAgentData.agentType === "claude" && (
+                        <div className="space-y-2 bg-black/40 p-4 rounded-lg border border-purple-900/30">
+                        <Label htmlFor="model" className="text-white font-medium">Model</Label>
+                        <Select
+                          value={newAgentData.config.model || ""}
+                          onValueChange={(value) =>
+                          setNewAgentData({
+                            ...newAgentData,
+                            config: { ...newAgentData.config, model: value }
+                          })
+                          }
+                        >
+                          <SelectTrigger className="bg-black/50 border-purple-900/40 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all">
+                          <SelectValue placeholder="Select model" />
+                          </SelectTrigger>
+                          <SelectContent className="max-h-[200px] overflow-y-auto">
+                          <div className="bg-black/90 border-purple-900/40 text-white">
+                            <SelectItem value="claude-3-opus-20240229" className="hover:bg-purple-900/20">Claude Sonnet 4</SelectItem>
+                            <SelectItem value="claude-3-sonnet-20240229" className="hover:bg-purple-900/20">Claude 3.7 Sonnet</SelectItem>
+                            <SelectItem value="claude-3-sonnet-20240229" className="hover:bg-purple-900/20">Claude 3.5 Sonnet</SelectItem>
+                            <SelectItem value="claude-3-haiku-20240307" className="hover:bg-purple-900/20">Claude 3 Haiku</SelectItem>
+                           
+                        
+                          </div>
+                          </SelectContent>
+                        </Select>
+                        </div>
+                      )}         
+                      
+                      
+                      
+                      
+                                 {newAgentData.agentType === "google_translate" && (
                         <div className="bg-black/40 p-4 rounded-lg border border-purple-900/30">
                         <h4 className="text-sm font-medium text-purple-200 mb-3">Translation Settings</h4>
                         <div className="space-y-2">
