@@ -74,15 +74,24 @@ export default function Home() {
                 <Cpu className="h-4 w-4 text-white" />
               </div>
               <span className="text-lg font-bold text-white">MyGen-AI Suite</span>
-            </div>
-            <div className="hidden md:flex items-center space-x-8">
+            </div>            <div className="hidden md:flex items-center space-x-8">
               <a href="#features" className="text-sm text-gray-300 hover:text-purple-400 transition-colors">Features</a>
               <a href="#why-us" className="text-sm text-gray-300 hover:text-purple-400 transition-colors">Why Choose Us</a>
-            </div>            <Link href="/auth/login">
+              <Link href="/apps/create/service-workflow-builder/documentation" className="text-sm text-gray-300 hover:text-purple-400 transition-colors">
+                <span className="flex items-center">
+                  <BookOpen className="h-3 w-3 mr-1" />
+                  Documentation
+                </span>
+              </Link>
+            </div>
+            
+            
+            <Link href="/auth/login">
               <Button size="sm" className="bg-purple-600 hover:bg-purple-700 text-white text-xs px-4 py-2 rounded-md">
                 Sign In
               </Button>
             </Link>
+            
           </div>
         </div>
 
@@ -132,12 +141,19 @@ export default function Home() {
                   <Button className="bg-purple-600 hover:bg-purple-700 text-white font-medium text-sm px-6 py-3 rounded-md">
                     Get Started <ArrowRight className="ml-2 h-4 w-4" />
                   </Button>
-                </Link>
-                <Link href="#features">
+                </Link>                <Link href="#features">
                   <Button variant="outline" className="border-gray-700 text-gray-300 hover:bg-gray-800 font-medium text-sm px-6 py-3 rounded-md">
                     Explore Features <Lightbulb className="ml-2 h-4 w-4" />
                   </Button>
                 </Link>
+                <Button
+                  variant="outline"
+                  onClick={() => router.push("/apps/create/service-workflow-builder/documentation")}
+                  className="border-gray-700 text-gray-300 hover:bg-gray-800 font-medium text-sm px-6 py-3 rounded-md"
+                >
+                  <BookOpen className="h-4 w-4 mr-2" />
+                  Documentation
+                </Button>
               </div>
               
               {/* Code/UI mockup frame with enhanced backdrop gradients */}

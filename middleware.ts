@@ -32,13 +32,22 @@ export function middleware(request: NextRequest) {
     "/apps/api-keys",
     "/apps/create/service-workflow-builder",
   ];
-
+  
+  // Exceptions - paths that start with protected routes but should be publicly accessible
+  const publicExceptions = [
+    "/apps/create/service-workflow-builder/documentation",
+  ];
   const { pathname } = request.nextUrl;
   const accessToken = request.cookies.get("accessToken")?.value;
   const userId = request.cookies.get("user_id")?.value;
+  
+  // Check if the current path is in the exceptions list
+  const isPublicException = publicExceptions.some(path => pathname.startsWith(path));
+  
+  // Only consider a route protected if it's in the protected paths AND not in the exceptions
   const isProtectedRoute = protectedPaths.some((path) =>
     pathname.startsWith(path)
-  );
+  ) && !isPublicException;
 
   // Ana sayfa kontrolü
   if (pathname === "/" && accessToken && isValidToken(accessToken)) {

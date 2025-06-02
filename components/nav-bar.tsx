@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils"
 import { useAuth } from "@/hooks/useAuth"
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
+import { Button } from "@/components/ui/button"
 
 export function NavBar() {
   const pathname = usePathname()
@@ -81,13 +82,27 @@ export function NavBar() {
                 ))}
               </div>
             )}
-          </div>
-
-          <div className="flex items-center gap-4">
+          </div>          <div className="flex items-center gap-4">
             {renderState.showUserNav || isAuthenticated ? (
               <UserNav key={userId || 'guest'} />
             ) : (
-              <></>
+              <>
+                {/* Show login/register buttons for non-authenticated users on documentation page */}
+                {pathname.includes('/documentation') && (
+                  <div className="flex items-center gap-2">
+                    <Link href="/auth/login">
+                      <Button variant="ghost" className="text-gray-300 hover:text-white">
+                        Login
+                      </Button>
+                    </Link>
+                    <Link href="/auth/register">
+                      <Button variant="outline" className="border-purple-700/40 text-white hover:bg-purple-900/30 transition-all">
+                        Register
+                      </Button>
+                    </Link>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>

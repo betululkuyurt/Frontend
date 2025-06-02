@@ -49,6 +49,52 @@
   }
 }
 
+/* Custom animations for the landing page */
+@keyframes float {
+  0% { transform: translateY(0) translateX(0); opacity: 0; }
+  50% { opacity: 0.8; }
+  100% { transform: translateY(-100px) translateX(20px); opacity: 0; }
+}
+
+@keyframes progress {
+  0% { transform: scaleX(0); }
+  100% { transform: scaleX(1); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(40px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.4); }
+  70% { box-shadow: 0 0 0 10px rgba(139, 92, 246, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0); }
+}
+
+.animate-float {
+  animation: float 10s linear infinite;
+}
+
+.animate-progressBar {
+  animation: progress 40s linear infinite;
+}
+
+.animate-fadeIn {
+  opacity: 0;
+  animation: fadeIn 1s ease-out forwards;
+}
+
+.animate-fadeInUp {
+  opacity: 0;
+  animation: fadeInUp 1s ease-out forwards;
+}
+
 @layer base {
   * {
     @apply border-border;

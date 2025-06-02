@@ -1802,13 +1802,23 @@ export default function ServiceWorkflowBuilder() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-black via-purple-950/20 to-black">
-      <NavBar />
-
-      <main className="pt-24 pb-16 px-4">
+      <NavBar />      <main className="pt-24 pb-16 px-4">
         <div className="max-w-6xl mx-auto">
           <div className="mb-8">
-            <h1 className="text-3xl font-bold text-white mb-2">Create Custom AI Service</h1>
-            <p className="text-gray-400">Design your own AI service workflow</p>
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-3xl font-bold text-white mb-2">Create Custom AI Service</h1>
+                <p className="text-gray-400">Design your own AI service workflow</p>
+              </div>
+              <Button
+                variant="outline"
+                onClick={() => router.push("/apps/create/service-workflow-builder/documentation")}
+                className="flex items-center border-purple-700/40 text-white hover:bg-purple-900/30 transition-all"
+              >
+                <BookOpen className="h-4 w-4 mr-2" />
+                Documentation
+              </Button>
+            </div>
           </div>
 
           {/* Progress Bar */}
