@@ -277,6 +277,9 @@ export default function ServiceWorkflowBuilder() {
   // **[NEW STATE]** - Add file upload state for RAG agents
   const [ragDocumentFile, setRagDocumentFile] = useState<File | null>(null);
 
+  // **[NEW STATE]** - Add state for RGB border animation during prompt enhancement
+  const [isEnhancingPrompt, setIsEnhancingPrompt] = useState<boolean>(false);
+
   const { toast } = useToast()
 
   const [agentTypes, setAgentTypes] = useState<AgentType[]>([]);
@@ -292,6 +295,8 @@ export default function ServiceWorkflowBuilder() {
   
   // **[NEW STATE]** - Add state for favorited agents
   const [favoritedAgents, setFavoritedAgents] = useState<Set<string>>(new Set())
+  const [isLoadingFavorites, setIsLoadingFavorites] = useState(false)
+  const [agentFavoriteCounts, setAgentFavoriteCounts] = useState<Record<string, number>>({})
 
   // Within the ServiceWorkflowBuilder component
   const [translateLanguages, setTranslateLanguages] = useState<Language[]>([]);
@@ -324,6 +329,7 @@ export default function ServiceWorkflowBuilder() {
   useEffect(() => {
     fetchAgents()
     fetchApiKeys()
+    fetchUserFavorites() // Add this line to load favorites on mount
   }, [])
 
   // Fetch available agents from the backend
@@ -358,11 +364,15 @@ export default function ServiceWorkflowBuilder() {
           apiKey: a.api_key,
           apiKeyId: a.api_key_id,
           type: a.agent_type,
+          favorites: 0, // Will be updated by fetchFavoriteCounts
         }))
 
         console.log("Mapped agents:", agents);
 
         setAvailableAgents(agents)
+        
+        // Fetch favorite counts for all agents
+        await fetchFavoriteCountsForAgents(agents.map(a => a.id))
       } catch (error) {
         console.error("Error fetching agents:", error)
         // If API fails, use localStorage as fallback
@@ -380,6 +390,92 @@ export default function ServiceWorkflowBuilder() {
       setIsLoading(false)
     }
   }
+
+  // **[UPDATED FUNCTION]** - Fetch favorite counts for multiple agents with proper ID handling
+  const fetchFavoriteCountsForAgents = async (agentIds: string[]): Promise<void> => {
+    try {
+      const counts: Record<string, number> = {}
+      
+      // Fetch counts sequentially to avoid race conditions
+      for (const agentId of agentIds) {
+        try {
+          console.log(`Fetching count for agent ID: ${agentId}`); // Debug log
+          const response = await fetch(`http://127.0.0.1:8000/api/v1/agents/${agentId}/favorite/count`, {
+            headers: {
+              Authorization: `Bearer ${Cookies.get("access_token")}`,
+            }
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            counts[agentId] = data.favorite_count || 0;
+            console.log(`Agent ${agentId} count: ${counts[agentId]}`); // Debug log
+          } else {
+            console.warn(`Failed to fetch count for agent ${agentId}:`, response.status);
+            counts[agentId] = 0;
+          }
+        } catch (error) {
+          console.error(`Error fetching count for agent ${agentId}:`, error);
+          counts[agentId] = 0;
+        }
+      }
+
+      console.log('All counts fetched:', counts); // Debug log
+      setAgentFavoriteCounts(prev => ({ ...prev, ...counts }));
+      
+      // Update availableAgents with the new counts
+      setAvailableAgents(prev => prev.map(agent => ({
+        ...agent,
+        favorites: counts[agent.id] !== undefined ? counts[agent.id] : agent.favorites || 0
+      })));
+      
+    } catch (error) {
+      console.error("Error fetching favorite counts:", error);
+    }
+  };
+
+  // **[UPDATED FUNCTION]** - Update single agent favorite count with debug logging
+  const updateAgentFavoriteCount = async (agentId: string): Promise<void> => {
+    try {
+      console.log(`🔄 Fetching real favorite count for agent ${agentId}...`);
+      
+      const response = await fetch(`http://127.0.0.1:8000/api/v1/agents/${agentId}/favorite/count`, {
+        headers: {
+          Authorization: `Bearer ${Cookies.get("access_token")}`,
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const realCount = data.favorite_count || 0;
+        
+        console.log(`✅ Real count for agent ${agentId}: ${realCount}`);
+        
+        // Update the counts state for ONLY this agent
+        setAgentFavoriteCounts(prev => {
+          const updated = {
+            ...prev,
+            [agentId]: realCount
+          };
+          console.log(`📊 Updated single agent count in state:`, updated);
+          return updated;
+        });
+        
+        // Update ONLY this agent in availableAgents
+        setAvailableAgents(prev => prev.map(agent => {
+          if (agent.id === agentId) {
+            console.log(`🎯 Updating agent ${agent.id} (${agent.name}) with real count: ${agent.favorites} → ${realCount}`);
+            return { ...agent, favorites: realCount };
+          }
+          return agent; // Leave other agents unchanged
+        }));
+      } else {
+        console.warn(`⚠️ Failed to fetch real count for agent ${agentId}: ${response.status}`);
+      }
+    } catch (error) {
+      console.error(`❌ Error updating favorite count for agent ${agentId}:`, error);
+    }
+  };
 
   // Fetch saved API keys
   async function fetchApiKeys() {
@@ -1113,8 +1209,8 @@ export default function ServiceWorkflowBuilder() {
         filteredAgents = compatibleAgents.filter(agent => agent.userId === currentUserId)
         break
       case "My Favorites":
-        // For now, return empty array with placeholder message
-        filteredAgents = []
+        // **[UPDATED]** - Filter by actual favorited agents
+        filteredAgents = compatibleAgents.filter(agent => favoritedAgents.has(agent.id))
         break
       case "All Agents":
       default:
@@ -1468,6 +1564,24 @@ export default function ServiceWorkflowBuilder() {
     }
   }, [newAgentData.agentType]);
 
+  // **[NEW USEEFFECT]** - Periodically refresh favorite counts for visible agents
+  // This is disabled to prevent interference with manual favorite toggles
+  /*
+  useEffect(() => {
+    if (availableAgents.length > 0) {
+      const interval = setInterval(() => {
+        // Only refresh counts for agents that are currently visible
+        const visibleAgentIds = availableAgents.map(a => a.id);
+        if (visibleAgentIds.length > 0) {
+          fetchFavoriteCountsForAgents(visibleAgentIds);
+        }
+      }, 30000); // Refresh every 30 seconds
+
+      return () => clearInterval(interval);
+    }
+  }, [availableAgents.length]); // Only depend on length to avoid infinite loops
+  */
+
   // React Flow states and refs
   const [nodes, setNodes, onNodesChange] = useNodesState<WorkflowNodeData>([
     {
@@ -1756,26 +1870,118 @@ export default function ServiceWorkflowBuilder() {
     return filtered;
   };
 
-  // **[NEW FUNCTION]** - Handle favoriting/unfavoriting agents
-  const toggleFavorite = (agentId: string, event: React.MouseEvent) => {
+  // **[UPDATED FUNCTION]** - Handle favoriting/unfavoriting agents with proper debugging and ID handling
+  const toggleFavorite = async (agentId: string, event: React.MouseEvent) => {
     event.stopPropagation() // Prevent triggering the card click
     
+    console.log(`🔄 Toggling favorite for agent ID: ${agentId}`); // Debug log
+    
+    const isFavorited = favoritedAgents.has(agentId);
+    const currentCount = agentFavoriteCounts[agentId] || 0;
+    
+    console.log(`📊 Agent ${agentId} - isFavorited: ${isFavorited}, currentCount: ${currentCount}`); // Debug log
+    
+    // Optimistically update favorite status
     setFavoritedAgents(prev => {
       const newFavorites = new Set(prev)
-      if (newFavorites.has(agentId)) {
+      if (isFavorited) {
         newFavorites.delete(agentId)
       } else {
         newFavorites.add(agentId)
       }
+      console.log(`⭐ Updated favorites set for agent ${agentId}:`, Array.from(newFavorites));
       return newFavorites
     })
-  
-    if (activeFilterTab === "All") {
-      return agentTypes;
-    }
+
+    // Optimistically update count for ONLY this specific agent
+    const optimisticCount = isFavorited ? Math.max(0, currentCount - 1) : currentCount + 1;
     
-    const categoryTypes = (agentTypeCategories as any)[activeFilterTab] || [];
-    return agentTypes.filter(type => categoryTypes.includes(type.type));
+    console.log(`🔢 Agent ${agentId} - optimistic count: ${currentCount} → ${optimisticCount}`);
+    
+    setAgentFavoriteCounts(prev => {
+      const updated = {
+        ...prev,
+        [agentId]: optimisticCount
+      };
+      console.log(`📝 Updated agentFavoriteCounts:`, updated);
+      return updated;
+    });
+    
+    // Update ONLY this specific agent in availableAgents array
+    setAvailableAgents(prev => prev.map(agent => {
+      if (agent.id === agentId) {
+        console.log(`🎯 Updating agent ${agent.id} (${agent.name}) favorites: ${agent.favorites} → ${optimisticCount}`);
+        return { ...agent, favorites: optimisticCount };
+      }
+      // Leave ALL other agents completely unchanged
+      return agent;
+    }));
+
+    // Make API call
+    let success = false;
+    try {
+      if (isFavorited) {
+        console.log(`🗑️ Removing agent ${agentId} from favorites...`);
+        success = await removeFromFavorites(agentId);
+      } else {
+        console.log(`❤️ Adding agent ${agentId} to favorites...`);
+        success = await addToFavorites(agentId);
+      }
+      console.log(`🌐 API call result for agent ${agentId}: ${success ? 'SUCCESS' : 'FAILED'}`);
+    } catch (error) {
+      console.error(`❌ Error in API call for agent ${agentId}:`, error);
+      success = false;
+    }
+
+    if (!success) {
+      console.log(`🔄 API call failed for agent ${agentId}, reverting all changes...`);
+      
+      // Revert favorite status
+      setFavoritedAgents(prev => {
+        const newFavorites = new Set(prev)
+        if (isFavorited) {
+          newFavorites.add(agentId) // Revert removal
+        } else {
+          newFavorites.delete(agentId) // Revert addition
+        }
+        console.log(`🔙 Reverted favorites set:`, Array.from(newFavorites));
+        return newFavorites
+      })
+      
+      // Revert count for ONLY this agent
+      setAgentFavoriteCounts(prev => {
+        const reverted = {
+          ...prev,
+          [agentId]: currentCount
+        };
+        console.log(`🔙 Reverted agentFavoriteCounts:`, reverted);
+        return reverted;
+      });
+      
+      // Revert ONLY this agent in availableAgents
+      setAvailableAgents(prev => prev.map(agent => 
+        agent.id === agentId 
+          ? { 
+              ...agent, 
+              favorites: currentCount 
+            }
+          : agent // Leave other agents unchanged
+      ));
+    } else {
+      console.log(`✅ API call successful for agent ${agentId}`);
+      
+      // Show success message
+      toast({
+        title: isFavorited ? "Removed from favorites" : "Added to favorites",
+        description: `Agent ${isFavorited ? "removed from" : "added to"} your favorites`,
+      });
+
+      // Fetch real count from backend after a delay to ensure accuracy
+      setTimeout(async () => {
+        console.log(`🔄 Fetching real count for agent ${agentId} from backend...`);
+        await updateAgentFavoriteCount(agentId);
+      }, 1000); // Increased delay to 1 second
+    }
   };
 
   // **[NEW FUNCTION]** - Reset agent dialog state
@@ -1798,6 +2004,106 @@ export default function ServiceWorkflowBuilder() {
     setActiveFilterTab("All");
     setIsAgentTypeGridOpen(true); // Always show grid when opening dialog
     setSearchQuery(""); // Clear search
+  };
+
+  // **[NEW FUNCTIONS]** - Favorites API functions
+  const addToFavorites = async (agentId: string): Promise<boolean> => {
+    try {
+      const response = await fetch(`http://127.0.0.1:8000/api/v1/agents/${agentId}/favorite?current_user_id=${userId}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${Cookies.get("access_token")}`,
+        }
+      });
+
+      if (!response.ok) {
+        if (response.status === 409) {
+          // Already favorited, just return true
+          return true;
+        }
+        throw new Error("Failed to add to favorites");
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Error adding to favorites:", error);
+      toast({
+        variant: "destructive",
+        title: "Failed to add to favorites",
+        description: "Please try again later"
+      });
+      return false;
+    }
+  };
+
+  const removeFromFavorites = async (agentId: string): Promise<boolean> => {
+    try {
+      const response = await fetch(`http://127.0.0.1:8000/api/v1/agents/${agentId}/favorite?current_user_id=${userId}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${Cookies.get("access_token")}`,
+        }
+      });
+
+      if (!response.ok && response.status !== 404) {
+        throw new Error("Failed to remove from favorites");
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Error removing from favorites:", error);
+      toast({
+        variant: "destructive",
+        title: "Failed to remove from favorites", 
+        description: "Please try again later"
+      });
+      return false;
+    }
+  };
+
+  const fetchUserFavorites = async (): Promise<void> => {
+    try {
+      setIsLoadingFavorites(true);
+      const response = await fetch(`http://127.0.0.1:8000/api/v1/agents/favorites?current_user_id=${userId}`, {
+        headers: {
+          Authorization: `Bearer ${Cookies.get("access_token")}`,
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch favorites");
+      }
+
+      const favorites: any[] = await response.json();
+      const favoriteIds = new Set<string>(favorites.map((agent: any) => String(agent.id)));
+      setFavoritedAgents(favoriteIds);
+    } catch (error) {
+      console.error("Error fetching favorites:", error);
+      // Don't show error toast for this as it's not critical
+    } finally {
+      setIsLoadingFavorites(false);
+    }
+  };
+
+  const getFavoriteCount = async (agentId: string): Promise<number> => {
+    try {
+      const response = await fetch(`http://127.0.0.1:8000/api/v1/agents/${agentId}/favorite/count`, {
+        headers: {
+          Authorization: `Bearer ${Cookies.get("access_token")}`,
+        }
+      });
+
+      if (!response.ok) {
+        return 0;
+      }
+
+      const data = await response.json();
+      return data.favorite_count || 0;
+    } catch (error) {
+      console.error("Error fetching favorite count:", error);
+      return 0;
+    }
   };
 
   return (
@@ -2060,7 +2366,8 @@ export default function ServiceWorkflowBuilder() {
                         </ReactFlow>
                       </div>
                     </ReactFlowProvider>
-                    {/* --- END REACT FLOW CANVAS --- */}                    {/* Agent Selection Panel - Redesigned to be nearly full-screen */}
+                    {/* --- END REACT FLOW CANVAS --- */}
+                    {/* Agent Selection Panel - Redesigned to be nearly full-screen */}
                     {selectedAgent && (
                       <div className="fixed inset-4 bg-black/90 backdrop-blur-2xl z-50 rounded-2xl border border-purple-500/30 shadow-2xl shadow-purple-500/20 overflow-hidden">
                         {/* Enhanced background effects */}
@@ -2224,15 +2531,105 @@ export default function ServiceWorkflowBuilder() {
                                 <div className="space-y-6">
                                   {/* Handle My Favorites special case */}
                                   {agentOwnershipFilter === "My Favorites" ? (
-                                    <div className="text-center py-16 bg-black/30 rounded-xl border border-purple-900/30">
-                                      <div className="w-16 h-16 bg-yellow-600/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                                        <span className="text-2xl">⭐</span>
+                                    // **[UPDATED]** - Show actual favorites or empty state
+                                    getFilteredAgents().allAgents.length > 0 ? (
+                                      <div>
+                                        <h5 className="text-lg font-semibold text-white mb-4 flex items-center">
+                                          <div className="w-3 h-3 bg-yellow-500 rounded-full mr-3"></div>
+                                          My Favorites ({getFilteredAgents().allAgents.length})
+                                        </h5>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-4">
+                                          {getFilteredAgents().allAgents.map((agent) => (
+                                            <div
+                                              key={agent.id}
+                                              className="bg-black/50 backdrop-blur-sm rounded-xl border border-purple-500/30 p-4 cursor-pointer hover:border-purple-400 hover:bg-black/60 transition-all duration-200 hover:scale-105 hover:shadow-lg hover:shadow-purple-500/20 group relative"
+                                              onClick={() => addAgentToWorkflow(agent.id)}
+                                            >
+                                              {/* Info and Favorite Buttons */}
+                                              <div className="absolute top-3 right-3 flex items-center gap-1 z-10">
+                                                <span className="text-xs text-yellow-300 font-medium">
+                                                  {agentFavoriteCounts[agent.id] || agent.favorites || 0}
+                                                </span>
+                                                
+                                                <button
+                                                  onClick={(e) => toggleFavorite(agent.id, e)}
+                                                  className={`w-7 h-7 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110 ${
+                                                    favoritedAgents.has(agent.id)
+                                                      ? 'bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30'
+                                                      : 'bg-black/40 text-yellow-400/60 hover:bg-yellow-500/10 hover:text-yellow-400'
+                                                  }`}
+                                                  title={favoritedAgents.has(agent.id) ? "Remove from favorites" : "Add to favorites"}
+                                                >
+                                                  <Star 
+                                                    className={`h-4 w-4 transition-all duration-200 ${
+                                                      favoritedAgents.has(agent.id) ? 'fill-yellow-400' : 'stroke-2'
+                                                    }`}
+                                                  />
+                                                </button>
+                                              </div>
+                                                
+                                              <div className="flex items-start space-x-3">
+                                                <div
+                                                  className={`w-8 h-8 rounded-xl bg-gradient-to-br ${agent.color} flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-200`}
+                                                >
+                                                  {agent.icon && <agent.icon className="h-5 w-5 text-white" />}
+                                                </div>
+
+                                                <div className="flex-1 min-w-0 pr-8">
+                                                  <div className="flex items-center gap-1 mb-1">
+                                                    <h6 className="text-white font-medium truncate">{agent.name}</h6>
+                                                    <button
+                                                      onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        fetchAgentDetails(agent.id);
+                                                        setAgentInfoOpen(agent.id);
+                                                      }}
+                                                      className="w-5 h-5 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110 bg-black/40 text-blue-400/70 hover:bg-blue-500/10 hover:text-blue-400 flex-shrink-0 ml-1"
+                                                      title="View agent details"
+                                                    >
+                                                      <Info className="h-3 w-3" />
+                                                    </button>
+                                                  </div>
+                                                  <p className="text-gray-400 text-sm line-clamp-2 mb-2">{agent.description}</p>
+                                                  <div className="flex flex-wrap gap-1">
+                                                    <Badge variant="outline" className="bg-purple-900/20 text-purple-300 text-xs px-2 py-0.5 border-purple-500/30">
+                                                      {agent.inputType} → {agent.outputType}
+                                                    </Badge>
+                                                    {agent.type && (
+                                                      <Badge variant="outline" className="bg-blue-900/20 text-blue-300 text-xs px-2 py-0.5 border-blue-500/30">
+                                                        {getAgentTypeDisplayName(agent.type || "")}
+                                                      </Badge>
+                                                    )}
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            </div>
+                                          ))}
+                                        </div>
                                       </div>
-                                      <h3 className="text-white font-medium text-lg mb-2">No Favorites Yet</h3>
-                                      <p className="text-gray-400 mb-4">
-                                        You haven't favorited any agents yet. Favorite agents will appear here.
-                                      </p>
-                                    </div>
+                                    ) : (
+                                      <div className="text-center py-16 bg-black/30 rounded-xl border border-purple-900/30">
+                                        <div className="w-16 h-16 bg-yellow-600/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                                          <Star className="h-8 w-8 text-yellow-400" />
+                                        </div>
+                                        <h3 className="text-white font-medium text-lg mb-2">No Favorites Yet</h3>
+                                        <p className="text-gray-400 mb-4">
+                                          {isLoadingFavorites 
+                                            ? "Loading your favorite agents..."
+                                            : "You haven't favorited any agents yet. Click the star icon on any agent to add it to your favorites."
+                                          }
+                                        </p>
+                                        {!isLoadingFavorites && (
+                                          <Button
+                                            variant="outline"
+                                            onClick={() => setAgentOwnershipFilter("All Agents")}
+                                            className="bg-black/40 border-purple-500/30 text-purple-300 hover:bg-purple-900/30"
+                                          >
+                                            Browse All Agents
+                                          </Button>
+                                        )}
+                                      </div>
+                                    )
                                   ) : getFilteredAgents().allAgents.length > 0 ? (
                                     /* All Agents Grid */
                                     <div>
@@ -2248,7 +2645,7 @@ export default function ServiceWorkflowBuilder() {
                                           >                                            {/* Info and Favorite Buttons */}
                                             <div className="absolute top-3 right-3 flex items-center gap-1 z-10">
                                               <span className="text-xs text-yellow-300 font-medium">
-                                                {agent.favorites || 0}
+                                                {agentFavoriteCounts[agent.id] || agent.favorites || 0}
                                               </span>
                                               
                                               <button
@@ -2569,13 +2966,16 @@ export default function ServiceWorkflowBuilder() {
                             </Badge>
                           )}
                           </div>
-                          <Textarea
-                          id="systemInstruction"
-                          value={newAgentData.systemInstruction}
-                          onChange={(e) => setNewAgentData({ ...newAgentData, systemInstruction: e.target.value })}
-                          placeholder="Instructions for the agent..."
-                          className={`bg-black/50 border-purple-900/40 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all ${newAgentData.enhancePrompt ? 'min-h-[200px]' : 'min-h-[80px]'}`}
-                          />
+                          <div className={`relative ${isEnhancingPrompt ? 'system-instruction enhancing' : ''}`}>
+                            <Textarea
+                            id="systemInstruction"
+                            value={newAgentData.systemInstruction}
+                            onChange={(e) => setNewAgentData({ ...newAgentData, systemInstruction: e.target.value })}
+                            placeholder="Instructions for the agent..."
+                            className={`${isEnhancingPrompt ? 'pointer-events-none' : ''} bg-black/50 border-purple-900/40 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all ${newAgentData.enhancePrompt ? 'min-h-[200px]' : 'min-h-[80px]'}`}
+                            disabled={isEnhancingPrompt}
+                            />
+                          </div>
                           <p className="text-gray-400 text-xs">Provide instructions to guide the agent's behavior</p>
                           
                           {/* Enhance System Prompt Section */}
@@ -2598,6 +2998,7 @@ export default function ServiceWorkflowBuilder() {
                                 <Button 
                                   variant="outline"
                                   size="sm"
+                                  disabled={isEnhancingPrompt}
                                   onClick={async () => {
                                     if (!newAgentData.systemInstruction) {
                                       toast({
@@ -2607,6 +3008,9 @@ export default function ServiceWorkflowBuilder() {
                                       });
                                       return;
                                     }
+
+                                    // Start RGB border animation
+                                    setIsEnhancingPrompt(true);
 
                                     // Show loading toast
                                     const loadingToast = toast({
@@ -2663,20 +3067,25 @@ export default function ServiceWorkflowBuilder() {
                                           charIndex++;
                                         } else {
                                           clearInterval(typingInterval);
+                                          
+                                          // Wait a moment before stopping the RGB border animation to let it be visible
+                                          setTimeout(() => {
+                                            setIsEnhancingPrompt(false);
+                                            
+                                            // Dismiss loading toast and show success
+                                            loadingToast.dismiss();
+                                            toast({
+                                              title: "System prompt enhanced",
+                                              description: "Your system instruction has been improved"
+                                            });
+                                          }, 1000); // Wait 1 second after typing completes
                                         }
                                       }, typingSpeed);
-
-                                      // Clean up interval if component unmounts
-                                      return () => clearInterval(typingInterval);
-
-                                      // Dismiss loading toast and show success
-                                      loadingToast.dismiss();
-                                      toast({
-                                        title: "System prompt enhanced",
-                                        description: "Your system instruction has been improved"
-                                      });
                                     } catch (error) {
                                       console.error("Error enhancing system prompt:", error);
+                                      
+                                      // Stop RGB border animation on error
+                                      setIsEnhancingPrompt(false);
                                       
                                       // Dismiss loading toast and show error
                                       loadingToast.dismiss();
@@ -2689,8 +3098,17 @@ export default function ServiceWorkflowBuilder() {
                                   }}
                                   className="bg-gradient-to-r from-purple-600/80 to-purple-700/80 text-white border-purple-500/30 hover:from-purple-600 hover:to-purple-700 transition-all duration-300 shadow-lg hover:shadow-purple-500/20"
                                 >
-                                  <Wand2 className="h-3.5 w-3.5 mr-2" />
-                                  Enhance
+                                  {isEnhancingPrompt ? (
+                                    <>
+                                      <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />
+                                      Enhancing...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Wand2 className="h-3.5 w-3.5 mr-2" />
+                                      Enhance
+                                    </>
+                                  )}
                                 </Button>
                               </div>
                               
