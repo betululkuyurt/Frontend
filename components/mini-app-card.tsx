@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { ArrowRight, Trash2, Loader2, Info, Play, RotateCcw, Star } from "lucide-react"
 import { useState, useEffect, useRef } from "react"
-import { deleteMiniService } from "@/lib/services"
+import { deleteMiniService, toggleFavorite, getFavoriteCount, checkIfFavorited } from "@/lib/services"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -67,6 +67,7 @@ export function MiniAppCard({
   const router = useRouter()
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [isTogglingFavorite, setIsTogglingFavorite] = useState(false)
   const [isHovering, setIsHovering] = useState(false)
   const [isFlipped, setIsFlipped] = useState(false)
   const [titleNeedsAnimation, setTitleNeedsAnimation] = useState(false)
@@ -75,6 +76,8 @@ export function MiniAppCard({
   const containerRef = useRef<HTMLDivElement>(null)
   const backTitleRef = useRef<HTMLSpanElement>(null)
   const backContainerRef = useRef<HTMLDivElement>(null)
+  const [isFavorite, setIsFavorite] = useState(false)
+  const [favoriteCount, setFavoriteCount] = useState(0)
 
   // Check if current user is the owner of the service
   const isCurrentUserOwner = (): boolean => {
@@ -190,14 +193,87 @@ export function MiniAppCard({
     } finally {
       setIsDeleting(false);
     }
-  };  return (
-    <>      <div
+  };
+
+  // Handle favorite button click
+  const handleFavoriteClick = async () => {
+    if (!id) return;
+
+    setIsTogglingFavorite(true);
+
+    try {
+      const result = await toggleFavorite(id);
+      
+      if (result.success) {
+        setIsFavorite(result.isFavorited);
+        
+        // Refresh favorite count from server to ensure accuracy
+        try {
+          const updatedCount = await getFavoriteCount(id);
+          setFavoriteCount(updatedCount);
+        } catch (error) {
+          console.error("Error refreshing favorite count:", error);
+          // Fallback to local update if server refresh fails
+          if (result.isFavorited) {
+            setFavoriteCount(favoriteCount + 1);
+          } else {
+            setFavoriteCount(Math.max(0, favoriteCount - 1));
+          }
+        }
+        
+        toast({
+          title: "Success",
+          description: `"${title}" has been ${result.isFavorited ? "added to" : "removed from"} favorites.`,
+        });
+        
+        // Dispatch event to notify other components about favorite change
+        window.dispatchEvent(new Event("favoriteToggled"));
+      } else {
+        throw new Error("Failed to toggle favorite");
+      }
+    } catch (error) {
+      console.error("Error toggling favorite:", error);
+      toast({
+        variant: "destructive",
+        title: "Favorite Toggle Failed",
+        description: "There was a problem toggling this service's favorite status. Please try again.",
+      });
+    } finally {
+      setIsTogglingFavorite(false);
+    }
+  };
+
+  // Load favorite status and count
+  useEffect(() => {
+    if (id) {
+      const loadFavoriteStatus = async () => {
+        try {
+          console.log(`[FAVORITES] Loading status for service ${id}`);
+          const isFavorited = await checkIfFavorited(id);
+          console.log(`[FAVORITES] Service ${id} is favorited:`, isFavorited);
+          setIsFavorite(isFavorited);
+          
+          const count = await getFavoriteCount(id);
+          console.log(`[FAVORITES] Service ${id} favorite count:`, count);
+          setFavoriteCount(count);
+        } catch (error) {
+          console.error(`[FAVORITES] Error loading status for service ${id}:`, error);
+        }
+      };
+      loadFavoriteStatus();
+    }
+  }, [id]);
+
+  return (
+    <>
+      <div
         onClick={handleClick}
         onMouseEnter={() => setIsHovering(true)}
         onMouseLeave={() => setIsHovering(false)}
         className="cursor-pointer group relative h-64 transform transition-all duration-200 p-2"
         style={{ perspective: '1000px' }}
-      >        {/* Lightweight background glow */}
+      >
+        {/* Lightweight background glow */}
         <div
           className={cn(
             "absolute -inset-1 rounded-3xl bg-gradient-to-br opacity-0 group-hover:opacity-10 transition-opacity duration-200 blur-lg",
@@ -212,7 +288,9 @@ export function MiniAppCard({
             isFlipped && "rotate-y-180"
           )}
           style={{ transformStyle: 'preserve-3d' }}
-        >          {/* Front side of card */}          <div
+        >
+          {/* Front side of card */}
+          <div
             className={cn(
               "h-full bg-gradient-to-br from-gray-900/40 via-gray-800/30 to-gray-900/40 backdrop-blur-xl rounded-xl border border-gray-600/30 flex flex-col transition-all duration-200 relative overflow-hidden absolute inset-2 shadow-2xl",
               isHovering && "border-purple-500/50 from-gray-900/60 via-gray-800/50 to-gray-900/60",
@@ -227,7 +305,8 @@ export function MiniAppCard({
                 isHovering && "opacity-10",
                 color
               )}
-            />            {/* Subtle static background with depth */}
+            />
+            {/* Subtle static background with depth */}
             <div className="absolute inset-0 opacity-10">
               <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-purple-500/20 via-transparent to-blue-500/20"></div>
               <div className="absolute top-0 right-0 w-3/4 h-3/4 bg-gradient-to-bl from-pink-500/15 to-transparent rounded-full blur-xl"></div>
@@ -238,11 +317,13 @@ export function MiniAppCard({
             {/* Simplified border effects */}
             <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-transparent via-purple-500/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200"></div>
             <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-purple-400/50 to-transparent group-hover:via-purple-300/70 transition-all duration-200"></div>
-            <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-blue-400/30 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-200"></div>            {isAddCard ? (
+            <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-blue-400/30 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-200"></div>
+            {isAddCard ? (
               // Modern "Create New" card
-              <>                <div className={cn(
-                    "w-20 h-20 rounded-2xl flex items-center justify-center bg-gradient-to-br shadow-2xl transition-all duration-200 group-hover:scale-105 mb-6 relative overflow-hidden border border-white/10",
-                    color
+              <>
+                <div className={cn(
+                  "w-20 h-20 rounded-2xl flex items-center justify-center bg-gradient-to-br shadow-2xl transition-all duration-200 group-hover:scale-105 mb-6 relative overflow-hidden border border-white/10",
+                  color
                 )}>
                   <div className="absolute inset-0 bg-white/10 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-200"></div>
                   <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent rounded-2xl"></div>
@@ -259,15 +340,18 @@ export function MiniAppCard({
                   </h3>
                   <p className="text-gray-300 text-sm leading-relaxed max-w-xs mx-auto">
                     Build a custom AI workflow with our intuitive drag-and-drop builder
-                  </p>                  <div className="inline-flex items-center text-purple-300 text-sm font-medium bg-gradient-to-r from-purple-500/10 via-blue-500/10 to-purple-500/10 backdrop-blur-sm border border-purple-400/20 px-4 py-2 rounded-full hover:border-purple-400/40 transition-all duration-200">
+                  </p>
+                  <div className="inline-flex items-center text-purple-300 text-sm font-medium bg-gradient-to-r from-purple-500/10 via-blue-500/10 to-purple-500/10 backdrop-blur-sm border border-purple-400/20 px-4 py-2 rounded-full hover:border-purple-400/40 transition-all duration-200">
                     <span className="w-2 h-2 bg-gradient-to-r from-purple-400 to-blue-400 rounded-full mr-2"></span>
                     Click to get started
                   </div>
                 </div>
               </>
-            ) : (              // Enhanced regular service card
+            ) : (
+              // Enhanced regular service card
               <>
-                {/* Modern service icon and title section with glassmorphism */}                <div className="flex items-start space-x-3 mb-4 relative z-10">
+                {/* Modern service icon and title section with glassmorphism */}
+                <div className="flex items-start space-x-3 mb-4 relative z-10">
                   <div className={cn(
                     "w-12 h-12 rounded-xl flex items-center justify-center bg-gradient-to-br shadow-xl transition-all duration-200 group-hover:scale-105 relative overflow-hidden flex-shrink-0 border border-white/10",
                     color
@@ -278,7 +362,8 @@ export function MiniAppCard({
                       {icon}
                     </div>
                   </div>
-                    <div className="flex-1 min-w-0 pr-16" ref={containerRef}>                    <div className="flex items-center mb-2">
+                  <div className="flex-1 min-w-0 pr-16" ref={containerRef}>
+                    <div className="flex items-center mb-2">
                       <h3 className="text-base font-bold text-white tracking-wide flex items-center bg-gradient-to-r from-white via-gray-100 to-gray-200 bg-clip-text text-transparent overflow-hidden">
                         <span 
                           ref={titleRef}
@@ -318,7 +403,31 @@ export function MiniAppCard({
                   </div>
 
                   {/* Modern action buttons with glassmorphism */}
-                  <div className="absolute top-0 right-0 flex gap-1.5">                    {/* Info button with modern design */}
+                  <div className="absolute top-0 right-0 flex gap-1.5">
+                    {/* Favorite star button with modern design */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleFavoriteClick();
+                      }}
+                      className={cn(
+                        "p-2 rounded-xl backdrop-blur-sm transition-all duration-150 border shadow-lg",
+                        isFavorite
+                          ? "bg-gradient-to-r from-orange-500/60 to-amber-500/60 text-orange-300 border-orange-400/50 hover:from-orange-400/60 hover:to-amber-400/60"
+                          : "bg-gradient-to-r from-gray-800/60 to-gray-900/60 text-gray-400 border-gray-600/30 hover:text-orange-400 hover:from-orange-500/20 hover:to-orange-600/20 hover:border-orange-500/50"
+                      )}
+                      aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
+                      title={isFavorite ? "Remove from favorites" : "Add to favorites"}
+                      disabled={isTogglingFavorite}
+                    >
+                      {isTogglingFavorite ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin text-purple-400" />
+                      ) : (
+                        <Star className={cn("h-3.5 w-3.5", isFavorite && "fill-current")} />
+                      )}
+                    </button>
+                    
+                    {/* Info button with modern design */}
                     <button
                       onClick={handleInfoClick}
                       className="p-2 rounded-xl bg-gradient-to-r from-gray-800/60 to-gray-900/60 backdrop-blur-sm text-gray-400 hover:text-blue-400 hover:from-blue-500/20 hover:to-blue-600/20 transition-all duration-150 border border-gray-600/30 hover:border-blue-500/50 shadow-lg"
@@ -344,7 +453,8 @@ export function MiniAppCard({
                       </button>
                     )}
                   </div>
-                </div>                {/* Modern stats badge with gradient background */}
+                </div>
+                {/* Modern stats badge with gradient background */}
                 <div className="flex justify-between items-center mb-4 relative z-10">
                   {/* Runtime badge */}
                   <div className="inline-flex items-center space-x-2 bg-gradient-to-r from-purple-500/10 via-blue-500/10 to-purple-500/10 backdrop-blur-sm border border-purple-400/20 rounded-full px-3 py-1.5 hover:border-purple-400/40 transition-all duration-150 group/stat">
@@ -357,10 +467,8 @@ export function MiniAppCard({
                     {/* Favorites badge */}
                     <div className="inline-flex items-center bg-gradient-to-r from-orange-500/10 to-amber-500/10 border border-orange-400/20 rounded-full px-2 py-1">
                       <Star className="h-3 w-3 text-orange-400 mr-1" />
-                      <span className="text-orange-300 text-[10px] font-medium">0 favorites</span>
+                      <span className="text-orange-300 text-[10px] font-medium">{favoriteCount} favorites</span>
                     </div>
-                    
-                    
                     
                     {is_enhanced === true && (
                       <div className="inline-flex items-center bg-gradient-to-r from-yellow-500/10 to-orange-500/10 border border-yellow-400/20 rounded-full px-2 py-1">
@@ -368,9 +476,9 @@ export function MiniAppCard({
                         <span className="text-yellow-300 text-[10px] font-medium ml-1">Enhanced</span>
                       </div>
                     )}
-                   
                   </div>
-                </div>                {/* Enhanced "Run Service" button with modern glassmorphism */}
+                </div>
+                {/* Enhanced "Run Service" button with modern glassmorphism */}
                 <button
                   className="absolute bottom-0 left-0 right-0 text-center py-4 bg-gradient-to-r from-purple-600/20 via-blue-600/15 to-purple-600/20 hover:from-purple-500/30 hover:via-blue-500/25 hover:to-purple-500/30 text-white transition-all duration-200 border-t border-purple-400/20 text-sm font-semibold flex items-center justify-center group/button rounded-b-xl backdrop-blur-md hover:backdrop-blur-lg shadow-lg hover:shadow-purple-500/15"
                 >
@@ -392,7 +500,9 @@ export function MiniAppCard({
             )}
           </div>
 
-          {/* Back side of card (description) */}          {!isAddCard && (            <div
+          {/* Back side of card (description) */}
+          {!isAddCard && (
+            <div
               className={cn(
                 "h-full bg-gradient-to-br from-gray-900/40 via-gray-800/30 to-gray-900/40 backdrop-blur-xl rounded-xl border flex flex-col transition-all duration-200 relative overflow-hidden absolute inset-2 p-4 rotate-y-180 shadow-2xl",
                 "border-gray-600/30 group-hover:border-purple-500/50"
@@ -518,8 +628,10 @@ export function MiniAppCard({
             >
               {isDeleting ? "Deleting..." : "Yes, Delete"}
             </AlertDialogAction>
-          </AlertDialogFooter>        </AlertDialogContent>
-      </AlertDialog>      <style>{`
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <style>{`
         .rotate-y-180 {
           transform: rotateY(180deg);
         }
