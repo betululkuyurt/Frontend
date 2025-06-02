@@ -34,6 +34,8 @@ import {
   AlertCircle,
   Play,
   Volume2,
+  Star,
+  Info,
 } from "lucide-react"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
@@ -81,22 +83,25 @@ interface TextareaAgentSetting extends BaseAgentSetting {
   type: "textarea"
 }
 
-type AgentSetting = SelectAgentSetting | RangeAgentSetting | TextareaAgentSetting
+type AgentSetting = SelectAgentSetting | RangeAgentSetting | TextareaAgentSetting;
 
 interface Agent {
-  id: string
-  name: string
-  description: string
-  inputType: string
-  outputType: string
-  icon?: React.ComponentType<any>
-  color?: string
-  settings?: AgentSetting[]
-  isPublic: boolean
-  userId: string
-  apiKey?: string
-  apiKeyId?: string
-  type?: string // Add type field
+  id: string;
+  name: string;
+  description: string;
+  inputType: string;
+  outputType: string;
+  icon?: React.ComponentType<any>;
+  color?: string;
+  settings?: AgentSetting[];
+  isPublic: boolean;
+  userId: string;
+  apiKey?: string;
+  apiKeyId?: string;
+  type?: string; // Add type field for agent type (Gemini, ChatGPT, etc.)
+  favorites?: number; // For favoriting functionality
+  trendingScore?: number; // For trending sorting
+  createdAt?: string; // For recently added sorting
 }
 
 interface ApiKey {
@@ -279,6 +284,14 @@ export default function ServiceWorkflowBuilder() {
 
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
+  // **[NEW STATE]** - Add state for agent type filter tabs and sorting
+  const [agentTypeFilter, setAgentTypeFilter] = useState("All")
+  const [agentSortBy, setAgentSortBy] = useState<"mostFavorited" | "trending" | "recentlyAdded">("mostFavorited")
+    // **[NEW STATE]** - Add state for agent ownership filter
+  const [agentOwnershipFilter, setAgentOwnershipFilter] = useState<"All Agents" | "My Agents" | "My Favorites">("All Agents")
+  
+  // **[NEW STATE]** - Add state for favorited agents
+  const [favoritedAgents, setFavoritedAgents] = useState<Set<string>>(new Set())
 
   // Within the ServiceWorkflowBuilder component
   const [translateLanguages, setTranslateLanguages] = useState<Language[]>([]);
@@ -1089,32 +1102,81 @@ export default function ServiceWorkflowBuilder() {
       ...prev,
       [field]: value,
     }));
-  };
-
-  const getFilteredAgents = (): { ownAgents: Agent[], otherAgents: Agent[] } => {
+  };  const getFilteredAgents = (): { allAgents: Agent[] } => {
     const compatibleAgents = getCompatibleAgents()
     const currentUserId = Cookies.get("user_id")
 
-    // Separate agents into own and other users' agents
-    const ownAgents = compatibleAgents.filter(agent => agent.userId === currentUserId)
-    const otherAgents = compatibleAgents.filter(agent => agent.userId !== currentUserId)
-
-    // Apply search filter if there's a search query
-    if (searchQuery.trim()) {
-      const searchLower = searchQuery.toLowerCase()
-      return {
-        ownAgents: ownAgents.filter(agent =>
-          agent.name.toLowerCase().includes(searchLower) ||
-          agent.description.toLowerCase().includes(searchLower)
-        ),
-        otherAgents: otherAgents.filter(agent =>
-          agent.name.toLowerCase().includes(searchLower) ||
-          agent.description.toLowerCase().includes(searchLower)
-        )
-      }
+    // Apply ownership filter first
+    let filteredAgents: Agent[] = []
+    switch (agentOwnershipFilter) {
+      case "My Agents":
+        filteredAgents = compatibleAgents.filter(agent => agent.userId === currentUserId)
+        break
+      case "My Favorites":
+        // For now, return empty array with placeholder message
+        filteredAgents = []
+        break
+      case "All Agents":
+      default:
+        filteredAgents = compatibleAgents
+        break
     }
 
-    return { ownAgents, otherAgents }
+    // Apply agent type filter
+    const filterByType = (agents: Agent[]) => {
+      if (agentTypeFilter === "All") return agents
+      
+      const agentTypeMapping: { [key: string]: string[] } = {
+        "Gemini": ["gemini", "gemini_text2image"],
+        "ChatGPT": ["openai", "gpt_vision", "openai_assistant"],
+        "Claude": ["claude"],
+        "TTS": ["edge_tts", "bark_tts"],
+        "Media": ["whisper", "transcribe"],
+        "Document": ["rag", "pdf_reader", "document_analyzer"],
+        "Translation": ["google_translate"],
+        "Custom": ["custom_endpoint_llm"]
+      }
+      
+      const typeList = agentTypeMapping[agentTypeFilter] || []
+      return agents.filter(agent => agent.type && typeList.includes(agent.type))
+    }
+
+    // Apply search filter
+    const filterBySearch = (agents: Agent[]) => {
+      if (!searchQuery.trim()) return agents
+      const searchLower = searchQuery.toLowerCase()
+      return agents.filter(agent =>
+        agent.name.toLowerCase().includes(searchLower) ||
+        agent.description.toLowerCase().includes(searchLower)
+      )
+    }
+
+    // Apply sorting
+    const sortAgents = (agents: Agent[]) => {
+      return [...agents].sort((a, b) => {
+        switch (agentSortBy) {
+          case "mostFavorited":
+            return (b.favorites || 0) - (a.favorites || 0)
+          case "trending":
+            return (b.trendingScore || 0) - (a.trendingScore || 0)
+          case "recentlyAdded":
+            const dateA = new Date(a.createdAt || '').getTime()
+            const dateB = new Date(b.createdAt || '').getTime()
+            return dateB - dateA
+          default:
+            return a.name.localeCompare(b.name)
+        }
+      })
+    }
+
+    // Process agents through all filters
+    const processAgents = (agents: Agent[]) => {
+      return sortAgents(filterBySearch(filterByType(agents)))
+    }
+
+    return { 
+      allAgents: processAgents(filteredAgents)
+    }
   }
 
   // Common glow effect styles for all tabs
@@ -1674,8 +1736,40 @@ export default function ServiceWorkflowBuilder() {
       .map(word => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ');
   };
-  // **[NEW FUNCTION]** - Filter agent types based on selected tab
+
+  // **[NEW FUNCTION]** - Filter agent types for the agent creation dialog
   const getFilteredAgentTypes = (): AgentType[] => {
+    // Filter by active tab/category
+    let filtered = agentTypes;
+    if (activeFilterTab !== "All") {
+      const categoryTypes = (agentTypeCategories as any)[activeFilterTab] || [];
+      filtered = filtered.filter(type => categoryTypes.includes(type.type));
+    }
+    // Filter by search query
+    if (searchQuery.trim()) {
+      const searchLower = searchQuery.toLowerCase();
+      filtered = filtered.filter(type =>
+        getAgentTypeDisplayName(type.type).toLowerCase().includes(searchLower) ||
+        type.type.toLowerCase().includes(searchLower)
+      );
+    }
+    return filtered;
+  };
+
+  // **[NEW FUNCTION]** - Handle favoriting/unfavoriting agents
+  const toggleFavorite = (agentId: string, event: React.MouseEvent) => {
+    event.stopPropagation() // Prevent triggering the card click
+    
+    setFavoritedAgents(prev => {
+      const newFavorites = new Set(prev)
+      if (newFavorites.has(agentId)) {
+        newFavorites.delete(agentId)
+      } else {
+        newFavorites.add(agentId)
+      }
+      return newFavorites
+    })
+  
     if (activeFilterTab === "All") {
       return agentTypes;
     }
@@ -1956,62 +2050,124 @@ export default function ServiceWorkflowBuilder() {
                         </ReactFlow>
                       </div>
                     </ReactFlowProvider>
-                    {/* --- END REACT FLOW CANVAS --- */}
-
-                    {/* Agent Selection Panel */}
+                    {/* --- END REACT FLOW CANVAS --- */}                    {/* Agent Selection Panel - Redesigned to be nearly full-screen */}
                     {selectedAgent && (
-                      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm z-10 p-4 overflow-y-auto">
-                        <div className="bg-gray-900/70 border border-purple-900/30 rounded-md p-4 max-w-3xl mx-auto">
-                          <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-lg font-medium text-white">Select Agent</h3>
+                      <div className="fixed inset-4 bg-black/90 backdrop-blur-2xl z-50 rounded-2xl border border-purple-500/30 shadow-2xl shadow-purple-500/20 overflow-hidden">
+                        {/* Enhanced background effects */}
+                        <div className="absolute inset-0 bg-gradient-to-br from-purple-900/20 via-black/80 to-blue-900/20 backdrop-blur-3xl"></div>
+                        <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(147,51,234,0.1),transparent_50%)] animate-pulse"></div>
+                        
+                        <div className="relative h-full flex flex-col">
+                          {/* Header with enhanced styling */}
+                          <div className="flex items-center justify-between p-6 border-b border-purple-500/20 bg-black/30 backdrop-blur-sm">
+                            <div>
+                              <h3 className="text-2xl font-bold text-white mb-1">Select Agent</h3>
+                              <p className="text-gray-400 text-sm">Choose an agent to add to your workflow</p>
+                            </div>
                             <Button 
                               variant="ghost" 
                               size="sm" 
-                              className="text-gray-400 hover:text-white"
+                              className="text-gray-400 hover:text-white hover:bg-purple-900/30 rounded-full h-10 w-10 p-0"
                               onClick={() => setSelectedAgent(null)}
                             >
-                              <X className="h-4 w-4" />
+                              <X className="h-5 w-5" />
                             </Button>
                           </div>
-                          <div className="space-y-4">
-                            {/* Search and Filter */}
-                            <div className="flex flex-col space-y-3">
-                              {/* Search input */}
-                              <div className="relative w-full">
-                                <div className="flex items-center bg-black/40 border border-purple-900/30 rounded-md pr-1">
+
+                          {/* Main content area */}
+                          <div className="flex-1 p-6 space-y-6 overflow-y-auto">                            {/* Search and Filter Controls */}
+                            <div className="space-y-4">
+                              {/* Search input with enhanced styling */}
+                              <div className="relative w-full max-w-md">
+                                <div className="relative">
                                   <Input
                                     type="text"
                                     placeholder="Search agents..."
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="h-9 text-sm border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 text-white w-full pl-9"
+                                    className="h-12 text-base border-0 bg-black/40 backdrop-blur-sm focus-visible:ring-2 focus-visible:ring-purple-500 text-white w-full pl-12 pr-10 rounded-xl border border-purple-500/30"
                                   />
-                                  <Search className="h-4 w-4 text-gray-400 absolute left-3" />
+                                  <Search className="h-5 w-5 text-gray-400 absolute left-4 top-1/2 transform -translate-y-1/2" />
                                   {searchQuery && (
                                     <Button
                                       variant="ghost"
                                       size="icon"
-                                      className="h-7 w-7 p-0 flex-shrink-0"
+                                      className="h-8 w-8 p-0 absolute right-2 top-1/2 transform -translate-y-1/2 hover:bg-purple-900/30"
                                       onClick={() => setSearchQuery("")}
                                     >
-                                      <X className="h-3 w-3 text-gray-400" />
+                                      <X className="h-4 w-4 text-gray-400" />
                                     </Button>
                                   )}
                                 </div>
                               </div>
-                              {/* Filter controls */}
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+
+                              {/* Agent Ownership Filter Tabs */}
+                              <div className="space-y-3">
+                                <h4 className="text-sm font-medium text-gray-300">Agent Collection</h4>
+                                <div className="flex flex-wrap gap-2">
+                                  {["All Agents", "My Agents", "My Favorites"].map((filter) => (
+                                    <button
+                                      key={filter}
+                                      onClick={() => setAgentOwnershipFilter(filter as "All Agents" | "My Agents" | "My Favorites")}
+                                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                                        agentOwnershipFilter === filter
+                                          ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/30 border border-purple-400'
+                                          : 'bg-black/40 text-gray-300 hover:text-white hover:bg-purple-900/30 border border-purple-900/30'
+                                      }`}
+                                    >
+                                      {filter}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+
+                              {/* Agent Type Filter Tabs */}
+                              <div className="space-y-3">
+                                <h4 className="text-sm font-medium text-gray-300">Filter by Agent Type</h4>
+                                <div className="flex flex-wrap gap-2">
+                                  {["All", "Gemini", "ChatGPT", "Claude", "TTS", "Media", "Document", "Translation", "Custom"].map((type) => (
+                                    <button
+                                      key={type}
+                                      onClick={() => setAgentTypeFilter(type)}
+                                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                                        agentTypeFilter === type
+                                          ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/30 border border-purple-400'
+                                          : 'bg-black/40 text-gray-300 hover:text-white hover:bg-purple-900/30 border border-purple-900/30'
+                                      }`}
+                                    >
+                                      {type}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+
+                              {/* Sorting Options */}
+                              <div className="flex items-center justify-between">
+                                <h4 className="text-sm font-medium text-gray-300">Sort by</h4>
+                                <Select value={agentSortBy} onValueChange={(value: any) => setAgentSortBy(value)}>
+                                  <SelectTrigger className="w-48 bg-black/40 border-purple-500/30 text-white h-10 rounded-lg">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent className="bg-black/90 border-purple-500/30 backdrop-blur-xl">
+                                    <div className="bg-black/90 border-purple-900/30 text-white">
+                                      <SelectItem value="mostFavorited">Most Favorited</SelectItem>
+                                      <SelectItem value="trending">Trending</SelectItem>
+                                      <SelectItem value="recentlyAdded">Recently Added</SelectItem>
+                                    </div>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+
+                              {/* Input/Output Type Filters */}
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <Select
                                   value={filterTypes.inputType}
                                   onValueChange={handleInputTypeChange}
                                 >
-                                  <SelectTrigger
-                                    id="inputType"
-                                    className="bg-black/40 border-purple-900/30 text-white h-9 text-sm"
-                                  >
+                                  <SelectTrigger className="bg-black/40 border-purple-500/30 text-white h-10 rounded-lg">
                                     <SelectValue placeholder="Input Type" />
                                   </SelectTrigger>
-                                  <SelectContent>
+                                  <SelectContent className="bg-black/90 border-purple-500/30 backdrop-blur-xl">
                                     <div className="bg-black/90 border-purple-900/30 text-white">
                                       <SelectItem value="select">All Inputs</SelectItem>
                                       {inputTypes.map((type) => (
@@ -2029,13 +2185,10 @@ export default function ServiceWorkflowBuilder() {
                                   value={filterTypes.outputType}
                                   onValueChange={handleOutputTypeChange}
                                 >
-                                  <SelectTrigger
-                                    id="outputType"
-                                    className="bg-black/40 border-purple-900/30 text-white h-9 text-sm"
-                                  >
+                                  <SelectTrigger className="bg-black/40 border-purple-500/30 text-white h-10 rounded-lg">
                                     <SelectValue placeholder="Output Type" />
                                   </SelectTrigger>
-                                  <SelectContent>
+                                  <SelectContent className="bg-black/90 border-purple-500/30 backdrop-blur-xl">
                                     <div className="bg-black/90 border-purple-900/30 text-white">
                                       <SelectItem value="select">All Outputs</SelectItem>
                                       {outputTypes.map((type) => (
@@ -2050,86 +2203,136 @@ export default function ServiceWorkflowBuilder() {
                                   </SelectContent>
                                 </Select>
                               </div>
-                            </div>
-                            {/* Agent List */}
-                            <div className="w-full">
+                            </div>                            {/* Agent List with enhanced layout */}
+                            <div className="flex-1">
                               {isLoading ? (
-                                <div className="flex items-center justify-center p-6">
-                                  <Loader2 className="h-6 w-6 animate-spin mr-2 text-purple-400" />
-                                  <span className="text-gray-400">Loading available agents...</span>
+                                <div className="flex items-center justify-center p-12">
+                                  <Loader2 className="h-8 w-8 animate-spin mr-3 text-purple-400" />
+                                  <span className="text-gray-400 text-lg">Loading available agents...</span>
                                 </div>
                               ) : (
-                                <div className="space-y-6 w-full">
-                                  {/* User's Own Agents */}
-                                  <div>
-                                    <h5 className="text-sm font-medium text-gray-400 mb-3">My Agents</h5>
-                                    {getFilteredAgents().ownAgents.length > 0 ? (
-                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                        {getFilteredAgents().ownAgents.map((agent) => (
-                                          <div
+                                <div className="space-y-6">
+                                  {/* Handle My Favorites special case */}
+                                  {agentOwnershipFilter === "My Favorites" ? (
+                                    <div className="text-center py-16 bg-black/30 rounded-xl border border-purple-900/30">
+                                      <div className="w-16 h-16 bg-yellow-600/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                                        <span className="text-2xl">⭐</span>
+                                      </div>
+                                      <h3 className="text-white font-medium text-lg mb-2">No Favorites Yet</h3>
+                                      <p className="text-gray-400 mb-4">
+                                        You haven't favorited any agents yet. Favorite agents will appear here.
+                                      </p>
+                                    </div>
+                                  ) : getFilteredAgents().allAgents.length > 0 ? (
+                                    /* All Agents Grid */
+                                    <div>
+                                      <h5 className="text-lg font-semibold text-white mb-4 flex items-center">
+                                        <div className="w-3 h-3 bg-purple-500 rounded-full mr-3"></div>
+                                        {agentOwnershipFilter} ({getFilteredAgents().allAgents.length})
+                                      </h5>
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-4">
+                                        {getFilteredAgents().allAgents.map((agent) => (                                          <div
                                             key={agent.id}
-                                            className="bg-black/40 rounded-lg border border-purple-900/30 p-3 cursor-pointer hover:border-purple-500/50 transition-colors"
+                                            className="bg-black/50 backdrop-blur-sm rounded-xl border border-purple-500/30 p-4 cursor-pointer hover:border-purple-400 hover:bg-black/60 transition-all duration-200 hover:scale-105 hover:shadow-lg hover:shadow-purple-500/20 group relative"
                                             onClick={() => addAgentToWorkflow(agent.id)}
-                                          >
-                                            <div className="flex items-center">
-                                              <div
-                                                className={`w-8 h-8 rounded-full bg-gradient-to-br ${agent.color} flex items-center justify-center flex-shrink-0`}
+                                          >                                            {/* Info and Favorite Buttons */}
+                                            <div className="absolute top-3 right-3 flex items-center gap-1 z-10">
+                                              <span className="text-xs text-yellow-300 font-medium">
+                                                {agent.favorites || 0}
+                                              </span>
+                                              
+                                              <button
+                                                onClick={(e) => toggleFavorite(agent.id, e)}
+                                                className={`w-7 h-7 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110 ${
+                                                  favoritedAgents.has(agent.id)
+                                                    ? 'bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30'
+                                                    : 'bg-black/40 text-yellow-400/60 hover:bg-yellow-500/10 hover:text-yellow-400'
+                                                }`}
+                                                title={favoritedAgents.has(agent.id) ? "Remove from favorites" : "Add to favorites"}
                                               >
-                                                {agent.icon && <agent.icon className="h-4 w-4 text-white" />}
-                                              </div>
-                                              <div className="ml-2 flex-1 min-w-0">
-                                                <h5 className="text-white text-sm font-medium truncate">{agent.name}</h5>
-                                                <div className="flex mt-1 space-x-1">
-                                                  <Badge variant="outline" className="bg-purple-900/20 text-[10px] px-1 py-0 h-4">
+                                                <Star 
+                                                  className={`h-4 w-4 transition-all duration-200 ${
+                                                    favoritedAgents.has(agent.id) ? 'fill-yellow-400' : 'stroke-2'
+                                                  }`}
+                                                />
+                                              </button>
+                                            </div>
+                                              
+                                            <div className="flex items-start space-x-3">
+                                              <div
+                                                className={`w-8 h-8 rounded-xl bg-gradient-to-br ${agent.color} flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-200`}
+                                              >
+                                                {agent.icon && <agent.icon className="h-5 w-5 text-white" />}
+                                              </div>                                              <div className="flex-1 min-w-0 pr-8">
+                                                <div className="flex items-center gap-1 mb-1">
+                                                  <h6 className="text-white font-medium truncate">{agent.name}</h6>
+                                                  <button
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      fetchAgentDetails(agent.id);
+                                                      setAgentInfoOpen(agent.id);
+                                                    }}
+                                                    className="w-5 h-5 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110 bg-black/40 text-blue-400/70 hover:bg-blue-500/10 hover:text-blue-400 flex-shrink-0 ml-1"
+                                                    title="View agent details"
+                                                  >
+                                                    <Info className="h-3 w-3" />
+                                                  </button>
+                                                </div>
+                                                <p className="text-gray-400 text-sm line-clamp-2 mb-2">{agent.description}</p>
+                                                <div className="flex flex-wrap gap-1">
+                                                  <Badge variant="outline" className="bg-purple-900/20 text-purple-300 text-xs px-2 py-0.5 border-purple-500/30">
                                                     {agent.inputType} → {agent.outputType}
-                                                  </Badge>
+                                                  </Badge>                                                  {agent.type && (
+                                                    <Badge variant="outline" className="bg-blue-900/20 text-blue-300 text-xs px-2 py-0.5 border-blue-500/30">
+                                                      {getAgentTypeDisplayName(agent.type || "")}
+                                                    </Badge>
+                                                  )}
                                                 </div>
                                               </div>
+                                              
                                             </div>
+                                            
                                           </div>
                                         ))}
                                       </div>
-                                    ) : (
-                                      <p className="text-gray-500 text-sm italic">
-                                        {searchQuery ? `No agents found named "${searchQuery}" in your collection.` : "No agents found in your collection."}
-                                      </p>
-                                    )}
-                                  </div>
-                                  {/* Other Users' Agents */}
-                                  <div>
-                                    <h5 className="text-sm font-medium text-gray-400 mb-3">Other Agents</h5>
-                                    {getFilteredAgents().otherAgents.length > 0 ? (
-                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                        {getFilteredAgents().otherAgents.map((agent) => (
-                                          <div
-                                            key={agent.id}
-                                            className="bg-black/40 rounded-lg border border-purple-900/30 p-3 cursor-pointer hover:border-purple-500/50 transition-colors"
-                                            onClick={() => addAgentToWorkflow(agent.id)}
-                                          >
-                                            <div className="flex items-center">
-                                              <div
-                                                className={`w-8 h-8 rounded-full bg-gradient-to-br ${agent.color} flex items-center justify-center flex-shrink-0`}
-                                              >
-                                                {agent.icon && <agent.icon className="h-4 w-4 text-white" />}
-                                              </div>
-                                              <div className="ml-2 flex-1 min-w-0">
-                                                <h5 className="text-white text-sm font-medium truncate">{agent.name}</h5>
-                                                <div className="flex mt-1 space-x-1">
-                                                  <Badge variant="outline" className="bg-purple-900/20 text-[10px] px-1 py-0 h-4">
-                                                    {agent.inputType} → {agent.outputType}
-                                                  </Badge>
-                                                </div>
-                                              </div>
-                                            </div>
-                                          </div>
-                                        ))}
+                                    </div>
+                                  ) : (
+                                    /* No results state */
+                                    <div className="text-center py-16 bg-black/30 rounded-xl border border-purple-900/30">
+                                      <div className="w-16 h-16 bg-purple-600/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                                        <Search className="h-8 w-8 text-purple-400 opacity-60" />
                                       </div>
-                                    ) : (
-                                      <p className="text-gray-500 text-sm italic">
-                                        {searchQuery ? `No other agents found named "${searchQuery}".` : "No other agents found."}
+                                      <h3 className="text-white font-medium text-lg mb-2">No agents found</h3>
+                                      <p className="text-gray-400 mb-4">
+                                        No agents match your current filters and search criteria.
                                       </p>
-                                    )}
-                                  </div>
+                                      <div className="flex gap-2 justify-center">
+                                        {searchQuery && (
+                                          <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => setSearchQuery("")}
+                                            className="bg-black/40 border-purple-500/30 text-purple-300 hover:bg-purple-900/30"
+                                          >
+                                            <X className="h-4 w-4 mr-2" /> Clear Search
+                                          </Button>
+                                        )}
+                                        {(agentTypeFilter !== "All" || agentOwnershipFilter !== "All Agents") && (
+                                          <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => {
+                                              setAgentTypeFilter("All")
+                                              setAgentOwnershipFilter("All Agents")
+                                            }}
+                                            className="bg-black/40 border-purple-500/30 text-purple-300 hover:bg-purple-900/30"
+                                          >
+                                            <X className="h-4 w-4 mr-2" /> Clear Filters
+                                          </Button>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
                               )}
                             </div>
@@ -2326,28 +2529,26 @@ export default function ServiceWorkflowBuilder() {
                           </span>
                         </div>
                         </div>
-                      </div>
-
-                      {/* Replace input/output type dropdowns with text display */}
+                      </div>                      {/* Replace input/output type dropdowns with text display */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className="space-y-2">
-                        <Label className="text-white font-medium">Input Type</Label>
-                        <div className="p-2 bg-black/50 border border-purple-900/40 rounded-md">
-                          <p className="text-white text-sm">
-                          {newAgentData.inputType || "Will be set based on agent type"}
-                          </p>
-                        </div>
+                          <Label className="text-white font-medium">Input Type</Label>
+                          <div className="p-2 bg-black/50 border border-purple-900/40 rounded-md">
+                            <p className="text-white text-sm">
+                              {newAgentData.inputType || "Will be set based on agent type"}
+                            </p>
+                          </div>
                         </div>
 
                         <div className="space-y-2">
-                        <Label className="text-white font-medium">Output Type</Label>
-                        <div className="p-2 bg-black/50 border border-purple-900/40 rounded-md">
-                          <p className="text-white text-sm">
-                          {newAgentData.outputType || "Will be set based on agent type"}
-                          </p>
+                          <Label className="text-white font-medium">Output Type</Label>
+                          <div className="p-2 bg-black/50 border border-purple-900/40 rounded-md">
+                            <p className="text-white text-sm">
+                              {newAgentData.outputType || "Will be set based on agent type"}
+                            </p>
+                          </div>
                         </div>
-                        </div>
-                      </div>                      {/* System Instruction - only for specific agent types */}
+                      </div>{/* System Instruction - only for specific agent types */}
                       {(newAgentData.agentType === "gemini" || newAgentData.agentType==="claude" || newAgentData.agentType === "openai" || newAgentData.agentType === "gemini_text2image") && (
                         <div className="space-y-2">
                           <div className="flex items-center space-x-2">
@@ -3350,10 +3551,130 @@ export default function ServiceWorkflowBuilder() {
                   </div>
                 </div>
               </div>
-            </TabsContent>
-          </Tabs>
+            </TabsContent>          </Tabs>
         </div>
       </main>
+
+      {/* Agent Details Popup Dialog */}
+      <Dialog open={agentInfoOpen !== null} onOpenChange={() => setAgentInfoOpen(null)}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto bg-gradient-to-br from-black/95 via-purple-950/30 to-black/95 border border-purple-500/30 backdrop-blur-xl">
+          <div className="absolute inset-0 bg-gradient-to-br from-purple-600/10 via-transparent to-blue-600/10 pointer-events-none" />
+          <div className="relative z-10">
+            <DialogHeader className="pb-6">
+              <DialogTitle className="text-2xl font-bold bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center">
+                  <Info className="h-5 w-5 text-white" />
+                </div>
+                Agent Details
+              </DialogTitle>
+            </DialogHeader>
+
+            {isLoadingAgentDetails ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-purple-400 mr-3" />
+                <span className="text-gray-300">Loading agent details...</span>
+              </div>
+            ) : agentDetails ? (
+              <div className="space-y-6">
+                {/* Basic Information */}
+                <div className="bg-black/40 rounded-xl p-6 border border-purple-900/30">
+                  <h3 className="text-lg font-semibold text-white mb-4 flex items-center">
+                    <MessageSquare className="h-5 w-5 mr-2 text-purple-400" />
+                    Basic Information
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-gray-300 text-sm">Agent Name</Label>
+                      <p className="text-white font-medium mt-1">{agentDetails.name}</p>
+                    </div>
+                    <div>
+                      <Label className="text-gray-300 text-sm">Agent Type</Label>
+                      <p className="text-white font-medium mt-1">{getAgentTypeDisplayName(agentDetails.agent_type || "")}</p>
+                    </div>
+                    <div>
+                      <Label className="text-gray-300 text-sm">Input Type</Label>
+                      <Badge variant="outline" className="bg-green-900/20 text-green-300 border-green-500/30 mt-1">
+                        {agentDetails.input_type}
+                      </Badge>
+                    </div>
+                    <div>
+                      <Label className="text-gray-300 text-sm">Output Type</Label>
+                      <Badge variant="outline" className="bg-blue-900/20 text-blue-300 border-blue-500/30 mt-1">
+                        {agentDetails.output_type}
+                      </Badge>
+                    </div>
+                    <div className="md:col-span-2">
+                      <Label className="text-gray-300 text-sm">Description</Label>
+                      <p className="text-white mt-1">{agentDetails.description || "No description available"}</p>
+                    </div>
+                    <div>
+                      <Label className="text-gray-300 text-sm">Visibility</Label>
+                      <Badge variant="outline" className={`mt-1 ${agentDetails.is_public ? 'bg-green-900/20 text-green-300 border-green-500/30' : 'bg-orange-900/20 text-orange-300 border-orange-500/30'}`}>
+                        {agentDetails.is_public ? 'Public' : 'Private'}
+                      </Badge>
+                    </div>
+                    <div>
+                      <Label className="text-gray-300 text-sm">Created Date</Label>
+                      <p className="text-gray-300 mt-1">{agentDetails.created_at ? new Date(agentDetails.created_at).toLocaleDateString() : "N/A"}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* System Prompt/Instruction */}
+                {agentDetails.system_instruction && (
+                  <div className="bg-black/40 rounded-xl p-6 border border-purple-900/30">
+                    <h3 className="text-lg font-semibold text-white mb-4 flex items-center">
+                      <Wand2 className="h-5 w-5 mr-2 text-purple-400" />
+                      System Instruction
+                    </h3>
+                    <div className="bg-black/50 rounded-lg p-4 border border-purple-800/20">
+                      <pre className="text-gray-300 whitespace-pre-wrap text-sm leading-relaxed font-mono">
+                        {agentDetails.system_instruction}
+                      </pre>
+                    </div>
+                  </div>
+                )}                {/* Configuration */}
+                {agentDetails.config && Object.keys(agentDetails.config).length > 0 && (
+                  <div className="bg-black/40 rounded-xl p-6 border border-purple-900/30">
+                    <h3 className="text-lg font-semibold text-white mb-4 flex items-center">
+                      <Settings className="h-5 w-5 mr-2 text-purple-400" />
+                      Configuration
+                    </h3>
+                    <div className="space-y-3">
+                      {Object.entries(agentDetails.config)
+                        .filter(([key]) => !key.toLowerCase().includes('api_key') && !key.toLowerCase().includes('apikey'))
+                        .map(([key, value]) => (
+                        <div key={key} className="flex items-center justify-between py-2 px-3 bg-black/50 rounded-lg border border-purple-800/20">
+                          <Label className="text-gray-300 text-sm capitalize">
+                            {key.replace(/_/g, ' ')}
+                          </Label>
+                          <span className="text-white font-medium text-sm">
+                            {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-12">
+                <AlertCircle className="h-12 w-12 text-red-400 mx-auto mb-4" />
+                <p className="text-gray-300">Failed to load agent details</p>
+              </div>
+            )}
+
+            <div className="flex justify-end pt-6 border-t border-purple-900/30">
+              <Button
+                onClick={() => setAgentInfoOpen(null)}
+                className="bg-gradient-to-r from-purple-600 to-purple-800 text-white hover:opacity-90 transition-all duration-300"
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
