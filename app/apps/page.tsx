@@ -38,7 +38,7 @@ import {
 } from "lucide-react"
 import { toast } from "@/components/ui/use-toast"
 import { decodeJWT } from "@/lib/auth"
-import { deleteMiniService } from "@/lib/services"
+import { deleteMiniService, getFavoriteServices, type FavoriteService } from "@/lib/services"
 import { Play } from "next/font/google"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -61,32 +61,33 @@ import {
 
 // Define the service type
 interface Service {
-  id: number
-  name: string
-  description: string
-  icon: React.ReactNode
-  serviceType: string
-  color: string
-  isCustom?: boolean
-  owner_id?: number
-  owner_username?: string
-  onDelete?: (id: number) => Promise<boolean> | boolean
+  id: number;
+  name: string;
+  description: string;
+  icon: React.ReactNode;
+  serviceType: string;
+  color: string;
+  isCustom?: boolean;
+  owner_id?: number;
+  owner_username?: string;
+  onDelete?: (id: number) => Promise<boolean> | boolean;
   usageStats?: {
     average_token_usage: {
-      input_type: number
-      output_type: number
-      prompt_tokens: number
-      completion_tokens: number
-      total_tokens: number
-    }
-    run_time: number
-    input_type: string
-    output_type: string
-    total_runs?: number
-  }
-  is_enhanced?: boolean
-  created_at?: string
-  requiresApiKey?: boolean
+      input_type: number;
+      output_type: number;
+      prompt_tokens: number;
+      completion_tokens: number;
+      total_tokens: number;
+    };
+    run_time: number;
+    input_type: string;
+    output_type: string;
+    total_runs?: number;
+  };
+  is_enhanced?: boolean;
+  created_at?: string;
+  requiresApiKey?: boolean;
+  is_favorited?: boolean; // Add this line
 }
 
 // Define the mini-service type from API
@@ -125,7 +126,9 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [customServices, setCustomServices] = useState<Service[]>([])
   const [miniServices, setMiniServices] = useState<Service[]>([])
+  const [favoriteServices, setFavoriteServices] = useState<Service[]>([])
   const [miniServicesLoading, setMiniServicesLoading] = useState(false)
+  const [favoritesLoading, setFavoritesLoading] = useState(false)
   const [user_id, setUserId] = useState<number | null>(null)
   const [refreshTrigger, setRefreshTrigger] = useState(0)
   const [recentActivities, setRecentActivities] = useState<Process[]>([])
@@ -296,7 +299,20 @@ export default function DashboardPage() {
       refreshMiniServices()
     }
 
+    const handleFavoriteToggled = () => {
+      console.log("Favorite toggled event detected")
+      
+      // Only refresh favorites if favorites tab is active, otherwise just trigger a re-render
+      if (activeFilter === "favourites") {
+        setRefreshTrigger((prev) => prev + 1)
+      }
+      
+      // Force a re-render of cards to update favorite counts without full page refresh
+      setMiniServices((prev) => [...prev])
+    }
+
     window.addEventListener("miniServiceCreated", handleMiniServiceCreated)
+    window.addEventListener("favoriteToggled", handleFavoriteToggled)
 
     // Check for URL parameters that might indicate a new service was created
     const urlParams = new URLSearchParams(window.location.search)
@@ -311,8 +327,9 @@ export default function DashboardPage() {
 
     return () => {
       window.removeEventListener("miniServiceCreated", handleMiniServiceCreated)
+      window.removeEventListener("favoriteToggled", handleFavoriteToggled)
     }
-  }, [refreshMiniServices])
+  }, [refreshMiniServices, activeFilter])
 
   // Handle mini service deletion
   const handleMiniServiceDelete = async (id: number): Promise<boolean> => {
@@ -475,6 +492,78 @@ export default function DashboardPage() {
       fetchRecentActivities()
     }
   }, [isAuthenticated, user_id, getUserId])
+
+  // Fetch user's favorite services
+  useEffect(() => {
+    if (isAuthenticated && activeFilter === "favourites") {
+      const fetchFavoriteServices = async () => {
+        try {
+          setFavoritesLoading(true)
+          
+          const favoriteData = await getFavoriteServices(0, 100)
+          console.log("Fetched favorite services:", favoriteData)
+          console.log("Favorite data length:", favoriteData?.length)
+          console.log("First favorite item:", favoriteData?.[0])
+
+          // Backend now returns full mini service details, so we can map directly
+          const formattedFavorites = favoriteData.map((service: FavoriteService) => {
+            console.log("Processing favorite service:", service)
+            
+            // Determine icon based on input/output type
+            let iconName = "Wand2"
+            if (service.input_type === "text" && service.output_type === "text") {
+              iconName = "MessageSquare"
+            } else if (service.input_type === "text" && service.output_type === "image") {
+              iconName = "ImageIcon"
+            } else if (service.input_type === "text" && service.output_type === "sound") {
+              iconName = "Headphones"
+            } else if (service.input_type === "sound" || service.output_type === "sound") {
+              iconName = "Headphones"
+            } else if (service.input_type === "image" || service.output_type === "image") {
+              iconName = "ImageIcon"
+            }
+
+            // Get color based on service type
+            const color = getColorForService(service.input_type, service.output_type)
+
+            const formattedService = {
+              id: service.id,
+              name: service.name,
+              description: service.description,
+              icon: getIconComponent(iconName),
+              serviceType: "mini-service",
+              color,
+              isCustom: true,
+              owner_username: service.owner_username,
+              onDelete: handleMiniServiceDelete,
+              usageStats: {
+                average_token_usage: service.average_token_usage,
+                run_time: service.run_time,
+                input_type: service.input_type,
+                output_type: service.output_type,
+                total_runs: Math.floor(Math.random() * 100) + 1
+              },
+              is_enhanced: service.is_enhanced,
+              created_at: service.created_at,
+            }
+            
+            console.log("Formatted favorite service:", formattedService)
+            return formattedService
+          })
+
+          console.log("All formatted favorites:", formattedFavorites)
+          setFavoriteServices(formattedFavorites)
+        } catch (error) {
+          console.error("Error fetching favorite services:", error)
+          setFavoriteServices([])
+        } finally {
+          setFavoritesLoading(false)
+        }
+      }
+
+      fetchFavoriteServices()
+    }
+  }, [isAuthenticated, activeFilter, refreshTrigger])
 
   // Get icon component by name
   const getIconComponent = (iconName: string) => {
@@ -741,7 +830,7 @@ export default function DashboardPage() {
       case "trending":
         return services.filter(service => (service.usageStats?.total_runs || 0) > 50)
       case "favourites":
-        return [] // Şimdilik boş
+        return favoriteServices // Return the actual favorite services
       case "created":
         return services.filter(service => service.isCustom && service.owner_id === user_id)
       default:
@@ -1058,7 +1147,7 @@ export default function DashboardPage() {
                 }}
               >
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-4">
-                  {miniServicesLoading ? (
+                  {(miniServicesLoading || (activeFilter === "favourites" && favoritesLoading)) ? (
                     // Placeholder cards during loading
                     Array.from({ length: 6 }).map((_, index) => (
                       <div
@@ -1090,7 +1179,7 @@ export default function DashboardPage() {
           )}
 
           {/* Show special message for Favourites */}
-          {activeFilter === "favourites" && getFilteredMiniServices().length === 0 && (
+          {activeFilter === "favourites" && getFilteredMiniServices().length === 0 && !favoritesLoading && (
             <div className="bg-black/40 backdrop-blur-sm rounded-xl border border-purple-900/30 p-8 text-center my-12">
               <div className="w-16 h-16 bg-purple-600/10 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Star className="h-8 w-8 text-purple-400 opacity-60" />
