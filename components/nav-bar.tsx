@@ -54,56 +54,60 @@ export function NavBar() {
   const navItems: { title: string; href: string }[] = []
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 bg-black/50 backdrop-blur-md border-b border-purple-900/30">
-      <div className="max-w-7xl mx-auto px-4">
-        <div className="flex items-center justify-between h-16 my-2">
-          <div className="flex items-center gap-4 md:gap-16">
-            <Link href="/" className="flex items-center">
-              <div className="w-10 h-10 rounded-xl bg-purple-600 flex items-center justify-center">
-                <div className="w-3 h-3 rounded-full bg-white" />
-              </div>
-              <span className="ml-3 text-white font-semibold">AI Super App</span>
-            </Link>
+    <nav className="fixed top-2 left-2 right-2 z-50">
+      <div className="max-w-6xl mx-auto bg-black/5 backdrop-blur border border-white/10 rounded-2xl shadow-2xl shadow-purple-500/10">
+        <div className="px-6">
+          <div className="flex items-center justify-between h-12">
+            <div className="flex items-center gap-4 md:gap-12">
+              <Link href="/" className="flex items-center group">
+                <div className="w-8 h-8 rounded-2xl bg-gradient-to-br from-purple-500 via-purple-600 to-blue-600 flex items-center justify-center shadow-lg shadow-purple-500/30 transition-all duration-300 group-hover:scale-105 group-hover:shadow-purple-500/50">
+                  <div className="w-2.5 h-2.5 rounded-full bg-white" />
+                </div>
+                <span className="ml-3 text-white font-semibold text-sm bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent">MyGen-AI Suite</span>
+              </Link>
 
-            {/* Menü sadece giriş yapılınca */}
-            {isAuthenticated && navItems.length > 0 && (
-              <div className="hidden md:flex items-center space-x-8">
-                {navItems.map((item) => (
-                  <Link
-                    key={item.title}
-                    href={item.href}
-                    className={cn(
-                      "text-sm font-medium transition-colors hover:text-white",
-                      pathname === item.href ? "text-white" : "text-gray-400",
-                    )}
-                  >
-                    {item.title}
-                  </Link>
-                ))}
-              </div>
-            )}
-          </div>          <div className="flex items-center gap-4">
-            {renderState.showUserNav || isAuthenticated ? (
-              <UserNav key={userId || 'guest'} />
-            ) : (
-              <>
-                {/* Show login/register buttons for non-authenticated users on documentation page */}
-                {pathname.includes('/documentation') && (
-                  <div className="flex items-center gap-2">
-                    <Link href="/auth/login">
-                      <Button variant="ghost" className="text-gray-300 hover:text-white">
-                        Login
-                      </Button>
+              {/* Menü sadece giriş yapılınca */}
+              {isAuthenticated && navItems.length > 0 && (
+                <div className="hidden md:flex items-center space-x-6">
+                  {navItems.map((item) => (
+                    <Link
+                      key={item.title}
+                      href={item.href}
+                      className={cn(
+                        "text-xs font-medium transition-all duration-300 hover:text-white px-3 py-1.5 rounded-xl hover:bg-white/10",
+                        pathname === item.href ? "text-white bg-white/10" : "text-gray-400",
+                      )}
+                    >
+                      {item.title}
                     </Link>
-                    <Link href="/auth/register">
-                      <Button variant="outline" className="border-purple-700/40 text-white hover:bg-purple-900/30 transition-all">
-                        Register
-                      </Button>
-                    </Link>
-                  </div>
-                )}
-              </>
-            )}
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center gap-3">
+              {renderState.showUserNav || isAuthenticated ? (
+                <UserNav key={userId || 'guest'} />
+              ) : (
+                <>
+                  {/* Show login/register buttons for non-authenticated users on documentation page */}
+                  {pathname.includes('/documentation') && (
+                    <div className="flex items-center gap-2">
+                      <Link href="/auth/login">
+                        <Button variant="ghost" className="text-gray-300 hover:text-white h-8 px-4 text-xs rounded-xl hover:bg-white/10 transition-all duration-300">
+                          Login
+                        </Button>
+                      </Link>
+                      <Link href="/auth/register">
+                        <Button variant="outline" className="border-purple-500/30 bg-gradient-to-r from-purple-600/20 to-blue-600/20 text-white hover:from-purple-500/30 hover:to-blue-500/30 transition-all duration-300 h-8 px-4 text-xs rounded-xl shadow-lg shadow-purple-500/20">
+                          Register
+                        </Button>
+                      </Link>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
           </div>
         </div>
       </div>
