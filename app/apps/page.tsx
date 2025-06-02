@@ -38,7 +38,7 @@ import {
 } from "lucide-react"
 import { toast } from "@/components/ui/use-toast"
 import { decodeJWT } from "@/lib/auth"
-import { deleteMiniService, getFavoriteServices, type FavoriteService } from "@/lib/services"
+import { deleteMiniService, getFavoriteServices, getFavoriteCount, type FavoriteService } from "@/lib/services"
 import { Play } from "next/font/google"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -87,7 +87,8 @@ interface Service {
   is_enhanced?: boolean;
   created_at?: string;
   requiresApiKey?: boolean;
-  is_favorited?: boolean; // Add this line
+  is_favorited?: boolean;
+  favorite_count?: number; // Add favorite count for sorting
 }
 
 // Define the mini-service type from API
@@ -118,7 +119,7 @@ interface Process {
   mini_service_id?: number
 }
 
-type SortOption = 'name' | 'created' | 'usage' | 'runs' | 'type'
+type SortOption = 'name' | 'created' | 'usage' | 'runs' | 'type' | 'favorites'
 type SortDirection = 'asc' | 'desc'
 
 export default function DashboardPage() {
@@ -389,7 +390,8 @@ export default function DashboardPage() {
           const userCreatedServices = data
 
           // Map the mini-services to the format expected by MiniAppCard
-          const formattedServices = userCreatedServices.map((service) => {
+          // Fetch favorite counts for all services in parallel
+          const formattedServicesPromises = userCreatedServices.map(async (service) => {
             // Determine icon based on input/output type
             let iconName = "Wand2"
             if (service.input_type === "text" && service.output_type === "text") {
@@ -402,8 +404,13 @@ export default function DashboardPage() {
               iconName = "Headphones"
             } else if (service.input_type === "image" || service.output_type === "image") {
               iconName = "ImageIcon"
-            }            // Get color based on service type
+            }
+
+            // Get color based on service type
             const color = getColorForService(service.input_type, service.output_type)
+
+            // Fetch favorite count for this service
+            const favoriteCount = await getFavoriteCount(service.id)
 
             return {
               id: service.id,
@@ -425,9 +432,12 @@ export default function DashboardPage() {
               },
               is_enhanced: service.is_enhanced,
               created_at: service.created_at,
-              
+              favorite_count: favoriteCount, // Add favorite count for sorting
             }
           })
+
+          // Wait for all favorite counts to be fetched
+          const formattedServices = await Promise.all(formattedServicesPromises)
 
           setMiniServices(formattedServices)
         } catch (error) {
@@ -904,6 +914,11 @@ export default function DashboardPage() {
           const typeB = `${b.usageStats?.input_type || ''}-${b.usageStats?.output_type || ''}`
           comparison = typeA.localeCompare(typeB)
           break
+        case 'favorites':
+          const favCountA = a.favorite_count || 0
+          const favCountB = b.favorite_count || 0
+          comparison = favCountA - favCountB
+          break
       }
       
       return sortDirection === 'asc' ? comparison : -comparison
@@ -926,11 +941,32 @@ export default function DashboardPage() {
       <main className="pt-24 pb-16 px-6">
         <div className="max-w-7xl mx-auto">
           {/* Enhanced Search and Filter Bar */}
-          <div className="mb-8">
+          <div>
             <div className="flex flex-col gap-4">
               <h1 className="text-3xl font-bold text-white"></h1>
-              
+               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mt-4 mb-6 gap-4">
+                <h2 className="text-2xl md:text-3xl font-bold text-white flex items-center">
+                  {activeFilter === "trending" ? "Trending AI Workflows" :
+                   activeFilter === "favourites" ? "Your Favourite Workflows" :
+                   activeFilter === "created" ? "Created By You" :
+                   "All Workflows"}
+                  <span className="ml-3 text-sm bg-purple-900/40 text-purple-300 px-2 py-1 rounded-full">
+                    {getFilteredMiniServices().length}
+                  </span>
+                </h2>
+                
+                {/* Create New Mini Service Button - now positioned at the rightmost */}
+                <Button
+                  onClick={() => router.push("/apps/create/service-workflow-builder")}
+                  className="bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white border-0 shadow-lg transition-all duration-200 hover:shadow-purple-500/25 whitespace-nowrap"
+                >
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  Create New Mini Service
+                </Button>
+              </div>  
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+
+                
                 {/* Search Bar */}
                 <div className="relative flex-grow max-w-md">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -1027,6 +1063,10 @@ export default function DashboardPage() {
                         <Filter className="h-4 w-4 mr-2" />
                         Type
                       </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setSortBy('favorites')} className="text-white hover:bg-purple-900/30">
+                        <Star className="h-4 w-4 mr-2" />
+                        Favorites
+                      </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem onClick={() => setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')} className="text-white hover:bg-purple-900/30">
                         {sortDirection === 'asc' ? <SortDesc className="h-4 w-4 mr-2" /> : <SortAsc className="h-4 w-4 mr-2" />}
@@ -1037,46 +1077,7 @@ export default function DashboardPage() {
                 </div>
               </div>
             </div>
-
-            {/* Category Filter Tabs - Now on a separate row with icons */}
-            <div className="mt-4">
-              <Tabs 
-                value={activeFilter} 
-                onValueChange={(v) => setActiveFilter(v as "all" | "trending" | "favourites" | "created")}
-                className="w-full"
-              >
-                <TabsList className="grid grid-cols-4 h-12 bg-black/40 border border-purple-900/30 w-full max-w-lg">
-                  <TabsTrigger 
-                    value="all" 
-                    className="data-[state=active]:bg-purple-600 data-[state=active]:text-white flex items-center gap-2"
-                  >
-                    <Filter className="h-4 w-4" />
-                    All
-                  </TabsTrigger>
-                  <TabsTrigger 
-                    value="trending" 
-                    className="data-[state=active]:bg-purple-600 data-[state=active]:text-white flex items-center gap-2"
-                  >
-                    <TrendingUp className="h-4 w-4" />
-                    Trending
-                  </TabsTrigger>
-                  <TabsTrigger 
-                    value="favourites" 
-                    className="data-[state=active]:bg-purple-600 data-[state=active]:text-white flex items-center gap-2"
-                  >
-                    <Star className="h-4 w-4" />
-                    Favorites
-                  </TabsTrigger>
-                  <TabsTrigger 
-                    value="created" 
-                    className="data-[state=active]:bg-purple-600 data-[state=active]:text-white flex items-center gap-2"
-                  >
-                    <Bot className="h-4 w-4" />
-                    Created By You
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
-            </div>
+            
 
             {/* Search Results Info */}
             {searchQuery && (
@@ -1115,31 +1116,55 @@ export default function DashboardPage() {
                 )}
               </div>
             )}
+           
+            {/* Category Filter Tabs - Now on a separate row with icons */}
+              <div className="mt-4">
+              <Tabs 
+                value={activeFilter} 
+                onValueChange={(v) => setActiveFilter(v as "all" | "trending" | "favourites" | "created")}
+                className="w-full"
+                
+              >
+                <TabsList className="grid grid-cols-4 h-12 bg-black/40 border border-purple-900/30 w-full max-w-lg">
+                  <TabsTrigger 
+                    value="all" 
+                    className="data-[state=active]:bg-purple-600 data-[state=active]:text-white flex items-center gap-2"
+                  >
+                    <Filter className="h-4 w-4" />
+                    All
+                  </TabsTrigger>
+                  <TabsTrigger 
+                    value="trending" 
+                    className="data-[state=active]:bg-purple-600 data-[state=active]:text-white flex items-center gap-2"
+                  >
+                    <TrendingUp className="h-4 w-4" />
+                    Trending
+                  </TabsTrigger>
+                  <TabsTrigger 
+                    value="favourites" 
+                    className="data-[state=active]:bg-purple-600 data-[state=active]:text-white flex items-center gap-2"
+                  >
+                    <Star className="h-4 w-4" />
+                    Favorites
+                  </TabsTrigger>
+                  <TabsTrigger 
+                    value="created" 
+                    className="data-[state=active]:bg-purple-600 data-[state=active]:text-white flex items-center gap-2"
+                  >
+                    <Bot className="h-4 w-4" />
+                    Created By You
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+
+            
           </div>
 
           {/* Services Display Section */}
           {getFilteredMiniServices().length > 0 && (
             <section className="mb-12">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-4">
-                <h2 className="text-2xl md:text-3xl font-bold text-white flex items-center">
-                  {activeFilter === "trending" ? "Trending AI Workflows" :
-                   activeFilter === "favourites" ? "Your Favourite Workflows" :
-                   activeFilter === "created" ? "Created By You" :
-                   "All Workflows"}
-                  <span className="ml-3 text-sm bg-purple-900/40 text-purple-300 px-2 py-1 rounded-full">
-                    {getFilteredMiniServices().length}
-                  </span>
-                </h2>
-                
-                {/* Create New Mini Service Button - now positioned at the rightmost */}
-                <Button
-                  onClick={() => router.push("/apps/create/service-workflow-builder")}
-                  className="bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white border-0 shadow-lg transition-all duration-200 hover:shadow-purple-500/25 whitespace-nowrap"
-                >
-                  <Sparkles className="h-4 w-4 mr-2" />
-                  Create New Mini Service
-                </Button>
-              </div>              {/* Scrollable container for services */}              <div 
+                          {/* Scrollable container for services */}              <div 
                 className="max-h-[700px] overflow-y-auto pr-2 custom-scrollbar px-4 py-6 bg-black/60 backdrop-blur-md rounded-xl border border-purple-900/30"
                 style={{
                   scrollbarWidth: 'thin',
