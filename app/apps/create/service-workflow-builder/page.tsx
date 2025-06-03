@@ -1714,12 +1714,93 @@ export default function ServiceWorkflowBuilder() {
     }
     setEdges(newEdges);
   };
-
-  // Rearrange nodes after drag
+  // Enhanced drag-and-drop reordering functionality
   const onNodeDragStop = () => {
-    const allNodes = markLastAgentNode(nodes);
+    // Get agent nodes only (exclude input/output nodes)
+    const agentNodes = nodes
+      .filter(node => node.type === 'agent')
+      .sort((a, b) => a.position.x - b.position.x); // Sort by x-position (left to right)
+
+    if (agentNodes.length <= 1) {
+      // No reordering needed for 0 or 1 agents
+      const allNodes = markLastAgentNode(nodes);
+      setNodes(allNodes);
+      updateWorkflowConnections(allNodes);
+      return;
+    }
+
+    // Create new workflow order based on node positions
+    const newWorkflowOrder: WorkflowStep[] = [];
+    
+    agentNodes.forEach((node, index) => {
+      // Find the corresponding workflow step
+      const workflowStep = workflow.find(step => step.id === node.id);
+      if (workflowStep) {
+        // Create new step with updated next pointer
+        const nextStepId = index < agentNodes.length - 1 ? agentNodes[index + 1].id : null;
+        newWorkflowOrder.push({
+          ...workflowStep,
+          next: nextStepId
+        });
+      }
+    });
+
+    // Update the workflow state with new order
+    setWorkflow(newWorkflowOrder);
+
+    // Update visual positioning to snap to grid
+    const baseX = 40;
+    const stepX = 250;
+    
+    const repositionedNodes = nodes.map(node => {
+      if (node.type === 'agent') {
+        // Find the index of this node in the new order
+        const orderIndex = agentNodes.findIndex(n => n.id === node.id);
+        if (orderIndex !== -1) {
+          return {
+            ...node,
+            position: { 
+              x: baseX + stepX * (orderIndex + 1), 
+              y: 250 
+            }
+          };
+        }
+      } else if (node.id === 'input-node') {
+        return { ...node, position: { x: baseX, y: 250 } };
+      } else if (node.id === 'output-node') {
+        return { 
+          ...node, 
+          position: { 
+            x: baseX + stepX * (agentNodes.length + 1), 
+            y: 250 
+          } 
+        };
+      }
+      return node;
+    });
+
+    // Mark the last agent and update connections
+    const allNodes = markLastAgentNode(repositionedNodes);
     setNodes(allNodes);
     updateWorkflowConnections(allNodes);
+
+    // Update service output type based on the new last agent
+    if (newWorkflowOrder.length > 0) {
+      const lastStep = newWorkflowOrder[newWorkflowOrder.length - 1];
+      const lastAgent = availableAgents.find(a => a.id === lastStep.agentId);
+      if (lastAgent) {
+        setServiceData(current => ({
+          ...current,
+          outputType: lastAgent.outputType
+        }));
+      }
+    }
+
+    // Show feedback to user
+    toast({
+      title: "Workflow Reordered",
+      description: "The workflow has been updated based on the new agent positions.",
+    });
   };
 
   // Open agent selection
@@ -2276,8 +2357,7 @@ export default function ServiceWorkflowBuilder() {
                     {/* React Flow 2D canvas */}
                     {/* --- BEGIN REACT FLOW CANVAS --- */}
                     <ReactFlowProvider>
-                      <div style={{ width: '100%', height: '100%' }}>
-                        <ReactFlow
+                      <div style={{ width: '100%', height: '100%' }}>                        <ReactFlow
                           nodes={nodes}
                           edges={edges}
                           onNodesChange={onNodesChange}
@@ -2293,6 +2373,11 @@ export default function ServiceWorkflowBuilder() {
                           maxZoom={1.5}
                           connectionLineType={ConnectionLineType.SmoothStep}
                           connectionLineStyle={{ stroke: '#7c3aed', strokeWidth: 2 }}
+                          nodesDraggable={true}
+                          nodesConnectable={false}
+                          elementsSelectable={true}
+                          selectNodesOnDrag={false}
+                          panOnDrag={true}
                         >
                           <Background color="#6366f1" gap={20} size={1} />
                           <Controls className="bg-gray-900/70 border border-gray-800 rounded-md" />

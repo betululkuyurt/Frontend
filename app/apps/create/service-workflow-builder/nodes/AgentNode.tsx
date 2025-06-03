@@ -5,25 +5,21 @@ import { Handle, Position, NodeProps } from 'reactflow';
 import { Cpu, Trash2 } from 'lucide-react';
 
 // Custom AgentNode component for each processing step
-function AgentNode({ data, isConnectable, selected }: NodeProps) {
-  return (
-    <div className={`relative bg-gradient-to-b ${data.color || 'from-gray-700/40 to-gray-900/80'} rounded-lg border ${selected ? 'border-purple-400' : 'border-gray-500/50'} p-4 shadow-lg min-w-[240px]`}>
-      {/* Delete button that shows when node is last agent */}
-      {data.isLast && (
-        <button 
-          className="absolute -top-3 -right-3 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center text-white hover:bg-red-600 transition-colors shadow-md z-10"
-          onClick={(e) => {
-            e.stopPropagation();
-            data.onDelete?.();
-          }}
-        >
-          <Trash2 className="w-3 h-3" />
-        </button>
-      )}
-      
-      <div className="flex items-center mb-2">
-        <div className={`w-8 h-8 rounded-full ${data.iconBg || 'bg-gray-800'} flex items-center justify-center mr-2`}>
-          {data.icon || <Cpu className="h-4 w-4 text-gray-300" />}
+function AgentNode({ data, isConnectable, selected }: NodeProps) {  return (
+    <div className={`relative bg-gradient-to-b ${data.color ?? 'from-gray-700/40 to-gray-900/80'} rounded-lg border ${selected ? 'border-purple-400' : 'border-gray-500/50'} p-4 shadow-lg min-w-[240px]`}>
+      {/* Delete button - shows for all agent nodes */}
+      <button 
+        className="absolute -top-3 -right-3 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center text-white hover:bg-red-600 transition-colors shadow-md z-10"
+        onClick={(e) => {
+          e.stopPropagation();
+          data.onDelete?.();
+        }}
+      >
+        <Trash2 className="w-3 h-3" />
+      </button>
+        <div className="flex items-center mb-2">
+        <div className={`w-8 h-8 rounded-full ${data.iconBg ?? 'bg-gray-800'} flex items-center justify-center mr-2`}>
+          {data.icon ?? <Cpu className="h-4 w-4 text-gray-300" />}
         </div>
         <div className="flex-1 min-w-0">
           <h3 className="text-sm font-medium text-white truncate">{data.label}</h3>
