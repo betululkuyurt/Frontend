@@ -1272,7 +1272,7 @@ export default function DashboardPage() {
                 
                 {/* Create New Mini Service Button - now positioned at the rightmost */}
                 <Button
-                  onClick={() => router.push("/apps/create/service-workflow-builder")}
+                  onClick={() => router.push("/apps/create")}
                   className="bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white border-0 shadow-lg transition-all duration-200 hover:shadow-purple-500/25 whitespace-nowrap"
                 >
                   <Sparkles className="h-4 w-4 mr-2" />
