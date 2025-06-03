@@ -58,7 +58,7 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { Loader2, ArrowLeft, Wand2, ImageIcon, Headphones, FileText, Video, Trash2, ArrowRightIcon, LucideBrush, LucideBot, LucideVolume2, LucideMic, LucideImage, LucideSearch, LucidePlug, LucideMusic, LucideClapperboard, LucideSparkles } from "lucide-react"
+import { Loader2, ArrowLeft, Wand2, ImageIcon, Headphones, FileText, Video, Trash2, ArrowRightIcon, LucideBrush, LucideBot, LucideVolume2, LucideMic, LucideImage, LucideSearch, LucidePlug, LucideMusic, LucideClapperboard, LucideSparkles, Send, User, Bot, Copy, Check, RotateCcw } from "lucide-react"
 import { toast } from "@/components/ui/use-toast"
 import { deleteMiniService } from "@/lib/services"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -211,6 +211,18 @@ export default function ServicePage() {
   const workflowScrollRef = useRef<HTMLDivElement>(null);
   const [workflowScroll, setWorkflowScroll] = useState(0);
   const [workflowMaxScroll, setWorkflowMaxScroll] = useState(0);
+
+  // Chat interface state for text-to-text services
+  const [chatHistory, setChatHistory] = useState<Array<{
+    id: string;
+    type: 'user' | 'assistant';
+    content: string;
+    timestamp: Date;
+  }>>([]);
+  const [isTyping, setIsTyping] = useState(false);
+  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+  const [hasActiveConversation, setHasActiveConversation] = useState(false);
+  const chatScrollRef = useRef<HTMLDivElement>(null);
 
   // Authentication check
   useEffect(() => {
@@ -844,9 +856,98 @@ export default function ServicePage() {
       setResult(data);
   };
 
-  // **[MAIN HANDLER]** - Updated main submit handler to use unified approach
+  // Check if service is text-to-text for chat interface
+  const isTextToTextService = () => {
+    return service?.input_type === "text" && service?.output_type === "text";
+  };
+
+  // Scroll to bottom of chat
+  const scrollToBottom = () => {
+    if (chatScrollRef.current) {
+      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+    }
+  };
+
+  // Copy message content to clipboard
+  const copyToClipboard = async (messageId: string, content: string) => {
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopiedMessageId(messageId);
+      toast({
+        title: "Copied to clipboard",
+        description: "Message content has been copied",
+        duration: 2000,
+      });
+      // Reset the copied state after 2 seconds
+      setTimeout(() => setCopiedMessageId(null), 2000);
+    } catch (err) {
+      console.error('Failed to copy text: ', err);
+      toast({
+        title: "Failed to copy",
+        description: "Please try again",
+        variant: "destructive",
+        duration: 2000,
+      });
+    }
+  };
+
+  // Reset conversation to start fresh
+  const resetConversation = () => {
+    setChatHistory([]);
+    setHasActiveConversation(false);
+    setIsTyping(false);
+    setError(null);
+    setResult(null);
+  };
+
+  // Auto-scroll when chat history changes
+  useEffect(() => {
+    scrollToBottom();
+  }, [chatHistory]);
+
+  // **[NEW EFFECT]** - Add assistant response to chat history when result changes for text-to-text services
+  useEffect(() => {
+    if (result && isTextToTextService()) {
+      // Extract the response text from the result
+      let responseContent = "";
+      
+      if (result.answer) {
+        responseContent = result.answer;
+      } else if (result.final_output) {
+        responseContent = result.final_output;
+      } else if (result.response) {
+        responseContent = result.response;
+      } else if (result.output) {
+        responseContent = result.output;
+      } else if (typeof result === 'string') {
+        responseContent = result;
+      } else {
+        responseContent = "I received your message but couldn't generate a proper response.";
+      }
+
+      // Add assistant message to chat history
+      const assistantMessage = {
+        id: `assistant-${Date.now()}`,
+        type: 'assistant' as const,
+        content: responseContent,
+        timestamp: new Date()
+      };
+
+      setChatHistory(prev => [...prev, assistantMessage]);
+      setIsTyping(false);
+      setHasActiveConversation(true); // Mark conversation as complete
+      
+      // Clear the result to avoid duplicate messages
+      setResult(null);
+    }
+  }, [result]);  // **[MAIN HANDLER]** - Updated main submit handler to use unified approach
   const handleSubmit = async () => {
     if (!service) return;
+
+    // Check if this is a text-to-text service for chat interface
+    if (isTextToTextService()) {
+      return handleChatSubmit();
+    }
 
     // console.log("🚀 handleSubmit started");
 
@@ -865,7 +966,7 @@ export default function ServicePage() {
     // Validation based on agent capabilities
     const ragAgents = fileUploadAgents.filter(agent => agent.type === 'rag');
     const nonRagFileAgents = fileUploadAgents.filter(agent => agent.type !== 'rag');
-    
+
     // RAG agents only need text input (for queries), not file uploads
     if (ragAgents.length > 0 && !userInput?.trim()) {
       // console.log("❌ Validation failed: RAG service needs text query");
@@ -913,6 +1014,52 @@ export default function ServicePage() {
       setError(err.message || "An unexpected error occurred while processing your request");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // **[NEW HANDLER]** - Handle chat submission for text-to-text services
+  const handleChatSubmit = async () => {
+    if (!userInput?.trim()) {
+      setError("Please enter a message to send.");
+      return;
+    }
+
+    // Add user message to chat history
+    const userMessage = {
+      id: `user-${Date.now()}`,
+      type: 'user' as const,
+      content: userInput.trim(),
+      timestamp: new Date()
+    };
+
+    setChatHistory(prev => [...prev, userMessage]);
+    
+    // Clear input and show typing indicator
+    setUserInput("");
+    setIsTyping(true);
+    setError(null);
+
+    try {
+      // Call the regular service submission logic
+      await handleRegularServiceSubmit();
+      
+      // If successful and we have a result, add it to chat history
+      // This will be handled in the useEffect that watches for result changes
+    } catch (err: any) {
+      console.error("Error in chat submission:", err);
+      setError(err.message || "An unexpected error occurred while processing your message");
+      
+      // Add error message to chat if needed
+      const errorMessage = {
+        id: `error-${Date.now()}`,
+        type: 'assistant' as const,
+        content: `Sorry, I encountered an error: ${err.message || "Something went wrong. Please try again."}`,
+        timestamp: new Date()
+      };
+      setChatHistory(prev => [...prev, errorMessage]);
+      setHasActiveConversation(true); // Even on error, conversation is complete
+    } finally {
+      setIsTyping(false);
     }
   };
 
@@ -987,6 +1134,173 @@ export default function ServicePage() {
   // **[UNIFIED UI RENDERER]** - Render input based on unified agent configuration
   const renderInput = () => {
     if (!service) return null;
+
+    // **[CHAT INTERFACE]** - Render chat interface for text-to-text services
+    if (isTextToTextService()) {
+      return (
+        <div className="flex flex-col h-[500px] border border-purple-900/30 rounded-lg bg-black/20">
+          {/* Chat Header */}
+          <div className="flex items-center justify-between p-4 border-b border-purple-900/30">
+            <div className="flex items-center gap-2">
+              <Bot className="h-5 w-5 text-purple-400" />
+              <span className="font-medium text-purple-200">Chat with {service.name}</span>
+            </div>
+            <div className="text-xs text-gray-400">
+              {chatHistory.length} message{chatHistory.length !== 1 ? 's' : ''}
+            </div>
+          </div>
+
+          {/* Chat Messages */}
+          <div 
+            ref={chatScrollRef}
+            className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-purple-900/20 hover:scrollbar-thumb-purple-600/40"
+          >
+            {chatHistory.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full text-center">
+                <Bot className="h-12 w-12 text-purple-400/50 mb-4" />
+                <p className="text-gray-400 text-sm mb-2">Send a text to {service.name}</p>
+                <p className="text-gray-500 text-xs max-w-md">
+                  Keep in mind that this is just a one message interaction as the service is not designed for continuous chat.
+                </p>
+              </div>
+            ) : (
+              chatHistory.map((message) => (
+                <div 
+                  key={message.id}
+                  className={`flex gap-3 ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
+                >
+                  {message.type === 'assistant' && (
+                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-purple-600/20 flex items-center justify-center border border-purple-600/30">
+                      <Bot className="h-4 w-4 text-purple-400" />
+                    </div>
+                  )}
+                  
+                  <div className={`max-w-[80%] ${message.type === 'user' ? 'order-2' : ''}`}>
+                    <div className={`p-3 rounded-lg relative group ${
+                      message.type === 'user' 
+                        ? 'bg-purple-600 text-white' 
+                        : 'bg-gray-800/50 text-gray-100 border border-gray-700/50'
+                    }`}>
+                      <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
+                      
+                      {/* Copy button for assistant messages */}
+                      {message.type === 'assistant' && (
+                        <button
+                          onClick={() => copyToClipboard(message.id, message.content)}
+                          className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 p-1.5 hover:bg-gray-700/50 rounded-md"
+                          title="Copy message"
+                        >
+                          {copiedMessageId === message.id ? (
+                            <Check className="h-3 w-3 text-green-400" />
+                          ) : (
+                            <Copy className="h-3 w-3 text-gray-400 hover:text-gray-200" />
+                          )}
+                        </button>
+                      )}
+                    </div>
+                    <div className="text-xs text-gray-500 mt-1 px-1">
+                      {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </div>
+                  </div>
+
+                  {message.type === 'user' && (
+                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center order-1">
+                      <User className="h-4 w-4 text-white" />
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+
+            {/* Typing Indicator */}
+            {isTyping && (
+              <div className="flex gap-3 justify-start">
+                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-purple-600/20 flex items-center justify-center border border-purple-600/30">
+                  <Bot className="h-4 w-4 text-purple-400" />
+                </div>
+                <div className="bg-gray-800/50 text-gray-100 border border-gray-700/50 p-3 rounded-lg">
+                  <div className="flex space-x-1">
+                    <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce"></div>
+                    <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                    <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Chat Input */}
+          <div className="p-4 border-t border-purple-900/30">
+            {/* Error display for chat interface */}
+            {error && (
+              <div className="mb-3 p-3 bg-red-950/30 border border-red-800/30 rounded-lg">
+                <p className="text-red-200 text-sm">{error}</p>
+              </div>
+            )}
+            
+            {/* Show input only if no active conversation */}
+            {!hasActiveConversation && !isTyping && (
+              <>
+                <div className="flex gap-2">
+                  <Textarea
+                    value={userInput}
+                    onChange={(e) => setUserInput(e.target.value)}
+                    placeholder="Type your message..."
+                    className="flex-1 bg-black/40 border-purple-900/30 text-white resize-none min-h-[44px] max-h-[100px]"
+                    rows={1}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        if (!isLoading && userInput.trim()) {
+                          handleSubmit();
+                        }
+                      }
+                    }}
+                  />
+                  <Button
+                    onClick={handleSubmit}
+                    disabled={isLoading || !userInput.trim() || !areAllRequiredApiKeysSelected}
+                    className="px-4 bg-purple-600 hover:bg-purple-700 text-white border-0"
+                  >
+                    {isLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Send className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+                <div className="text-xs text-gray-500 mt-2">
+                  Press Enter to send, Shift+Enter for new line
+                </div>
+              </>
+            )}
+
+            {/* Show retry button after conversation is complete */}
+            {hasActiveConversation && !isTyping && (
+              <div className="flex justify-center">
+                <Button
+                  onClick={resetConversation}
+                  className="flex items-center gap-2 bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-600/30 hover:border-purple-500/50 transition-all"
+                  variant="outline"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  Start New Conversation
+                </Button>
+              </div>
+            )}
+
+            {/* Show waiting message while typing */}
+            {isTyping && (
+              <div className="flex justify-center">
+                <div className="text-sm text-gray-400 italic">
+                  Waiting for response...
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
 
     // Get file upload requirements from agents
     const fileUploadRequirements = getFileUploadRequirements();
@@ -1942,11 +2256,13 @@ export default function ServicePage() {
                   )}
                 
                   <div>
-                    <label className="text-base font-semibold text-purple-200 mb-2 block">
-                      {service?.input_type === "text"
-                        ? "Your Input"
-                        : `${(service?.input_type || "").charAt(0).toUpperCase() + (service?.input_type || "").slice(1)} Input`}
-                    </label>
+                    {!isTextToTextService() && (
+                      <label className="text-base font-semibold text-purple-200 mb-2 block">
+                        {service?.input_type === "text"
+                          ? "Your Input"
+                          : `${(service?.input_type || "").charAt(0).toUpperCase() + (service?.input_type || "").slice(1)} Input`}
+                      </label>
+                    )}
                     {renderInput()}
                   </div>
                   <div className="flex flex-col gap-4">
@@ -2005,50 +2321,54 @@ export default function ServicePage() {
                   </div>
                 </div>
               </div>
-              <div className="flex flex-col gap-4 mt-4">
-                <Button
-                  onClick={handleSubmit}
-                  disabled={isLoading || 
-                    (getFileUploadAgents().length > 0 
-                      ? (getFileUploadAgents()[0].type === 'rag'
-                          ? (!userInput?.trim() || !areAllRequiredApiKeysSelected) // RAG agents only need query and API key
-                          : !uploadedFile // Other file upload agents require a file
+              {!isTextToTextService() && (
+                <>
+                  <div className="flex flex-col gap-4 mt-4">
+                    <Button
+                      onClick={handleSubmit}
+                      disabled={isLoading || 
+                        (getFileUploadAgents().length > 0 
+                          ? (getFileUploadAgents()[0].type === 'rag'
+                              ? (!userInput?.trim() || !areAllRequiredApiKeysSelected) // RAG agents only need query and API key
+                              : !uploadedFile // Other file upload agents require a file
+                            )
+                          : (!areAllRequiredApiKeysSelected ||
+                             (!userInput?.trim())) // Non-file agents require text input and API keys
                         )
-                      : (!areAllRequiredApiKeysSelected ||
-                         (!userInput?.trim())) // Non-file agents require text input and API keys
-                    )
-                  }
-                  className={`w-full sm:w-auto bg-gradient-to-r ${getServiceColor()} text-white font-bold text-base sm:text-lg px-6 sm:px-8 py-3 rounded-xl shadow-lg hover:opacity-90 transition-all relative`}
-                >
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 sm:h-5 sm:w-5 animate-spin" /> 
-                      <span className="hidden sm:inline">
-                        {documentProcessingState.isProcessing 
-                          ? `${documentProcessingState.stage.charAt(0).toUpperCase() + documentProcessingState.stage.slice(1)}...` 
-                          : "Processing..."}
-                      </span>
-                      <span className="sm:hidden">Processing...</span>
-                    </>
-                  ) : (
-                    <>Run Service</>
-                  )}
-                </Button>
-                
-                {/* Document processing status message */}
-                {documentProcessingState.isProcessing && (
-                  <div className="text-amber-300 text-sm flex items-center">
-                    <div className="w-2 h-2 bg-amber-400 rounded-full animate-pulse mr-2 flex-shrink-0"></div>
-                    <span className="break-words">{documentProcessingState.message}</span>
+                      }
+                      className={`w-full sm:w-auto bg-gradient-to-r ${getServiceColor()} text-white font-bold text-base sm:text-lg px-6 sm:px-8 py-3 rounded-xl shadow-lg hover:opacity-90 transition-all relative`}
+                    >
+                      {isLoading ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 sm:h-5 sm:w-5 animate-spin" /> 
+                          <span className="hidden sm:inline">
+                            {documentProcessingState.isProcessing 
+                              ? `${documentProcessingState.stage.charAt(0).toUpperCase() + documentProcessingState.stage.slice(1)}...` 
+                              : "Processing..."}
+                          </span>
+                          <span className="sm:hidden">Processing...</span>
+                        </>
+                      ) : (
+                        <>Run Service</>
+                      )}
+                    </Button>
+                    
+                    {/* Document processing status message */}
+                    {documentProcessingState.isProcessing && (
+                      <div className="text-amber-300 text-sm flex items-center">
+                        <div className="w-2 h-2 bg-amber-400 rounded-full animate-pulse mr-2 flex-shrink-0"></div>
+                        <span className="break-words">{documentProcessingState.message}</span>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-              {(result || error) && (
-                <div className="mt-8">
-                  <Card className="bg-black/60 border-0 rounded-xl p-6 shadow-lg">
-                    {renderOutput()}
-                  </Card>
-                </div>
+                  {(result || error) && (
+                    <div className="mt-8">
+                      <Card className="bg-black/60 border-0 rounded-xl p-6 shadow-lg">
+                        {renderOutput()}
+                      </Card>
+                    </div>
+                  )}
+                </>
               )}
             </Card>
           </section>
