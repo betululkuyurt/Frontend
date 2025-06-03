@@ -37,16 +37,77 @@ interface ChatMessage {
 
 // Service creation response interfaces
 interface Agent {
-  id: number;
+  id?: number;
   name: string;
   agent_type: string;
   system_instruction: string;
   config: any;
   input_type: string;
   output_type: string;
-  owner_id: number;
-  created_at: string;
-  is_enhanced: boolean;
+  owner_id?: number;
+  created_at?: string;
+  is_enhanced?: boolean;
+}
+
+// Checklist interfaces
+interface ChecklistItem {
+  completed: boolean;
+  value: string;
+}
+
+interface Checklist {
+  service_purpose: ChecklistItem;
+  input_type: ChecklistItem;
+  output_type: ChecklistItem;
+  service_name: ChecklistItem;
+}
+
+// Workflow interfaces
+interface WorkflowNode {
+  agent_id: number;
+  next: string | null;
+}
+
+interface Workflow {
+  nodes: { [key: string]: WorkflowNode };
+}
+
+interface WorkflowState {
+  agents: Agent[];
+  workflow: Workflow;
+  ready_for_approval: boolean;
+}
+
+// Service specification for approval
+interface ServiceSpecification {
+  service: {
+    name: string;
+    description: string;
+    input_type: string;
+    output_type: string;
+    is_public: boolean;
+  };
+  agents: Agent[];
+  workflow: Workflow;
+  ready_for_approval: boolean;
+}
+
+// Server response types
+interface ChatResponse {
+  type: "chat_response";
+  message: string;
+  conversation_history: Array<{role: string; content: string}>;
+  checklist: Checklist;
+  workflow_state: WorkflowState;
+}
+
+interface ApprovalRequiredResponse {
+  type: "approval_required";
+  message: string;
+  service_specification: ServiceSpecification;
+  conversation_history: Array<{role: string; content: string}>;
+  checklist: Checklist;
+  workflow_state: WorkflowState;
 }
 
 interface MiniService {
@@ -87,6 +148,12 @@ export default function ServiceCreationPage() {
   const [createdAgents, setCreatedAgents] = useState<Agent[]>([])
   const [isServiceCreated, setIsServiceCreated] = useState(false)
 
+  // New state for tracking conversation and workflow
+  const [currentChecklist, setCurrentChecklist] = useState<Checklist | null>(null)
+  const [currentWorkflowState, setCurrentWorkflowState] = useState<WorkflowState | null>(null)
+  const [serviceSpecification, setServiceSpecification] = useState<ServiceSpecification | null>(null)
+  const [readyForApproval, setReadyForApproval] = useState(false)
+
   // Authentication check
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -119,10 +186,14 @@ export default function ServiceCreationPage() {
     setCreatedService(null)
     setCreatedAgents([])
     setIsServiceCreated(false)
+    setCurrentChecklist(null)
+    setCurrentWorkflowState(null)
+    setServiceSpecification(null)
+    setReadyForApproval(false)
   }
 
   const handleChatSubmit = async () => {
-    if (!userInput.trim()) return
+    if (!userInput.trim() || readyForApproval) return
 
     // Add user message
     const userMessage: ChatMessage = {
@@ -156,7 +227,7 @@ export default function ServiceCreationPage() {
         body: JSON.stringify({
           message: userInput.trim(),
           conversation_history: formattedHistory,
-          create_service: false,
+          approve_service: false,
           gemini_api_key: null
         })
       })
@@ -167,7 +238,7 @@ export default function ServiceCreationPage() {
 
       const data = await response.json()
 
-      // Check if this is a service creation success response
+      // Handle different response types
       if (data.type === "service_created") {
         const serviceData = data as ServiceCreatedResponse
         
@@ -191,8 +262,41 @@ export default function ServiceCreationPage() {
           description: `Your service "${serviceData.mini_service.name}" has been created with ${serviceData.agents.length} agents.`,
           duration: 5000,
         })
+      } else if (data.type === "chat_response") {
+        const chatData = data as ChatResponse
+        
+        // Update state with new information
+        setCurrentChecklist(chatData.checklist)
+        setCurrentWorkflowState(chatData.workflow_state)
+        setReadyForApproval(false)
+
+        // Add AI message to chat
+        const aiMessage: ChatMessage = {
+          id: `ai-${Date.now()}`,
+          type: 'assistant',
+          content: chatData.message,
+          timestamp: new Date()
+        }
+        setChatHistory(prev => [...prev, aiMessage])
+      } else if (data.type === "approval_required") {
+        const approvalData = data as ApprovalRequiredResponse
+        
+        // Update state with service specification
+        setCurrentChecklist(approvalData.checklist)
+        setCurrentWorkflowState(approvalData.workflow_state)
+        setServiceSpecification(approvalData.service_specification)
+        setReadyForApproval(true)
+
+        // Add AI message to chat
+        const aiMessage: ChatMessage = {
+          id: `ai-${Date.now()}`,
+          type: 'assistant',
+          content: approvalData.message,
+          timestamp: new Date()
+        }
+        setChatHistory(prev => [...prev, aiMessage])
       } else {
-        // Regular chat response
+        // Fallback for unknown response types
         const aiMessage: ChatMessage = {
           id: `ai-${Date.now()}`,
           type: 'assistant',
@@ -222,6 +326,76 @@ export default function ServiceCreationPage() {
     }
   }
 
+  // New function to handle service approval
+  const handleApproveService = async () => {
+    if (!serviceSpecification) return
+
+    setIsLoading(true)
+
+    try {
+      const currentUserId = Cookies.get("user_id")
+      const token = Cookies.get("access_token")
+
+      const formattedHistory = chatHistory.map(msg => ({
+        role: msg.type === 'user' ? 'user' : 'assistant',
+        content: msg.content
+      }))
+
+      const response = await fetch(`http://127.0.0.1:8000/api/v1/mini-services/chat-generate?current_user_id=${currentUserId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          message: "User approved the service",
+          conversation_history: formattedHistory,
+          approve_service: true,
+          service_specification: serviceSpecification,
+          gemini_api_key: null
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error(`API call failed: ${response.status}`)
+      }
+
+      const data = await response.json()
+
+      if (data.type === "service_created") {
+        const serviceData = data as ServiceCreatedResponse
+        
+        setCreatedService(serviceData.mini_service)
+        setCreatedAgents(serviceData.agents)
+        setIsServiceCreated(true)
+        setReadyForApproval(false)
+
+        toast({
+          title: "Service Created Successfully!",
+          description: `Your service "${serviceData.mini_service.name}" has been created successfully.`,
+          duration: 5000,
+        })
+      }
+
+    } catch (error) {
+      console.error('Service approval error:', error)
+      toast({
+        variant: "destructive",
+        title: "Creation Error",
+        description: "Failed to create service. Please try again."
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleRejectService = () => {
+    setReadyForApproval(false)
+    setServiceSpecification(null)
+    setCurrentChecklist(null)
+    setCurrentWorkflowState(null)
+  }
+
   const copyToClipboard = async (messageId: string, content: string) => {
     try {
       await navigator.clipboard.writeText(content)
@@ -249,6 +423,10 @@ export default function ServiceCreationPage() {
     setCreatedService(null)
     setCreatedAgents([])
     setIsServiceCreated(false)
+    setCurrentChecklist(null)
+    setCurrentWorkflowState(null)
+    setServiceSpecification(null)
+    setReadyForApproval(false)
     handleAIOption() // This will add the welcome message back
   }
 
@@ -480,91 +658,269 @@ export default function ServiceCreationPage() {
                       )}
                     </div>
 
-                    {/* Chat Input */}
+                    {/* Chat Input or Approval Buttons */}
                     <div className="p-4 border-t border-purple-900/30">
-                      <div className="flex gap-3">
-                        <Textarea
-                          value={userInput}
-                          onChange={(e) => setUserInput(e.target.value)}
-                          onKeyPress={handleKeyPress}
-                          placeholder="Describe the AI service you want to create..."
-                          className="flex-1 bg-black/40 border-purple-900/40 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all resize-none"
-                          rows={3}
-                          disabled={isLoading || isTyping}
-                        />
-                        <Button
-                          onClick={handleChatSubmit}
-                          disabled={!userInput.trim() || isLoading || isTyping}
-                          className="bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white border-0 px-6"
-                        >
-                          {isLoading || isTyping ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Send className="h-4 w-4" />
-                          )}
-                        </Button>
-                      </div>
-                      <p className="text-xs text-gray-500 mt-2">
-                        Press Enter to send, Shift+Enter for new line
-                      </p>
+                      {readyForApproval ? (
+                        /* Approval Buttons */
+                        <div className="space-y-4">
+                          <div className="text-center">
+                            <p className="text-yellow-400 text-sm mb-4 flex items-center justify-center">
+                              <AlertTriangle className="h-4 w-4 mr-2" />
+                              Service specification ready for approval
+                            </p>
+                          </div>
+                          <div className="flex gap-3">
+                            <Button
+                              onClick={handleApproveService}
+                              disabled={isLoading}
+                              className="flex-1 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white border-0"
+                            >
+                              {isLoading ? (
+                                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                              ) : (
+                                <CheckCircle className="h-4 w-4 mr-2" />
+                              )}
+                              Create Service
+                            </Button>
+                            <Button
+                              onClick={handleRejectService}
+                              disabled={isLoading}
+                              variant="outline"
+                              className="flex-1 border-red-700/40 text-red-400 hover:text-white hover:bg-red-900/30"
+                            >
+                              <AlertTriangle className="h-4 w-4 mr-2" />
+                              Modify
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        /* Regular Chat Input */
+                        <>
+                          <div className="flex gap-3">
+                            <Textarea
+                              value={userInput}
+                              onChange={(e) => setUserInput(e.target.value)}
+                              onKeyPress={handleKeyPress}
+                              placeholder="Describe the AI service you want to create..."
+                              className="flex-1 bg-black/40 border-purple-900/40 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all resize-none"
+                              rows={3}
+                              disabled={isLoading || isTyping}
+                            />
+                            <Button
+                              onClick={handleChatSubmit}
+                              disabled={!userInput.trim() || isLoading || isTyping}
+                              className="bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white border-0 px-6"
+                            >
+                              {isLoading || isTyping ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Send className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-2">
+                            Press Enter to send, Shift+Enter for new line
+                          </p>
+                        </>
+                      )}
                     </div>
                   </Card>
                 </div>
 
-                {/* Guidelines Sidebar */}
+                {/* Dynamic Sidebar */}
                 <div className="lg:col-span-1">
-                  <Card className="bg-black/40 backdrop-blur-sm border border-purple-900/30 rounded-2xl p-6 h-fit sticky top-24">
-                    <div className="flex items-center mb-4">
-                      <Lightbulb className="h-5 w-5 text-yellow-400 mr-2" />
-                      <h3 className="text-white font-medium">Guidelines & Tips</h3>
-                    </div>
-
-                    <div className="space-y-4 text-sm">
-                      <div>
-                        <h4 className="text-green-400 font-medium mb-2 flex items-center">
-                          <CheckCircle className="h-4 w-4 mr-1" />
-                          What to Write
-                        </h4>
-                        <ul className="space-y-1 text-gray-300 text-xs">
-                          <li>• Be specific about your service's purpose</li>
-                          <li>• Mention input and output types (text, image, audio)</li>
-                          <li>• Describe the AI models you prefer</li>
-                          <li>• Include any special requirements</li>
-                        </ul>
-                      </div>
-
-                      <div>
-                        <h4 className="text-red-400 font-medium mb-2 flex items-center">
-                          <AlertTriangle className="h-4 w-4 mr-1" />
-                          What to Avoid
-                        </h4>
-                        <ul className="space-y-1 text-gray-300 text-xs">
-                          <li>• Vague or unclear descriptions</li>
-                          <li>• Multiple unrelated functions</li>
-                          <li>• Technical jargon without context</li>
-                          <li>• Impossible or unrealistic requests</li>
-                        </ul>
-                      </div>
-
-                      <div>
-                        <h4 className="text-blue-400 font-medium mb-2 flex items-center">
-                          <Info className="h-4 w-4 mr-1" />
-                          Examples
-                        </h4>
-                        <div className="space-y-2 text-gray-300 text-xs">
-                          <div className="p-2 bg-blue-900/20 rounded border border-blue-800/30">
-                            "Create a document summarizer that takes long PDFs and creates concise summaries"
+                  <div className="space-y-6">
+                    {/* Checklist Card */}
+                    {currentChecklist && (
+                      <Card className="bg-black/40 backdrop-blur-sm border border-purple-900/30 rounded-2xl p-6">
+                        <div className="flex items-center mb-4">
+                          <CheckCircle className="h-5 w-5 text-green-400 mr-2" />
+                          <h3 className="text-white font-medium">Progress Checklist</h3>
+                        </div>
+                        
+                        <div className="space-y-3">
+                          <div className={`flex items-center justify-between p-2 rounded ${currentChecklist.service_purpose.completed ? 'bg-green-900/20' : 'bg-gray-800/30'}`}>
+                            <span className="text-sm text-gray-300">Service Purpose</span>
+                            <div className="flex items-center gap-2">
+                              {currentChecklist.service_purpose.completed ? (
+                                <CheckCircle className="h-4 w-4 text-green-400" />
+                              ) : (
+                                <div className="h-4 w-4 border-2 border-gray-600 rounded-full" />
+                              )}
+                            </div>
                           </div>
-                          <div className="p-2 bg-green-900/20 rounded border border-green-800/30">
-                            "I need a chatbot for customer support using OpenAI that can answer FAQs"
+                          
+                          <div className={`flex items-center justify-between p-2 rounded ${currentChecklist.input_type.completed ? 'bg-green-900/20' : 'bg-gray-800/30'}`}>
+                            <span className="text-sm text-gray-300">Input Type</span>
+                            <div className="flex items-center gap-2">
+                              {currentChecklist.input_type.completed ? (
+                                <>
+                                  <span className="text-xs text-green-300">{currentChecklist.input_type.value}</span>
+                                  <CheckCircle className="h-4 w-4 text-green-400" />
+                                </>
+                              ) : (
+                                <div className="h-4 w-4 border-2 border-gray-600 rounded-full" />
+                              )}
+                            </div>
                           </div>
-                          <div className="p-2 bg-purple-900/20 rounded border border-purple-800/30">
-                            "Build a service that translates text between English and Spanish"
+                          
+                          <div className={`flex items-center justify-between p-2 rounded ${currentChecklist.output_type.completed ? 'bg-green-900/20' : 'bg-gray-800/30'}`}>
+                            <span className="text-sm text-gray-300">Output Type</span>
+                            <div className="flex items-center gap-2">
+                              {currentChecklist.output_type.completed ? (
+                                <>
+                                  <span className="text-xs text-green-300">{currentChecklist.output_type.value}</span>
+                                  <CheckCircle className="h-4 w-4 text-green-400" />
+                                </>
+                              ) : (
+                                <div className="h-4 w-4 border-2 border-gray-600 rounded-full" />
+                              )}
+                            </div>
+                          </div>
+                          
+                          <div className={`flex items-center justify-between p-2 rounded ${currentChecklist.service_name.completed ? 'bg-green-900/20' : 'bg-gray-800/30'}`}>
+                            <span className="text-sm text-gray-300">Service Name</span>
+                            <div className="flex items-center gap-2">
+                              {currentChecklist.service_name.completed ? (
+                                <>
+                                  <span className="text-xs text-green-300 font-medium">"{currentChecklist.service_name.value}"</span>
+                                  <CheckCircle className="h-4 w-4 text-green-400" />
+                                </>
+                              ) : (
+                                <div className="h-4 w-4 border-2 border-gray-600 rounded-full" />
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </div>
-                  </Card>
+                      </Card>
+                    )}
+
+                    {/* Service Specification Card */}
+                    {serviceSpecification && (
+                      <Card className="bg-black/40 backdrop-blur-sm border border-blue-900/30 rounded-2xl p-6">
+                        <div className="flex items-center mb-4">
+                          <Bot className="h-5 w-5 text-blue-400 mr-2" />
+                          <h3 className="text-white font-medium">Service Details</h3>
+                        </div>
+                        
+                        <div className="space-y-4">
+                          <div>
+                            <h4 className="text-blue-300 font-medium text-sm mb-2">Name</h4>
+                            <p className="text-white text-sm bg-blue-900/20 p-2 rounded border border-blue-800/30">
+                              {serviceSpecification.service.name}
+                            </p>
+                          </div>
+                          
+                          <div>
+                            <h4 className="text-blue-300 font-medium text-sm mb-2">Description</h4>
+                            <p className="text-gray-300 text-xs leading-relaxed bg-blue-900/10 p-2 rounded border border-blue-800/20">
+                              {serviceSpecification.service.description}
+                            </p>
+                          </div>
+                          
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <h4 className="text-blue-300 font-medium text-xs mb-1">Input</h4>
+                              <span className="text-gray-300 text-xs bg-blue-900/20 px-2 py-1 rounded">
+                                {serviceSpecification.service.input_type}
+                              </span>
+                            </div>
+                            <div>
+                              <h4 className="text-blue-300 font-medium text-xs mb-1">Output</h4>
+                              <span className="text-gray-300 text-xs bg-blue-900/20 px-2 py-1 rounded">
+                                {serviceSpecification.service.output_type}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </Card>
+                    )}
+
+                    {/* Agents Card */}
+                    {currentWorkflowState && currentWorkflowState.agents.length > 0 && (
+                      <Card className="bg-black/40 backdrop-blur-sm border border-indigo-900/30 rounded-2xl p-6">
+                        <div className="flex items-center mb-4">
+                          <Sparkles className="h-5 w-5 text-indigo-400 mr-2" />
+                          <h3 className="text-white font-medium">AI Agents ({currentWorkflowState.agents.length})</h3>
+                        </div>
+                        
+                        <div className="space-y-3">
+                          {currentWorkflowState.agents.map((agent, index) => (
+                            <div key={index} className="bg-indigo-900/20 p-3 rounded border border-indigo-800/30">
+                              <div className="flex items-center gap-2 mb-2">
+                                <div className="w-6 h-6 bg-indigo-600 rounded-full flex items-center justify-center">
+                                  <span className="text-white text-xs font-bold">{index + 1}</span>
+                                </div>
+                                <h4 className="text-indigo-300 font-medium text-sm">{agent.name}</h4>
+                              </div>
+                              <p className="text-gray-400 text-xs mb-2">
+                                <span className="font-medium">Type:</span> {agent.agent_type}
+                              </p>
+                              <p className="text-gray-300 text-xs leading-relaxed">
+                                {agent.system_instruction}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </Card>
+                    )}
+
+                    {/* Guidelines Card - Show when no other info is available */}
+                    {!currentChecklist && !serviceSpecification && !currentWorkflowState && (
+                      <Card className="bg-black/40 backdrop-blur-sm border border-purple-900/30 rounded-2xl p-6 h-fit sticky top-24">
+                        <div className="flex items-center mb-4">
+                          <Lightbulb className="h-5 w-5 text-yellow-400 mr-2" />
+                          <h3 className="text-white font-medium">Guidelines & Tips</h3>
+                        </div>
+
+                        <div className="space-y-4 text-sm">
+                          <div>
+                            <h4 className="text-green-400 font-medium mb-2 flex items-center">
+                              <CheckCircle className="h-4 w-4 mr-1" />
+                              What to Write
+                            </h4>
+                            <ul className="space-y-1 text-gray-300 text-xs">
+                              <li>• Be specific about your service's purpose</li>
+                              <li>• Mention input and output types (text, image, audio)</li>
+                              <li>• Describe the AI models you prefer</li>
+                              <li>• Include any special requirements</li>
+                            </ul>
+                          </div>
+
+                          <div>
+                            <h4 className="text-red-400 font-medium mb-2 flex items-center">
+                              <AlertTriangle className="h-4 w-4 mr-1" />
+                              What to Avoid
+                            </h4>
+                            <ul className="space-y-1 text-gray-300 text-xs">
+                              <li>• Vague or unclear descriptions</li>
+                              <li>• Multiple unrelated functions</li>
+                              <li>• Technical jargon without context</li>
+                              <li>• Impossible or unrealistic requests</li>
+                            </ul>
+                          </div>
+
+                          <div>
+                            <h4 className="text-blue-400 font-medium mb-2 flex items-center">
+                              <Info className="h-4 w-4 mr-1" />
+                              Examples
+                            </h4>
+                            <div className="space-y-2 text-gray-300 text-xs">
+                              <div className="p-2 bg-blue-900/20 rounded border border-blue-800/30">
+                                "Create a document summarizer that takes long PDFs and creates concise summaries"
+                              </div>
+                              <div className="p-2 bg-green-900/20 rounded border border-green-800/30">
+                                "I need a chatbot for customer support using OpenAI that can answer FAQs"
+                              </div>
+                              <div className="p-2 bg-purple-900/20 rounded border border-purple-800/30">
+                                "Build a service that translates text between English and Spanish"
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </Card>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
