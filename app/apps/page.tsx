@@ -35,10 +35,13 @@ import {
   TrendingUp,
   Star,
   ChevronDown,
+  Grid3X3,
+  List,
+  Trash2,
 } from "lucide-react"
 import { toast } from "@/components/ui/use-toast"
-import { decodeJWT } from "@/lib/auth"
-import { deleteMiniService, getFavoriteServices, getFavoriteCount, type FavoriteService } from "@/lib/services"
+import { decodeJWT, getAccessToken } from "@/lib/auth"
+import { deleteMiniService, getFavoriteServices, getFavoriteCount, toggleFavorite, checkIfFavorited, type FavoriteService } from "@/lib/services"
 import { Play } from "next/font/google"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -58,6 +61,25 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 
 // Define the service type
 interface Service {
@@ -142,6 +164,9 @@ export default function DashboardPage() {
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
   const [inputTypeFilter, setInputTypeFilter] = useState<string | null>(null)
   const [outputTypeFilter, setOutputTypeFilter] = useState<string | null>(null)
+  const [viewMode, setViewMode] = useState<'card' | 'table'>('card')
+  const [favoriteLoadingStates, setFavoriteLoadingStates] = useState<Record<number, boolean>>({})
+  const [serviceFavoriteStates, setServiceFavoriteStates] = useState<Record<number, boolean>>({})
   
   const router = useRouter()
 
@@ -344,6 +369,108 @@ export default function DashboardPage() {
     return true;
   };
 
+  // Check if current user is the owner of a service
+  const isCurrentUserOwner = (ownerUsername?: string): boolean => {
+    if (!ownerUsername) return true // If no owner specified, allow delete (backward compatibility)
+    
+    try {
+      const token = getAccessToken()
+      if (!token) return false
+      
+      const decodedToken = decodeJWT(token)
+      if (!decodedToken?.username) return false
+      
+      return decodedToken.username === ownerUsername
+    } catch (error) {
+      console.error("Error checking user ownership:", error)
+      return false
+    }
+  }
+
+  // Handle table view service deletion with confirmation
+  const handleTableServiceDelete = async (service: any) => {
+    if (!service.id) return;
+    
+    try {
+      const success = await deleteMiniService(service.id, {
+        showToast: true,
+        toastMessage: `"${service.name}" has been deleted successfully.`,
+        onSuccess: () => {
+          // Update the services list in state
+          setMiniServices((prev) => prev.filter((s) => s.id !== service.id));
+        }
+      });
+
+      if (success) {
+        // Refresh the page after a short delay for better UX
+        setTimeout(() => {
+          window.location.reload();
+        }, 1000);
+      }
+    } catch (error) {
+      console.error("Error deleting service:", error);
+      toast({
+        variant: "destructive",
+        title: "Deletion Failed",
+        description: "There was a problem deleting this service. Please try again.",
+      });
+    }
+  };
+
+  // Handle table view service favorite toggle
+  const handleTableServiceFavorite = async (service: any) => {
+    if (!service.id) return;
+    
+    // Set loading state for this specific service
+    setFavoriteLoadingStates(prev => ({ ...prev, [service.id]: true }));
+    
+    try {
+      const result = await toggleFavorite(service.id);
+      
+      if (result.success) {
+        // Update the favorite count in the services list
+        setMiniServices((prev) => prev.map((s) => 
+          s.id === service.id 
+            ? { 
+                ...s, 
+                favorite_count: result.isFavorited 
+                  ? (s.favorite_count || 0) + 1 
+                  : Math.max(0, (s.favorite_count || 0) - 1)
+              }
+            : s
+        ));
+        
+        // Update the favorite status for this service
+        setServiceFavoriteStates(prev => ({ 
+          ...prev, 
+          [service.id]: result.isFavorited 
+        }));
+        
+        toast({
+          title: "Success",
+          description: `"${service.name}" has been ${result.isFavorited ? "added to" : "removed from"} favorites.`,
+        });
+        
+        // If we're in favorites view and unfavorited, refresh the list
+        if (activeFilter === "favourites" && !result.isFavorited) {
+          setRefreshTrigger(prev => prev + 1);
+        }
+      } else {
+        throw new Error("Failed to toggle favorite");
+      }
+    } catch (error) {
+      console.error("Error toggling favorite:", error);
+      toast({
+        variant: "destructive",
+        title: "Favorite Toggle Failed",
+        description: "There was a problem updating the favorite status. Please try again.",
+      });
+    } finally {
+      // Clear loading state for this specific service
+      setFavoriteLoadingStates(prev => ({ ...prev, [service.id]: false }));
+    }
+  };
+
  
   // Fetch mini-services from API
   useEffect(() => {
@@ -409,8 +536,11 @@ export default function DashboardPage() {
             // Get color based on service type
             const color = getColorForService(service.input_type, service.output_type)
 
-            // Fetch favorite count for this service
-            const favoriteCount = await getFavoriteCount(service.id)
+            // Fetch favorite count and status for this service
+            const [favoriteCount, isFavorited] = await Promise.all([
+              getFavoriteCount(service.id),
+              checkIfFavorited(service.id)
+            ])
 
             return {
               id: service.id,
@@ -440,6 +570,16 @@ export default function DashboardPage() {
           const formattedServices = await Promise.all(formattedServicesPromises)
 
           setMiniServices(formattedServices)
+          
+          // Store favorite states for table view - we need to collect them from the parallel promises
+          const favoriteStates: Record<number, boolean> = {}
+          await Promise.all(
+            userCreatedServices.map(async (service, index) => {
+              const isFavorited = await checkIfFavorited(service.id)
+              favoriteStates[service.id] = isFavorited
+            })
+          )
+          setServiceFavoriteStates(favoriteStates)
         } catch (error) {
           console.error("Error fetching mini-services:", error)
           setMiniServices([])
@@ -935,6 +1075,164 @@ export default function DashboardPage() {
     return []
   }
 
+  // Helper function to render table view
+  const renderTableView = () => {
+    const services = getFilteredMiniServices()
+    
+    return (
+      <div className="bg-black/60 backdrop-blur-md rounded-xl border border-purple-900/30 overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow className="border-purple-900/30 hover:bg-purple-900/20">
+              <TableHead className="text-purple-300 font-semibold">Service</TableHead>
+              <TableHead className="text-purple-300 font-semibold">Type</TableHead>
+              <TableHead className="text-purple-300 font-semibold">Owner</TableHead>
+              <TableHead className="text-purple-300 font-semibold">Token Usage</TableHead>
+              <TableHead className="text-purple-300 font-semibold">Runs</TableHead>
+              <TableHead className="text-purple-300 font-semibold">Favorites</TableHead>
+              <TableHead className="text-purple-300 font-semibold">Created</TableHead>
+              <TableHead className="text-purple-300 font-semibold">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {services.map((service) => (
+              <TableRow 
+                key={`table-service-${service.id}`}
+                className="border-purple-900/20 hover:bg-purple-900/10 cursor-pointer transition-colors"
+                onClick={() => {
+                  if (service.isCustom && service.id) {
+                    router.push(`/apps/service/${service.id}`)
+                  }
+                }}
+              >
+                <TableCell className="py-4">
+                  <div className="flex items-center space-x-3">
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${service.color}`}>
+                      {service.icon}
+                    </div>
+                    <div>
+                      <div className="font-medium text-white">{service.name}</div>
+                      <div className="text-sm text-gray-400 truncate max-w-xs">{service.description}</div>
+                    </div>
+                  </div>
+                </TableCell>
+                <TableCell className="text-gray-300">
+                  <div className="flex flex-col space-y-1">
+                    <span className="text-xs text-emerald-400">{service.usageStats?.input_type || 'Text'}</span>
+                    <span className="text-xs text-gray-500">→</span>
+                    <span className="text-xs text-blue-400">{service.usageStats?.output_type || 'Text'}</span>
+                  </div>
+                </TableCell>
+                <TableCell className="text-gray-300">
+                  {service.owner_username && (
+                    <span className="text-sm text-purple-300">{service.owner_username}</span>
+                  )}
+                </TableCell>
+                <TableCell className="text-gray-300">
+                  <span className="text-sm">
+                    {service.usageStats?.average_token_usage?.total_tokens !== undefined && 
+                     !isNaN(service.usageStats.average_token_usage.total_tokens) && 
+                     service.usageStats.average_token_usage.total_tokens > 0
+                      ? Math.round(service.usageStats.average_token_usage.total_tokens).toLocaleString()
+                      : '—'
+                    }
+                  </span>
+                </TableCell>
+                <TableCell className="text-gray-300">
+                  <span className="text-sm">
+                    {service.usageStats?.total_runs !== undefined && 
+                     !isNaN(service.usageStats.total_runs) && 
+                     service.usageStats.total_runs > 0
+                      ? service.usageStats.total_runs.toLocaleString()
+                      : '—'
+                    }
+                  </span>
+                </TableCell>
+                <TableCell className="text-gray-300">
+                  <div className="flex items-center space-x-1">
+                    <Star className="h-4 w-4 text-orange-400" />
+                    <span className="text-sm">{service.favorite_count || 0}</span>
+                  </div>
+                </TableCell>
+                <TableCell className="text-gray-300">
+                  <span className="text-sm">
+                    {service.created_at ? new Date(service.created_at).toLocaleDateString() : '—'}
+                  </span>
+                </TableCell>
+                <TableCell>
+                  <div className="flex items-center space-x-2">
+                    {/* Favorite Button */}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleTableServiceFavorite(service)
+                      }}
+                      disabled={favoriteLoadingStates[service.id]}
+                      className={`${
+                        serviceFavoriteStates[service.id]
+                          ? "text-yellow-400 hover:text-yellow-300 hover:bg-yellow-900/20"
+                          : "text-yellow-400/60 hover:text-yellow-400 hover:bg-yellow-900/20"
+                      }`}
+                      title={serviceFavoriteStates[service.id] ? "Remove from favorites" : "Add to favorites"}
+                    >
+                      {favoriteLoadingStates[service.id] ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Star 
+                          className={`h-4 w-4 ${
+                            serviceFavoriteStates[service.id] ? "fill-yellow-400" : "stroke-2"
+                          }`} 
+                        />
+                      )}
+                    </Button>
+                    
+                    {service.isCustom && isCurrentUserOwner(service.owner_username) && (
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                            }}
+                            className="text-red-400 hover:text-red-300 hover:bg-red-900/20"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent className="bg-gray-900 border border-purple-900/30 text-white">
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete Service</AlertDialogTitle>
+                            <AlertDialogDescription className="text-gray-400">
+                              Are you sure you want to delete "{service.name}"? This action cannot be undone.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel className="bg-gray-800 text-white border-gray-700 hover:bg-gray-700">
+                              Cancel
+                            </AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => handleTableServiceDelete(service)}
+                              className="bg-red-600 hover:bg-red-700 text-white"
+                            >
+                              Delete
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    )}
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    )
+  }
+
   return (    <div className="min-h-screen bg-gradient-to-b from-black via-purple-950/20 to-black">
       <NavBar />
 
@@ -964,116 +1262,180 @@ export default function DashboardPage() {
                   Create New Mini Service
                 </Button>
               </div>  
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-
+              {/* Reorganized layout: Search & Filters on left, Sort & View controls on right */}
+              <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
                 
-                {/* Search Bar */}
-                <div className="relative flex-grow max-w-md">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <Input 
-                    placeholder="Search services..." 
-                    className="pl-10 bg-black/40 border-purple-900/30 text-white focus:ring-purple-500 focus:border-purple-500"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                  />
-                  {searchQuery && (
-                    <button 
-                      onClick={() => setSearchQuery("")}
-                      className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 hover:text-gray-200"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  )}
+                {/* Left side: Search and Filters */}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-1">
+                  {/* Search Bar */}
+                  <div className="relative flex-grow max-w-md">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <Input 
+                      placeholder="Search services..." 
+                      className="pl-10 bg-black/40 border-purple-900/30 text-white focus:ring-purple-500 focus:border-purple-500"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                    />
+                    {searchQuery && (
+                      <button 
+                        onClick={() => setSearchQuery("")}
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 hover:text-gray-200"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                  
+                  {/* Type Filters */}
+                  <div className="flex gap-2">
+                    <Select value={inputTypeFilter || "all"} onValueChange={(value) => setInputTypeFilter(value === "all" ? null : value)}>
+                      <SelectTrigger className="w-[140px] bg-black/40 border-purple-900/30 text-white">
+                        <SelectValue placeholder="Input Type" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-gray-900 border-purple-900/30">
+                        <SelectItem value="all">All Inputs</SelectItem>
+                        <SelectItem value="text">Text</SelectItem>
+                        <SelectItem value="image">Image</SelectItem>
+                        <SelectItem value="sound">Audio/Video</SelectItem>
+                        <SelectItem value="document">Document</SelectItem>
+                      </SelectContent>
+                    </Select>
+
+                    <Select value={outputTypeFilter || "all"} onValueChange={(value) => setOutputTypeFilter(value === "all" ? null : value)}>
+                      <SelectTrigger className="w-[140px] bg-black/40 border-purple-900/30 text-white">
+                        <SelectValue placeholder="Output Type" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-gray-900 border-purple-900/30">
+                        <SelectItem value="all">All Outputs</SelectItem>
+                        <SelectItem value="text">Text</SelectItem>
+                        <SelectItem value="image">Image</SelectItem>
+                        <SelectItem value="sound">Audio/Video</SelectItem>
+                        <SelectItem value="document">Document</SelectItem>
+                      </SelectContent>
+                    </Select>
+
+                    {/* Clear Type Filters Button */}
+                    {(inputTypeFilter || outputTypeFilter) && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setInputTypeFilter(null)
+                          setOutputTypeFilter(null)
+                        }}
+                        className="bg-black/40 border-purple-900/30 text-white hover:bg-purple-900/30"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
                 </div>
-                
-                {/* Type Filters */}
-                <div className="flex gap-2">
-                  <Select value={inputTypeFilter || "all"} onValueChange={(value) => setInputTypeFilter(value === "all" ? null : value)}>
-                    <SelectTrigger className="w-[140px] bg-black/40 border-purple-900/30 text-white">
-                      <SelectValue placeholder="Input Type" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-gray-900 border-purple-900/30">
-                      <SelectItem value="all">All Inputs</SelectItem>
-                      <SelectItem value="text">Text</SelectItem>
-                      <SelectItem value="image">Image</SelectItem>
-                      <SelectItem value="sound">Audio/Video</SelectItem>
-                      <SelectItem value="document">Document</SelectItem>
-                    </SelectContent>
-                  </Select>
 
-                  <Select value={outputTypeFilter || "all"} onValueChange={(value) => setOutputTypeFilter(value === "all" ? null : value)}>
-                    <SelectTrigger className="w-[140px] bg-black/40 border-purple-900/30 text-white">
-                      <SelectValue placeholder="Output Type" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-gray-900 border-purple-900/30">
-                      <SelectItem value="all">All Outputs</SelectItem>
-                      <SelectItem value="text">Text</SelectItem>
-                      <SelectItem value="image">Image</SelectItem>
-                      <SelectItem value="sound">Audio/Video</SelectItem>
-                      <SelectItem value="document">Document</SelectItem>
-                    </SelectContent>
-                  </Select>
-
-                  {/* Clear Type Filters Button */}
-                  {(inputTypeFilter || outputTypeFilter) && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setInputTypeFilter(null)
-                        setOutputTypeFilter(null)
-                      }}
-                      className="bg-black/40 border-purple-900/30 text-white hover:bg-purple-900/30"
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  )}
-                </div>
-
-                {/* Sort Controls (removed Create button from here) */}
-                <div className="flex gap-2">
-                  {/* Sort Dropdown */}
+                {/* Right side: Sort and View Controls */}
+                <div className="flex gap-2 flex-shrink-0">
+                  {/* Enhanced Sort Dropdown with current state display */}
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="outline" className="bg-black/40 border-purple-900/30 text-white hover:bg-purple-900/30">
+                      <Button variant="outline" className="bg-black/40 border-purple-900/30 text-white hover:bg-purple-900/30 min-w-[180px] justify-start">
                         {sortDirection === 'asc' ? <SortAsc className="h-4 w-4 mr-2" /> : <SortDesc className="h-4 w-4 mr-2" />}
-                        Sort
-                        <ChevronDown className="h-4 w-4 ml-2" />
+                        <span className="text-sm">
+                          Sort by: {
+                            sortBy === 'name' ? 'Name' :
+                            sortBy === 'created' ? 'Created Date' :
+                            sortBy === 'usage' ? 'Token Usage' :
+                            sortBy === 'runs' ? 'Total Runs' :
+                            sortBy === 'type' ? 'Type' :
+                            sortBy === 'favorites' ? 'Favorites' : 'Created Date'
+                          } {sortDirection === 'asc' ? '↑' : '↓'}
+                        </span>
+                        <ChevronDown className="h-4 w-4 ml-auto" />
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent className="bg-gray-900 border-purple-900/30">
+                    <DropdownMenuContent className="bg-gray-900 border-purple-900/30" align="end">
                       <DropdownMenuLabel className="text-gray-400">Sort by</DropdownMenuLabel>
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem onClick={() => setSortBy('name')} className="text-white hover:bg-purple-900/30">
-                        Name
+                      <DropdownMenuItem 
+                        onClick={() => setSortBy('name')} 
+                        className={`text-white hover:bg-purple-900/30 ${sortBy === 'name' ? 'bg-purple-900/50' : ''}`}
+                      >
+                        <span className="flex-1">Name</span>
+                        {sortBy === 'name' && <span className="text-purple-400 ml-2">✓</span>}
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => setSortBy('created')} className="text-white hover:bg-purple-900/30">
+                      <DropdownMenuItem 
+                        onClick={() => setSortBy('created')} 
+                        className={`text-white hover:bg-purple-900/30 ${sortBy === 'created' ? 'bg-purple-900/50' : ''}`}
+                      >
                         <Clock className="h-4 w-4 mr-2" />
-                        Created Date
+                        <span className="flex-1">Created Date</span>
+                        {sortBy === 'created' && <span className="text-purple-400 ml-2">✓</span>}
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => setSortBy('usage')} className="text-white hover:bg-purple-900/30">
+                      <DropdownMenuItem 
+                        onClick={() => setSortBy('usage')} 
+                        className={`text-white hover:bg-purple-900/30 ${sortBy === 'usage' ? 'bg-purple-900/50' : ''}`}
+                      >
                         <Zap className="h-4 w-4 mr-2" />
-                        Token Usage
+                        <span className="flex-1">Token Usage</span>
+                        {sortBy === 'usage' && <span className="text-purple-400 ml-2">✓</span>}
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => setSortBy('runs')} className="text-white hover:bg-purple-900/30">
+                      <DropdownMenuItem 
+                        onClick={() => setSortBy('runs')} 
+                        className={`text-white hover:bg-purple-900/30 ${sortBy === 'runs' ? 'bg-purple-900/50' : ''}`}
+                      >
                         <TrendingUp className="h-4 w-4 mr-2" />
-                        Total Runs
+                        <span className="flex-1">Total Runs</span>
+                        {sortBy === 'runs' && <span className="text-purple-400 ml-2">✓</span>}
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => setSortBy('type')} className="text-white hover:bg-purple-900/30">
+                      <DropdownMenuItem 
+                        onClick={() => setSortBy('type')} 
+                        className={`text-white hover:bg-purple-900/30 ${sortBy === 'type' ? 'bg-purple-900/50' : ''}`}
+                      >
                         <Filter className="h-4 w-4 mr-2" />
-                        Type
+                        <span className="flex-1">Type</span>
+                        {sortBy === 'type' && <span className="text-purple-400 ml-2">✓</span>}
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => setSortBy('favorites')} className="text-white hover:bg-purple-900/30">
+                      <DropdownMenuItem 
+                        onClick={() => setSortBy('favorites')} 
+                        className={`text-white hover:bg-purple-900/30 ${sortBy === 'favorites' ? 'bg-purple-900/50' : ''}`}
+                      >
                         <Star className="h-4 w-4 mr-2" />
-                        Favorites
+                        <span className="flex-1">Favorites</span>
+                        {sortBy === 'favorites' && <span className="text-purple-400 ml-2">✓</span>}
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem onClick={() => setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')} className="text-white hover:bg-purple-900/30">
                         {sortDirection === 'asc' ? <SortDesc className="h-4 w-4 mr-2" /> : <SortAsc className="h-4 w-4 mr-2" />}
-                        {sortDirection === 'asc' ? 'Descending' : 'Ascending'}
+                        Switch to {sortDirection === 'asc' ? 'Descending' : 'Ascending'}
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
+
+                  {/* View Toggle Buttons */}
+                  <div className="flex gap-1 bg-black/40 border border-purple-900/30 rounded-md p-1">
+                    <Button
+                      variant={viewMode === 'card' ? 'default' : 'ghost'}
+                      size="sm"
+                      onClick={() => setViewMode('card')}
+                      className={viewMode === 'card' 
+                        ? "bg-purple-600 text-white hover:bg-purple-700" 
+                        : "text-gray-400 hover:text-white hover:bg-purple-900/30"
+                      }
+                      title="Card view"
+                    >
+                      <Grid3X3 className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant={viewMode === 'table' ? 'default' : 'ghost'}
+                      size="sm"
+                      onClick={() => setViewMode('table')}
+                      className={viewMode === 'table' 
+                        ? "bg-purple-600 text-white hover:bg-purple-700" 
+                        : "text-gray-400 hover:text-white hover:bg-purple-900/30"
+                      }
+                      title="Table view"
+                    >
+                      <List className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1164,42 +1526,60 @@ export default function DashboardPage() {
           {/* Services Display Section */}
           {getFilteredMiniServices().length > 0 && (
             <section className="mb-12">
-                          {/* Scrollable container for services */}              <div 
-                className="max-h-[700px] overflow-y-auto pr-2 custom-scrollbar px-4 py-6 bg-black/60 backdrop-blur-md rounded-xl border border-purple-900/30"
-                style={{
-                  scrollbarWidth: 'thin',
-                  scrollbarColor: '#8b5cf6 transparent'
-                }}
-              >
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-4">
+              {viewMode === 'card' ? (
+                /* Card View */
+                <div 
+                  className="max-h-[700px] overflow-y-auto pr-2 custom-scrollbar px-4 py-6 bg-black/60 backdrop-blur-md rounded-xl border border-purple-900/30"
+                  style={{
+                    scrollbarWidth: 'thin',
+                    scrollbarColor: '#8b5cf6 transparent'
+                  }}
+                >
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-4">
+                    {(miniServicesLoading || (activeFilter === "favourites" && favoritesLoading)) ? (
+                      // Placeholder cards during loading
+                      Array.from({ length: 6 }).map((_, index) => (
+                        <div
+                          key={`placeholder-${index}`}
+                          className="h-[320px] bg-black/40 backdrop-blur-sm rounded-xl border border-purple-900/30 animate-pulse"
+                        />
+                      ))
+                    ) : (
+                      getFilteredMiniServices().map((service) => (
+                        <MiniAppCard
+                          key={`mini-service-${service.id}`}
+                          title={service.name}
+                          description={service.description}
+                          icon={service.icon}
+                          serviceType={service.serviceType}
+                          color={service.color}
+                          isCustom={service.isCustom}
+                          id={service.id}
+                          onDelete={service.onDelete}
+                          usageStats={service.usageStats}
+                          is_enhanced={service.is_enhanced}
+                          requiresApiKey={service.requiresApiKey}
+                          owner_username={service.owner_username}
+                        />
+                      ))
+                    )}
+                  </div>
+                </div>
+              ) : (
+                /* Table View */
+                <div className="max-h-[700px] overflow-y-auto pr-2 custom-scrollbar">
                   {(miniServicesLoading || (activeFilter === "favourites" && favoritesLoading)) ? (
-                    // Placeholder cards during loading
-                    Array.from({ length: 6 }).map((_, index) => (
-                      <div
-                        key={`placeholder-${index}`}
-                        className="h-[320px] bg-black/40 backdrop-blur-sm rounded-xl border border-purple-900/30 animate-pulse"
-                      />
-                    ))
+                    <div className="bg-black/60 backdrop-blur-md rounded-xl border border-purple-900/30 p-8 text-center">
+                      <div className="flex items-center justify-center space-x-2">
+                        <Loader2 className="h-6 w-6 text-purple-500 animate-spin" />
+                        <span className="text-gray-400">Loading services...</span>
+                      </div>
+                    </div>
                   ) : (
-                    getFilteredMiniServices().map((service) => (                      <MiniAppCard
-                        key={`mini-service-${service.id}`}
-                        title={service.name}
-                        description={service.description}
-                        icon={service.icon}
-                        serviceType={service.serviceType}
-                        color={service.color}
-                        isCustom={service.isCustom}
-                        id={service.id}
-                        onDelete={service.onDelete}
-                        usageStats={service.usageStats}
-                        is_enhanced={service.is_enhanced}
-                        requiresApiKey={service.requiresApiKey}
-                        owner_username={service.owner_username}
-                      />
-                    ))
+                    renderTableView()
                   )}
                 </div>
-              </div>
+              )}
             </section>
           )}
 
