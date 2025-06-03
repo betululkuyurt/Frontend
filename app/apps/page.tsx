@@ -655,8 +655,8 @@ export default function DashboardPage() {
           console.log("Favorite data length:", favoriteData?.length)
           console.log("First favorite item:", favoriteData?.[0])
 
-          // Backend now returns full mini service details, so we can map directly
-          const formattedFavorites = favoriteData.map((service: FavoriteService) => {
+          // Backend now returns full mini service details, so we need to fetch favorite counts and states
+          const formattedFavoritesPromises = favoriteData.map(async (service: FavoriteService) => {
             console.log("Processing favorite service:", service)
             
             // Determine icon based on input/output type
@@ -675,6 +675,12 @@ export default function DashboardPage() {
 
             // Get color based on service type
             const color = getColorForService(service.input_type, service.output_type)
+
+            // Fetch favorite count and state for this service (same as regular services)
+            const [favoriteCount, isFavorited] = await Promise.all([
+              getFavoriteCount(service.id),
+              checkIfFavorited(service.id)
+            ])
 
             const formattedService = {
               id: service.id,
@@ -695,11 +701,22 @@ export default function DashboardPage() {
               },
               is_enhanced: service.is_enhanced,
               created_at: service.created_at,
+              favorite_count: favoriteCount, // Add favorite count for consistency with other views
             }
             
             console.log("Formatted favorite service:", formattedService)
             return formattedService
           })
+
+          // Wait for all favorite services to be processed with their counts
+          const formattedFavorites = await Promise.all(formattedFavoritesPromises)
+
+          // Store favorite states for table view
+          const favoriteStates: Record<number, boolean> = {}
+          formattedFavorites.forEach((service) => {
+            favoriteStates[service.id] = true // We know these are all favorited since they came from favorites endpoint
+          })
+          setServiceFavoriteStates(favoriteStates)
 
           console.log("All formatted favorites:", formattedFavorites)
           setFavoriteServices(formattedFavorites)
