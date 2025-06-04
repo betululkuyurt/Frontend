@@ -898,10 +898,16 @@ export default function ServicePage() {
     // Check if we have file upload agents
     const fileUploadAgents = getFileUploadAgents()
     const hasFileUploadAgents = fileUploadAgents.length > 0
+    
+    // Check for document input type agents
+    const fileUploadRequirements = getFileUploadRequirements()
+    const requiresFileUpload = hasFileUploadAgents || (fileUploadRequirements && fileUploadRequirements.type === "document")
 
     // console.log("📁 File upload check:", {
     //   fileUploadAgents: fileUploadAgents.length,
     //   hasFileUploadAgents,
+    //   requiresFileUpload,
+    //   fileUploadRequirements,
     //   agentTypes: fileUploadAgents.map(a => a.type),
     //   uploadedFile: !!uploadedFile,
     //   userInput: !!userInput?.trim()
@@ -918,15 +924,15 @@ export default function ServicePage() {
       return
     }
 
-    // Non-RAG file upload agents need actual files
-    if (nonRagFileAgents.length > 0 && !uploadedFile) {
+    // Non-RAG file upload agents or document type agents need actual files
+    if ((nonRagFileAgents.length > 0 || (fileUploadRequirements?.type === "document")) && !uploadedFile) {
       // console.log("❌ Validation failed: No file uploaded for file upload service");
       setError("Please upload a file for this service.")
       return
     }
 
     // Regular text services need text input
-    if (!hasFileUploadAgents && !userInput?.trim()) {
+    if (!requiresFileUpload && !userInput?.trim()) {
       // console.log("❌ Validation failed: No text input for text service");
       setError("Please provide text input for this service.")
       return
@@ -967,6 +973,9 @@ export default function ServicePage() {
       if (hasFileUploadAgents) {
         // console.log("📁 Calling handleUnifiedFileUpload");
         response = await performUnifiedFileUpload(currentInput, currentFile)
+      } else if (fileUploadRequirements?.type === "document") {
+        // console.log("📄 Calling document upload workflow");
+        response = await performDocumentUpload(currentInput, currentFile)
       } else {
         // console.log("📝 Calling handleRegularServiceSubmit");
         response = await performRegularServiceSubmit(currentInput, currentFile)
@@ -1238,6 +1247,91 @@ export default function ServicePage() {
 
     const data = await response.json()
     return data
+  }
+
+  // Handle document type uploads using the unified upload workflow
+  const performDocumentUpload = async (inputText: string, file: File | null) => {
+    if (!file) {
+      throw new Error("Document file is required")
+    }
+
+    const token = localStorage.getItem("token") || localStorage.getItem("accessToken") || Cookies.get("accessToken")
+    const currentUserId = Cookies.get("user_id")
+
+    // Step 1: Upload the document file first using the /upload endpoint
+    setDocumentProcessingState({
+      isProcessing: true,
+      stage: "uploading",
+      message: "Uploading document to server...",
+    })
+
+    const uploadFormData = new FormData()
+    uploadFormData.append("file", file, file.name)
+
+    const uploadResponse = await fetch(
+      `http://127.0.0.1:8000/api/v1/mini-services/upload?current_user_id=${currentUserId}`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: uploadFormData,
+        signal: AbortSignal.timeout(300000),
+      },
+    )
+
+    if (!uploadResponse.ok) {
+      let errorDetail = "Unknown error"
+      try {
+        const errorData = await uploadResponse.json()
+        errorDetail = errorData?.detail || JSON.stringify(errorData)
+      } catch (parseError) {
+        errorDetail = uploadResponse.statusText
+      }
+      throw new Error(`Upload failed: ${uploadResponse.status} ${errorDetail}`)
+    }
+
+    const uploadData = await uploadResponse.json()
+
+    // Step 2: Use the uploaded filename to run the mini service
+    setDocumentProcessingState({
+      isProcessing: true,
+      stage: "processing",
+      message: "Processing uploaded document...",
+    })
+
+    const processBody = {
+      input: inputText || uploadData.saved_as, // Use input text if provided, otherwise use filename
+      file: uploadData.saved_as, // Include the uploaded file reference
+      api_keys: getApiKeysForBackend(),
+    }
+
+    const processResponse = await fetch(
+      `http://127.0.0.1:8000/api/v1/mini-services/${serviceId}/run?current_user_id=${currentUserId}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(processBody),
+        signal: AbortSignal.timeout(300000),
+      },
+    )
+
+    if (!processResponse.ok) {
+      let errorDetail = "Unknown error"
+      try {
+        const errorData = await processResponse.json()
+        errorDetail = errorData?.detail || JSON.stringify(errorData)
+      } catch (parseError) {
+        errorDetail = processResponse.statusText
+      }
+      throw new Error(`Processing failed: ${processResponse.status} ${errorDetail}`)
+    }
+
+    const processData = await processResponse.json()
+    return processData
   }
 
   // Handle service deletion
@@ -2002,19 +2096,43 @@ export default function ServicePage() {
 
   // **[NEW HELPER]** - Get file upload requirements for UI
   const getFileUploadRequirements = useCallback(() => {
+    // First check for agents with specific file upload configs
     const agents = getFileUploadAgents()
-    if (agents.length === 0) return null
-
-    // For now, return requirements for the primary agent
-    const primaryAgent = agents[0]
-    return {
-      acceptedTypes: primaryAgent.config.supportedFileTypes.join(","),
-      maxSize: primaryAgent.config.maxFileSize,
-      hasSpecialUI: primaryAgent.config.hasSpecialUI,
-      type: primaryAgent.type,
-      agentName: primaryAgent.name,
+    if (agents.length > 0) {
+      const primaryAgent = agents[0]
+      return {
+        acceptedTypes: primaryAgent.config.supportedFileTypes.join(","),
+        maxSize: primaryAgent.config.maxFileSize,
+        hasSpecialUI: primaryAgent.config.hasSpecialUI,
+        type: primaryAgent.type,
+        agentName: primaryAgent.name,
+      }
     }
-  }, [getFileUploadAgents])
+
+    // If no specific file upload agents, check for document input type
+    if (!service?.workflow?.nodes) return null
+
+    // Check if any agent has document input type
+    const documentAgents = Object.entries(service.workflow.nodes).filter(([nodeId, node]) => {
+      const agentDetail = agentDetails[node.agent_id]
+      return agentDetail?.input_type === "document" || service.input_type === "document"
+    })
+
+    if (documentAgents.length > 0) {
+      const [nodeId, node] = documentAgents[0]
+      const agentDetail = agentDetails[node.agent_id]
+      
+      return {
+        acceptedTypes: ".pdf,.docx,.txt,.doc,.rtf",
+        maxSize: 10,
+        hasSpecialUI: false,
+        type: "document",
+        agentName: agentDetail?.name || node.agent_name || `Agent ${node.agent_id}`,
+      }
+    }
+
+    return null
+  }, [getFileUploadAgents, service?.workflow, service?.input_type, agentDetails])
 
   // **[RESTORED]** - Fetch document collection for RAG services (endpoint now available in backend)
   useEffect(() => {
@@ -2050,7 +2168,7 @@ export default function ServicePage() {
         }
 
         const url = `http://127.0.0.1:8000/api/v1/agents/${agentId}/documents?current_user_id=${currentUserId}`
-        // console.log("📡 Fetching documents from:", url);
+        console.log("📡 Fetching documents from:", url);
 
         const response = await fetch(url, {
           headers: {
@@ -2647,173 +2765,268 @@ export default function ServicePage() {
             </div>
           </div>
 
-          {/* Chat Container - Large Box */}
-          <div className="flex-1 p-4 lg:p-6">
-            <div className="h-full bg-black/40 backdrop-blur-sm rounded-2xl border border-purple-900/30 flex flex-col">
-              {/* Chat Messages Area */}
-              <div className="flex-1 overflow-y-auto p-6 scroll-smooth" style={{ maxHeight: 'calc(100vh - 400px)' }} ref={chatMessagesRef}>
-                <div className="max-w-4xl mx-auto">
-                  {/* Chat Messages */}
-                  <div className="space-y-4 min-h-[300px]">
-                    {/* Bot welcome message */}
-                    <div className="flex items-start space-x-3">
-                      <div className={`w-8 h-8 bg-gradient-to-r ${getServiceColor()} rounded-full flex items-center justify-center flex-shrink-0 mt-1`}>
-                        {getServiceIcon() && React.cloneElement(getServiceIcon(), { className: "h-4 w-4 text-white" })}
-                      </div>
-                      <div className="bg-zinc-800/80 backdrop-blur-sm rounded-2xl rounded-tl-sm p-4 max-w-md">
-                        <p className="text-gray-200 text-sm">
-                          Hello! I'm ready to help you with {service?.input_type} processing.
-                          {service?.output_type && ` I'll provide ${service.output_type} output.`}
-                        </p>
+          {/* Conditional Layout: Centered Input or Chat Interface */}
+          {chatHistory.length === 0 ? (
+            /* Initial State - Centered Input */
+            <div className="flex-1 flex items-center justify-center p-4 lg:p-6">
+              <div className="w-full max-w-2xl">
+                <div className="text-center mb-8">
+                  <div className={`w-16 h-16 bg-gradient-to-r ${getServiceColor()} rounded-full flex items-center justify-center mx-auto mb-4 shadow-2xl`}>
+                    {getServiceIcon() && React.cloneElement(getServiceIcon(), { className: "h-8 w-8 text-white" })}
+                  </div>
+                  <h2 className="text-2xl font-bold text-white mb-2">Ready to Process</h2>
+                  <p className="text-gray-400">
+                    {service?.input_type === "text" 
+                      ? "Enter your text below to get started"
+                      : "Upload your file and provide any additional context"}
+                  </p>
+                </div>
+
+                <div className="bg-black/40 backdrop-blur-sm rounded-2xl border border-purple-900/30 p-6">
+                  {/* API Key Warning */}
+                  {getAgentsRequiringApiKey().length > 0 && !areAllRequiredApiKeysSelected && (
+                    <div className="bg-amber-900/20 border border-amber-700/30 rounded-lg p-4 mb-6 animate-in slide-in-from-bottom-2">
+                      <div className="flex items-start space-x-3">
+                        <div className="w-6 h-6 bg-amber-600/20 rounded-full flex items-center justify-center flex-shrink-0">
+                          <svg className="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                          </svg>
+                        </div>
+                        <div className="flex-1">
+                          <h4 className="text-amber-200 font-medium text-sm mb-1">API Keys Required</h4>
+                          <p className="text-amber-300/80 text-xs mb-3">
+                            This service requires API keys to function. Please select the required API keys in the sidebar before proceeding.
+                          </p>
+                          <div className="space-y-1">
+                            {getAgentsRequiringApiKey().map((agent) => (
+                              <div key={agent.id} className="flex items-center space-x-2 text-xs text-amber-200/70">
+                                <div className="w-1.5 h-1.5 bg-amber-400 rounded-full"></div>
+                                <span>{agent.name} requires {agent.type} API key</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => setStatsOpen(true)}
+                          className="text-amber-400 hover:text-amber-300 transition-colors"
+                          title="Open sidebar to configure API keys"
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                        </button>
                       </div>
                     </div>
+                  )}
 
-                    {/* Chat History Messages */}
-                    {chatHistory.map((message) => (
-                      <div key={message.id}>
-                        {message.type === 'user' ? (
-                          /* User message */
-                          <div className="flex items-start space-x-3 justify-end">
-                            <div className={`bg-gradient-to-r ${getServiceColor()} rounded-2xl rounded-tr-sm p-4 max-w-md`}>
-                              <p className="text-white text-sm break-words">
-                                {message.file ? `📎 ${message.file.name}` : message.content}
-                              </p>
-                              {message.content && message.file && (
-                                <p className="text-purple-100 text-xs mt-2">{message.content}</p>
-                              )}
-                            </div>
-                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-600 to-purple-800 flex items-center justify-center flex-shrink-0 mt-1 border border-purple-500/30 shadow-lg">
-                              <span className="text-xs font-bold text-white">
-                                {userData.initials || "U"}
-                              </span>
-                            </div>
-                          </div>
-                        ) : (
-                          /* Assistant message */
-                          <div className="flex items-start space-x-3">
-                            <div className={`w-8 h-8 bg-gradient-to-r ${getServiceColor()} rounded-full flex items-center justify-center flex-shrink-0 mt-1`}>
-                              {getServiceIcon() && React.cloneElement(getServiceIcon(), { className: "h-4 w-4 text-white" })}
-                            </div>
-                            <div className="bg-zinc-800/80 backdrop-blur-sm rounded-2xl rounded-tl-sm p-4 max-w-3xl relative group flex-1">
-                              {message.result ? (
-                                <div className="w-full">
-                                  {renderOutputForMessage(message.result, message.id)}
-                                </div>
-                              ) : (
-                                <div className="text-red-300 text-sm">
-                                  {message.content || "An error occurred while processing your request"}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    ))}
+                  {/* Processing status */}
+                  {documentProcessingState.isProcessing && (
+                    <div className="text-amber-300 text-sm flex items-center bg-amber-900/20 rounded-lg p-3 mb-4">
+                      <div className="w-2 h-2 bg-amber-400 rounded-full animate-pulse mr-2 flex-shrink-0"></div>
+                      <span className="break-words">{documentProcessingState.message}</span>
+                    </div>
+                  )}
 
-                    {/* Loading indicator */}
-                    {isLoading && (
+                  {/* Input Area */}
+                  <div className="space-y-4">
+                    {renderChatInput()}
+                    
+                    {/* Send Button */}
+                    <Button
+                      onClick={handleSubmit}
+                      disabled={
+                        isLoading ||
+                        (getFileUploadAgents().length > 0
+                          ? getFileUploadAgents()[0].type === "rag"
+                            ? !userInput?.trim() || !areAllRequiredApiKeysSelected
+                            : !uploadedFile
+                          : !areAllRequiredApiKeysSelected || !userInput?.trim())
+                      }
+                      className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-4 rounded-2xl shadow-lg transition-all flex items-center justify-center"
+                    >
+                      {isLoading ? (
+                        <div className="flex items-center space-x-2">
+                          <Loader2 className="h-5 w-5 animate-spin" />
+                          <span>Processing...</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center space-x-2">
+                          <span>Send Message</span>
+                          <ArrowRightIcon className="h-5 w-5" />
+                        </div>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* Chat Mode - Normal Layout */
+            <div className="flex-1 p-4 lg:p-6">
+              <div className="h-full bg-black/40 backdrop-blur-sm rounded-2xl border border-purple-900/30 flex flex-col">
+                {/* Chat Messages Area */}
+                <div className="flex-1 overflow-y-auto p-6 scroll-smooth" style={{ maxHeight: 'calc(100vh - 400px)' }} ref={chatMessagesRef}>
+                  <div className="max-w-4xl mx-auto">
+                    {/* Chat Messages */}
+                    <div className="space-y-4 min-h-[300px]">
+                      {/* Bot welcome message */}
                       <div className="flex items-start space-x-3">
                         <div className={`w-8 h-8 bg-gradient-to-r ${getServiceColor()} rounded-full flex items-center justify-center flex-shrink-0 mt-1`}>
                           {getServiceIcon() && React.cloneElement(getServiceIcon(), { className: "h-4 w-4 text-white" })}
                         </div>
                         <div className="bg-zinc-800/80 backdrop-blur-sm rounded-2xl rounded-tl-sm p-4 max-w-md">
-                          <div className="flex items-center space-x-2">
-                            <Loader2 className="h-4 w-4 animate-spin text-purple-400" />
-                            <span className="text-gray-300 text-sm">Processing your request...</span>
-                          </div>
+                          <p className="text-gray-200 text-sm">
+                            Hello! I'm ready to help you with {service?.input_type} processing.
+                            {service?.output_type && ` I'll provide ${service.output_type} output.`}
+                          </p>
                         </div>
                       </div>
-                    )}
 
-                    {/* Scroll anchor */}
-                    <div />
-                  </div>
-                </div>
-              </div>
+                      {/* Chat History Messages */}
+                      {chatHistory.map((message) => (
+                        <div key={message.id}>
+                          {message.type === 'user' ? (
+                            /* User message */
+                            <div className="flex items-start space-x-3 justify-end">
+                              <div className={`bg-gradient-to-r ${getServiceColor()} rounded-2xl rounded-tr-sm p-4 max-w-md`}>
+                                <p className="text-white text-sm break-words">
+                                  {message.file ? `📎 ${message.file.name}` : message.content}
+                                </p>
+                                {message.content && message.file && (
+                                  <p className="text-purple-100 text-xs mt-2">{message.content}</p>
+                                )}
+                              </div>
+                              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-600 to-purple-800 flex items-center justify-center flex-shrink-0 mt-1 border border-purple-500/30 shadow-lg">
+                                <span className="text-xs font-bold text-white">
+                                  {userData.initials || "U"}
+                                </span>
+                              </div>
+                            </div>
+                          ) : (
+                            /* Assistant message */
+                            <div className="flex items-start space-x-3">
+                              <div className={`w-8 h-8 bg-gradient-to-r ${getServiceColor()} rounded-full flex items-center justify-center flex-shrink-0 mt-1`}>
+                                {getServiceIcon() && React.cloneElement(getServiceIcon(), { className: "h-4 w-4 text-white" })}
+                              </div>
+                              <div className="bg-zinc-800/80 backdrop-blur-sm rounded-2xl rounded-tl-sm p-4 max-w-3xl relative group flex-1">
+                                {message.result ? (
+                                  <div className="w-full">
+                                    {renderOutputForMessage(message.result, message.id)}
+                                  </div>
+                                ) : (
+                                  <div className="text-red-300 text-sm">
+                                    {message.content || "An error occurred while processing your request"}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ))}
 
-              {/* Chat Input Area - Fixed at bottom of chat box */}
-              <div className="border-t border-purple-900/30 bg-black/20 backdrop-blur-sm rounded-b-2xl">
-                <div className="p-4 lg:p-6">
-                  <div className="max-w-4xl mx-auto">
-                    {/* API Key Warning */}
-                    {getAgentsRequiringApiKey().length > 0 && !areAllRequiredApiKeysSelected && (
-                      <div className="bg-amber-900/20 border border-amber-700/30 rounded-lg p-4 mb-4 animate-in slide-in-from-bottom-2">
+                      {/* Loading indicator */}
+                      {isLoading && (
                         <div className="flex items-start space-x-3">
-                          <div className="w-6 h-6 bg-amber-600/20 rounded-full flex items-center justify-center flex-shrink-0">
-                            <svg className="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                            </svg>
+                          <div className={`w-8 h-8 bg-gradient-to-r ${getServiceColor()} rounded-full flex items-center justify-center flex-shrink-0 mt-1`}>
+                            {getServiceIcon() && React.cloneElement(getServiceIcon(), { className: "h-4 w-4 text-white" })}
                           </div>
-                          <div className="flex-1">
-                            <h4 className="text-amber-200 font-medium text-sm mb-1">API Keys Required</h4>
-                            <p className="text-amber-300/80 text-xs mb-3">
-                              This service requires API keys to function. Please select the required API keys in the sidebar before proceeding.
-                            </p>
-                            <div className="space-y-1">
-                              {getAgentsRequiringApiKey().map((agent) => (
-                                <div key={agent.id} className="flex items-center space-x-2 text-xs text-amber-200/70">
-                                  <div className="w-1.5 h-1.5 bg-amber-400 rounded-full"></div>
-                                  <span>{agent.name} requires {agent.type} API key</span>
-                                </div>
-                              ))}
+                          <div className="bg-zinc-800/80 backdrop-blur-sm rounded-2xl rounded-tl-sm p-4 max-w-md">
+                            <div className="flex items-center space-x-2">
+                              <Loader2 className="h-4 w-4 animate-spin text-purple-400" />
+                              <span className="text-gray-300 text-sm">Processing your request...</span>
                             </div>
                           </div>
-                          <button
-                            onClick={() => setStatsOpen(true)}
-                            className="text-amber-400 hover:text-amber-300 transition-colors"
-                            title="Open sidebar to configure API keys"
-                          >
-                            <ChevronRight className="w-4 h-4" />
-                          </button>
                         </div>
-                      </div>
-                    )}
+                      )}
 
-                    {/* Processing status */}
-                    {documentProcessingState.isProcessing && (
-                      <div className="text-amber-300 text-sm flex items-center bg-amber-900/20 rounded-lg p-3 mb-4">
-                        <div className="w-2 h-2 bg-amber-400 rounded-full animate-pulse mr-2 flex-shrink-0"></div>
-                        <span className="break-words">{documentProcessingState.message}</span>
-                      </div>
-                    )}
-
-                    {/* Transcription info */}
-                    {checkIfTranscriptionService() && !uploadedFile && (
-                      <div className="bg-indigo-950/30 border border-indigo-800/30 rounded-lg p-3 text-indigo-200 mb-4">
-                        <p className="text-xs text-indigo-300/80 flex items-center">
-                          <LucideMic className="h-3 w-3 mr-2" />
-                          Upload an audio or video file to get started with transcription
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Chat Input Row */}
-                    <div className="flex items-end space-x-3">
-                      <div className="flex-1">{renderChatInput()}</div>
-
-                      {/* Send Button */}
-                      <Button
-                        onClick={handleSubmit}
-                        disabled={
-                          isLoading ||
-                          (getFileUploadAgents().length > 0
-                            ? getFileUploadAgents()[0].type === "rag"
-                              ? !userInput?.trim() || !areAllRequiredApiKeysSelected
-                              : !uploadedFile
-                            : !areAllRequiredApiKeysSelected || !userInput?.trim())
-                        }
-                        className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold p-3 rounded-2xl shadow-lg transition-all flex items-center justify-center min-w-[48px] h-[48px]"
-                      >
-                        {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <ArrowRightIcon className="h-5 w-5" />}
-                      </Button>
+                      {/* Scroll anchor */}
+                      <div />
                     </div>
+                  </div>
+                </div>
 
-                    
+                {/* Chat Input Area - Fixed at bottom of chat box */}
+                <div className="border-t border-purple-900/30 bg-black/20 backdrop-blur-sm rounded-b-2xl">
+                  <div className="p-4 lg:p-6">
+                    <div className="max-w-4xl mx-auto">
+                      {/* API Key Warning */}
+                      {getAgentsRequiringApiKey().length > 0 && !areAllRequiredApiKeysSelected && (
+                        <div className="bg-amber-900/20 border border-amber-700/30 rounded-lg p-4 mb-4 animate-in slide-in-from-bottom-2">
+                          <div className="flex items-start space-x-3">
+                            <div className="w-6 h-6 bg-amber-600/20 rounded-full flex items-center justify-center flex-shrink-0">
+                              <svg className="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                              </svg>
+                            </div>
+                            <div className="flex-1">
+                              <h4 className="text-amber-200 font-medium text-sm mb-1">API Keys Required</h4>
+                              <p className="text-amber-300/80 text-xs mb-3">
+                                This service requires API keys to function. Please select the required API keys in the sidebar before proceeding.
+                              </p>
+                              <div className="space-y-1">
+                                {getAgentsRequiringApiKey().map((agent) => (
+                                  <div key={agent.id} className="flex items-center space-x-2 text-xs text-amber-200/70">
+                                    <div className="w-1.5 h-1.5 bg-amber-400 rounded-full"></div>
+                                    <span>{agent.name} requires {agent.type} API key</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => setStatsOpen(true)}
+                              className="text-amber-400 hover:text-amber-300 transition-colors"
+                              title="Open sidebar to configure API keys"
+                            >
+                              <ChevronRight className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Processing status */}
+                      {documentProcessingState.isProcessing && (
+                        <div className="text-amber-300 text-sm flex items-center bg-amber-900/20 rounded-lg p-3 mb-4">
+                          <div className="w-2 h-2 bg-amber-400 rounded-full animate-pulse mr-2 flex-shrink-0"></div>
+                          <span className="break-words">{documentProcessingState.message}</span>
+                        </div>
+                      )}
+
+                      {/* Transcription info */}
+                      {checkIfTranscriptionService() && !uploadedFile && (
+                        <div className="bg-indigo-950/30 border border-indigo-800/30 rounded-lg p-3 text-indigo-200 mb-4">
+                          <p className="text-xs text-indigo-300/80 flex items-center">
+                            <LucideMic className="h-3 w-3 mr-2" />
+                            Upload an audio or video file to get started with transcription
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Chat Input Row */}
+                      <div className="flex items-end space-x-3">
+                        <div className="flex-1">{renderChatInput()}</div>
+
+                        {/* Send Button */}
+                        <Button
+                          onClick={handleSubmit}
+                          disabled={
+                            isLoading ||
+                            (getFileUploadAgents().length > 0
+                              ? getFileUploadAgents()[0].type === "rag"
+                                ? !userInput?.trim() || !areAllRequiredApiKeysSelected
+                                : !uploadedFile
+                              : !areAllRequiredApiKeysSelected || !userInput?.trim())
+                          }
+                          className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold p-3 rounded-2xl shadow-lg transition-all flex items-center justify-center min-w-[48px] h-[48px]"
+                        >
+                          {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <ArrowRightIcon className="h-5 w-5" />}
+                        </Button>
+                      </div>
+
+                      
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
+          )}
 
           {/* Workflow Visualization - Compact at bottom */}
           <div className="p-4 lg:p-6 pt-0">

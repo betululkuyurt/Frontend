@@ -57,7 +57,7 @@ function getCurrentUserId(): string {
 export async function addToFavorites(miniServiceId: number): Promise<boolean> {
   try {
     const currentUserId = getCurrentUserId();
-    console.log(`[FAVORITES API] Adding service ${miniServiceId} to favorites for user ${currentUserId}`);
+    
     
     const response = await fetch(`http://127.0.0.1:8000/api/v1/favorites/?current_user_id=${currentUserId}`, {
       method: 'POST',
@@ -68,7 +68,7 @@ export async function addToFavorites(miniServiceId: number): Promise<boolean> {
       })
     });
     
-    console.log(`[FAVORITES API] Add response status:`, response.status);
+    
     
     if (response.ok) {
       console.log('Service added to favorites successfully');
@@ -96,7 +96,7 @@ export async function addToFavorites(miniServiceId: number): Promise<boolean> {
 export async function removeFromFavorites(miniServiceId: number): Promise<boolean> {
   try {
     const currentUserId = getCurrentUserId();
-    console.log(`[FAVORITES API] Removing service ${miniServiceId} from favorites for user ${currentUserId}`);
+    
     
     const response = await fetch(`http://127.0.0.1:8000/api/v1/favorites/${miniServiceId}?current_user_id=${currentUserId}`, {
       method: 'DELETE',
@@ -104,7 +104,7 @@ export async function removeFromFavorites(miniServiceId: number): Promise<boolea
       credentials: 'include',
     });
     
-    console.log(`[FAVORITES API] Remove response status:`, response.status);
+   
     
     if (response.ok || response.status === 204) {
       console.log('Service removed from favorites successfully');
@@ -159,7 +159,7 @@ export async function getFavoriteServices(skip: number = 0, limit: number = 100)
  */
 export async function getFavoriteCount(miniServiceId: number): Promise<number> {
   try {
-    console.log(`[FAVORITES API] Getting favorite count for service ${miniServiceId}`);
+    
     
     const response = await fetch(`http://127.0.0.1:8000/api/v1/favorites/count/${miniServiceId}`, {
       method: 'GET',
@@ -167,11 +167,11 @@ export async function getFavoriteCount(miniServiceId: number): Promise<number> {
       credentials: 'include',
     });
     
-    console.log(`[FAVORITES API] Count response status:`, response.status);
+   
     
     if (response.ok) {
       const data: FavoriteCountResponse = await response.json();
-      console.log(`[FAVORITES API] Count response data:`, data);
+      
       return data.favorite_count;
     }
     
@@ -196,7 +196,7 @@ export async function getFavoriteCount(miniServiceId: number): Promise<number> {
 export async function checkIfFavorited(miniServiceId: number): Promise<boolean> {
   try {
     const currentUserId = getCurrentUserId();
-    console.log(`[FAVORITES API] Checking if service ${miniServiceId} is favorited by user ${currentUserId}`);
+    
     
     const response = await fetch(`http://127.0.0.1:8000/api/v1/favorites/check/${miniServiceId}?current_user_id=${currentUserId}`, {
       method: 'GET',
@@ -204,11 +204,11 @@ export async function checkIfFavorited(miniServiceId: number): Promise<boolean> 
       credentials: 'include',
     });
     
-    console.log(`[FAVORITES API] Check response status:`, response.status);
+    
     
     if (response.ok) {
       const data: FavoriteCheckResponse = await response.json();
-      console.log(`[FAVORITES API] Check response data:`, data);
+      
       return data.is_favorited;
     }
     

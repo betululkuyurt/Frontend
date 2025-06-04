@@ -248,16 +248,16 @@ export function MiniAppCard({
     if (id) {
       const loadFavoriteStatus = async () => {
         try {
-          console.log(`[FAVORITES] Loading status for service ${id}`);
+          
           const isFavorited = await checkIfFavorited(id);
-          console.log(`[FAVORITES] Service ${id} is favorited:`, isFavorited);
+          
           setIsFavorite(isFavorited);
           
           const count = await getFavoriteCount(id);
-          console.log(`[FAVORITES] Service ${id} favorite count:`, count);
+         
           setFavoriteCount(count);
         } catch (error) {
-          console.error(`[FAVORITES] Error loading status for service ${id}:`, error);
+         
         }
       };
       loadFavoriteStatus();

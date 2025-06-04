@@ -326,7 +326,7 @@ export default function DashboardPage() {
     }
 
     const handleFavoriteToggled = () => {
-      console.log("Favorite toggled event detected")
+      
       
       // Only refresh favorites if favorites tab is active, otherwise just trigger a re-render
       if (activeFilter === "favourites") {
@@ -651,13 +651,11 @@ export default function DashboardPage() {
           setFavoritesLoading(true)
           
           const favoriteData = await getFavoriteServices(0, 100)
-          console.log("Fetched favorite services:", favoriteData)
-          console.log("Favorite data length:", favoriteData?.length)
-          console.log("First favorite item:", favoriteData?.[0])
+        
 
           // Backend now returns full mini service details, so we need to fetch favorite counts and states
           const formattedFavoritesPromises = favoriteData.map(async (service: FavoriteService) => {
-            console.log("Processing favorite service:", service)
+            
             
             // Determine icon based on input/output type
             let iconName = "Wand2"
@@ -718,7 +716,7 @@ export default function DashboardPage() {
           })
           setServiceFavoriteStates(favoriteStates)
 
-          console.log("All formatted favorites:", formattedFavorites)
+          
           setFavoriteServices(formattedFavorites)
         } catch (error) {
           console.error("Error fetching favorite services:", error)
