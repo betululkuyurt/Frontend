@@ -17,8 +17,8 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
-import Cookies from "js-cookie"
-import { 
+const Cookies = require("js-cookie")
+import {
   validateToken, 
   getUserId, 
   getAccessToken,
