@@ -15,11 +15,13 @@ export interface FavoriteService {
   description: string;
   input_type: string;
   output_type: string;
-  owner_username: string;
+  owner_id: number;
+  owner_username?: string;
   is_enhanced: boolean;
   created_at: string;
   average_token_usage: any;
   run_time: number;
+  favorite_count?: number; // Add favorite count field for trending
 }
 
 export interface FavoriteCountResponse {
@@ -221,6 +223,112 @@ export async function checkIfFavorited(miniServiceId: number): Promise<boolean> 
   } catch (error) {
     console.error('Error checking favorite status:', error);
     return false;
+  }
+}
+
+/**
+ * Get trending services ordered by favorite count (most favorites to least)
+ * Uses the /api/v1/favorites/count/{mini_service_id} endpoint for each service
+ */
+export async function getTrendingServices(): Promise<any[]> {
+  try {
+    const currentUserId = getCurrentUserId();
+    
+    // First, get all available mini-services
+    const response = await fetch(`http://127.0.0.1:8000/api/v1/mini-services?current_user_id=${currentUserId}`, {
+      headers: getAuthHeaders(),
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      console.error('Failed to fetch mini-services for trending:', response.status);
+      return [];
+    }
+
+    const allServices: FavoriteService[] = await response.json();
+    
+    // Helper function to get icon component based on input/output type
+    function getIconComponent(iconName: string) {
+      // Return a simple object that can be serialized
+      return { iconName };
+    }    // Helper function to get color based on service type
+    function getColorForService(inputType: string, outputType: string): string {
+      if (inputType === "text" && outputType === "text") {
+        return "from-purple-600 to-purple-800"
+      } else if (inputType === "text" && outputType === "image") {
+        return "from-pink-600 to-pink-800"
+      } else if (inputType === "text" && outputType === "sound") {
+        return "from-orange-600 to-orange-800"
+      } else if (inputType === "sound" || outputType === "sound") {
+        return "from-blue-600 to-blue-800"
+      } else if (inputType === "image" || outputType === "image") {
+        return "from-green-600 to-green-800"
+      }
+      return "from-indigo-600 to-indigo-800"
+    }
+    
+    // Map the mini-services to the format expected by the dashboard
+    const formattedServicesPromises = allServices.map(async (service) => {
+      // Determine icon based on input/output type
+      let iconName = "Wand2"
+      if (service.input_type === "text" && service.output_type === "text") {
+        iconName = "MessageSquare"
+      } else if (service.input_type === "text" && service.output_type === "image") {
+        iconName = "ImageIcon"
+      } else if (service.input_type === "text" && service.output_type === "sound") {
+        iconName = "Headphones"
+      } else if (service.input_type === "sound" || service.output_type === "sound") {
+        iconName = "Headphones"
+      } else if (service.input_type === "image" || service.output_type === "image") {
+        iconName = "ImageIcon"
+      }
+
+      // Get color based on service type
+      const color = getColorForService(service.input_type, service.output_type)
+
+      // Fetch favorite count and status for this service
+      const [favoriteCount, isFavorited] = await Promise.all([
+        getFavoriteCount(service.id),
+        checkIfFavorited(service.id)
+      ])
+
+      return {
+        id: service.id,
+        name: service.name,
+        description: service.description,
+        icon: getIconComponent(iconName),
+        serviceType: "mini-service",
+        color,
+        isCustom: true,
+        owner_id: service.owner_id,
+        owner_username: service.owner_username,
+        usageStats: {
+          average_token_usage: service.average_token_usage,
+          run_time: service.run_time,
+          input_type: service.input_type,
+          output_type: service.output_type,
+          total_runs: Math.floor(Math.random() * 100) + 1
+        },
+        is_enhanced: service.is_enhanced,
+        created_at: service.created_at,
+        favorite_count: favoriteCount,
+        is_favorited: isFavorited
+      }
+    });
+
+    // Wait for all services to be formatted
+    const formattedServices = await Promise.all(formattedServicesPromises);
+
+    // Sort by favorite count (descending - most favorites first) and filter to only include services with favorites
+    const trendingServices = formattedServices
+      .filter(service => service.favorite_count > 0) // Only include services with at least 1 favorite
+      .sort((a, b) => b.favorite_count - a.favorite_count);
+
+    console.log('Trending services fetched and sorted by favorite count:', trendingServices);
+    return trendingServices;
+  } catch (error) {
+    console.error('Error fetching trending services:', error);
+    return [];
   }
 }
 

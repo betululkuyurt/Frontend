@@ -41,7 +41,7 @@ import {
 } from "lucide-react"
 import { toast } from "@/components/ui/use-toast"
 import { decodeJWT, getAccessToken } from "@/lib/auth"
-import { deleteMiniService, getFavoriteServices, getFavoriteCount, toggleFavorite, checkIfFavorited, type FavoriteService } from "@/lib/services"
+import { deleteMiniService, getFavoriteServices, getFavoriteCount, toggleFavorite, checkIfFavorited, getTrendingServices, type FavoriteService } from "@/lib/services"
 import { Play } from "next/font/google"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -150,8 +150,10 @@ export default function DashboardPage() {
   const [customServices, setCustomServices] = useState<Service[]>([])
   const [miniServices, setMiniServices] = useState<Service[]>([])
   const [favoriteServices, setFavoriteServices] = useState<Service[]>([])
+  const [trendingServices, setTrendingServices] = useState<Service[]>([])
   const [miniServicesLoading, setMiniServicesLoading] = useState(false)
   const [favoritesLoading, setFavoritesLoading] = useState(false)
+  const [trendingLoading, setTrendingLoading] = useState(false)
   const [user_id, setUserId] = useState<number | null>(null)
   const [refreshTrigger, setRefreshTrigger] = useState(0)
   const [recentActivities, setRecentActivities] = useState<Process[]>([])
@@ -456,7 +458,7 @@ export default function DashboardPage() {
           setRefreshTrigger(prev => prev + 1);
         }
       } else {
-        throw new Error("Failed to toggle favorite");
+        throw new Error("Failed to toggle favorite")
       }
     } catch (error) {
       console.error("Error toggling favorite:", error);
@@ -665,10 +667,10 @@ export default function DashboardPage() {
               iconName = "ImageIcon"
             } else if (service.input_type === "text" && service.output_type === "sound") {
               iconName = "Headphones"
-            } else if (service.input_type === "sound" || service.output_type === "sound") {
-              iconName = "Headphones"
-            } else if (service.input_type === "image" || service.output_type === "image") {
+            } else if (service.input_type === "image" && service.output_type === "text") {
               iconName = "ImageIcon"
+            } else if (service.input_type === "sound" && service.output_type === "text") {
+              iconName = "Headphones"
             }
 
             // Get color based on service type
@@ -727,6 +729,42 @@ export default function DashboardPage() {
       }
 
       fetchFavoriteServices()
+    }
+  }, [isAuthenticated, activeFilter, refreshTrigger])  // Fetch trending services when trending filter is active
+  useEffect(() => {
+    if (isAuthenticated && activeFilter === "trending") {
+      const fetchTrendingServices = async () => {
+        try {
+          setTrendingLoading(true)
+          const trendingData = await getTrendingServices()
+          console.log("Trending services fetched:", trendingData)
+          
+          // Convert icon names to actual React components
+          const formattedTrendingServices = trendingData.map((service) => ({
+            ...service,
+            icon: getIconComponent(service.icon?.iconName || "Wand2") // Convert iconName to React component
+          }))
+          
+          setTrendingServices(formattedTrendingServices)
+          
+          // Store favorite states for table view 
+          const favoriteStates: Record<number, boolean> = {}
+          await Promise.all(
+            formattedTrendingServices.map(async (service) => {
+              const isFavorited = await checkIfFavorited(service.id)
+              favoriteStates[service.id] = isFavorited
+            })
+          )
+          setServiceFavoriteStates(favoriteStates)
+        } catch (error) {
+          console.error("Error fetching trending services:", error)
+          setTrendingServices([])
+        } finally {
+          setTrendingLoading(false)
+        }
+      }
+
+      fetchTrendingServices()
     }
   }, [isAuthenticated, activeFilter, refreshTrigger])
 
@@ -988,12 +1026,11 @@ export default function DashboardPage() {
   if (isAuthenticated === false) {
     return null // Will redirect in useEffect
   }
-
   // Enhanced filtering logic
   const filterServicesByCategory = (services: Service[]) => {
     switch (activeFilter) {
       case "trending":
-        return services.filter(service => (service.usageStats?.total_runs || 0) > 50)
+        return trendingServices // Return the actual trending services ordered by favorite count
       case "favourites":
         return favoriteServices // Return the actual favorite services
       case "created":
@@ -1550,8 +1587,7 @@ export default function DashboardPage() {
                     scrollbarColor: '#8b5cf6 transparent'
                   }}
                 >
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-4">
-                    {(miniServicesLoading || (activeFilter === "favourites" && favoritesLoading)) ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-4">                    {(miniServicesLoading || (activeFilter === "favourites" && favoritesLoading) || (activeFilter === "trending" && trendingLoading)) ? (
                       // Placeholder cards during loading
                       Array.from({ length: 6 }).map((_, index) => (
                         <div
@@ -1582,8 +1618,7 @@ export default function DashboardPage() {
                 </div>
               ) : (
                 /* Table View */
-                <div className="max-h-[700px] overflow-y-auto pr-2 custom-scrollbar">
-                  {(miniServicesLoading || (activeFilter === "favourites" && favoritesLoading)) ? (
+                <div className="max-h-[700px] overflow-y-auto pr-2 custom-scrollbar">                  {(miniServicesLoading || (activeFilter === "favourites" && favoritesLoading) || (activeFilter === "trending" && trendingLoading)) ? (
                     <div className="bg-black/60 backdrop-blur-md rounded-xl border border-purple-900/30 p-8 text-center">
                       <div className="flex items-center justify-center space-x-2">
                         <Loader2 className="h-6 w-6 text-purple-500 animate-spin" />
@@ -1609,10 +1644,8 @@ export default function DashboardPage() {
                 Star your favourite services to see them here.
               </p>
             </div>
-          )}
-
-          {/* Show empty state when no services are available and not favourites */}
-          {getFilteredMiniServices().length === 0 && activeFilter !== "favourites" && !miniServicesLoading && (
+          )}          {/* Show empty state when no services are available and not favourites */}
+          {getFilteredMiniServices().length === 0 && activeFilter !== "favourites" && activeFilter !== "trending" && !miniServicesLoading && (
             <div className="bg-black/40 backdrop-blur-sm rounded-xl border border-purple-900/30 p-8 text-center my-12">
               <div className="w-16 h-16 bg-purple-600/10 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Wand2 className="h-8 w-8 text-purple-400 opacity-60" />
@@ -1620,7 +1653,6 @@ export default function DashboardPage() {
               <h3 className="text-white font-medium text-lg mb-1">No AI workflows found</h3>
               <p className="text-gray-400 mb-4">
                 {activeFilter === "created" ? "You haven't created any workflows yet." :
-                 activeFilter === "trending" ? "No trending workflows at the moment." :
                  "Start by creating your first AI workflow."}
               </p>
               <button
@@ -1630,6 +1662,19 @@ export default function DashboardPage() {
                 <Plus className="h-5 w-5 mr-2" />
                 Create Your First Workflow
               </button>
+            </div>
+          )}
+
+          {/* Show special message for Trending */}
+          {activeFilter === "trending" && getFilteredMiniServices().length === 0 && !trendingLoading && (
+            <div className="bg-black/40 backdrop-blur-sm rounded-xl border border-purple-900/30 p-8 text-center my-12">
+              <div className="w-16 h-16 bg-purple-600/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                <TrendingUp className="h-8 w-8 text-purple-400 opacity-60" />
+              </div>
+              <h3 className="text-white font-medium text-lg mb-1">No trending workflows yet</h3>
+              <p className="text-gray-400">
+                Services will appear here based on their popularity and favorite count.
+              </p>
             </div>
           )}
 
