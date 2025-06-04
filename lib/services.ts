@@ -204,11 +204,9 @@ export async function checkIfFavorited(miniServiceId: number): Promise<boolean> 
       credentials: 'include',
     });
     
-    
-    
     if (response.ok) {
       const data: FavoriteCheckResponse = await response.json();
-      
+    
       return data.is_favorited;
     }
     
