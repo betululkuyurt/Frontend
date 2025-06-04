@@ -991,6 +991,12 @@ export default function ServicePage() {
       }
       setChatHistory(prev => [...prev, assistantMessage])
 
+      // Reset processing state immediately after successful response
+      setDocumentProcessingState({
+        isProcessing: false,
+        stage: "complete",
+        message: "",
+      })
     } catch (err: any) {
       console.error("Error running service:", err)
       
