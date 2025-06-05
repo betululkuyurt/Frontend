@@ -35,11 +35,13 @@ import {
   Settings,
   X,
   Menu,
+  Info,
 } from "lucide-react"
 import { toast } from "@/components/ui/use-toast"
 import { deleteMiniService } from "@/lib/services"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { decodeJWT, getAccessToken } from "@/lib/auth"
 
 interface MiniService {
@@ -65,6 +67,9 @@ interface MiniService {
     prompt_tokens: number
     completion_tokens: number
     total_tokens: number
+    avg_pricing?: {
+      estimated_cost_usd: number
+    }
   }
   run_time?: number
 }
@@ -1584,16 +1589,107 @@ export default function ServicePage() {
         description: "Failed to copy content to clipboard",
         variant: "destructive",
       })
+    }  }
+  // Function to extract token usage data from message result
+  const extractTokenUsage = (result: any) => {
+    if (!result) return null
+
+    // Check for various possible locations of token usage data
+    const tokenUsage = result.token_usage || result.usage || result.metadata?.token_usage || result.metadata?.usage
+
+    if (!tokenUsage) return null
+
+    const promptTokens = tokenUsage.prompt_tokens || 0
+    const completionTokens = tokenUsage.completion_tokens || 0
+    const totalTokens = tokenUsage.total_tokens || promptTokens + completionTokens
+    
+    // Try to get cost from multiple locations
+    let estimatedCostUsd = tokenUsage.estimated_cost_usd || 
+                result.estimated_cost_usd || 
+                result.pricing?.estimated_cost_usd ||
+                result.metadata?.estimated_cost_usd || 
+                result.cost_usd || 
+                tokenUsage.cost_usd
+
+    // If no cost provided, estimate based on common pricing (rough estimate for GPT-4-turbo)
+    if (!estimatedCostUsd && totalTokens > 0) {
+      // Very rough estimate: $0.01 per 1K prompt tokens, $0.03 per 1K completion tokens
+      estimatedCostUsd = (promptTokens * 0.01 / 1000) + (completionTokens * 0.03 / 1000)
+    }
+
+    return {
+      prompt_tokens: promptTokens,
+      completion_tokens: completionTokens,
+      total_tokens: totalTokens,
+      estimated_cost_usd: estimatedCostUsd
     }
   }
 
+  // Component for the token usage info button
+  const TokenUsageInfoButton = ({ result, messageId }: { result: any; messageId: string }) => {
+    const tokenUsage = extractTokenUsage(result)
+    
+    if (!tokenUsage || tokenUsage.total_tokens === 0) return null
+
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="p-1 h-6 w-6 text-gray-400 hover:text-purple-400 hover:bg-purple-600/20 transition-colors"
+              aria-label="Token usage information"
+            >
+              <Info className="h-3 w-3" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent 
+            side="left" 
+            className="bg-black/90 border border-purple-900/50 text-white p-3 max-w-xs"
+          >
+            <div className="space-y-2">
+              <div className="font-medium text-purple-300 text-sm mb-2">Token Usage</div>
+              <div className="space-y-1 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-gray-300">Prompt Tokens:</span>
+                  <span className="text-white font-mono">{tokenUsage.prompt_tokens.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-300">Completion Tokens:</span>
+                  <span className="text-white font-mono">{tokenUsage.completion_tokens.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between border-t border-gray-600 pt-1">
+                  <span className="text-gray-300 font-medium">Total Tokens:</span>
+                  <span className="text-purple-300 font-mono font-medium">{tokenUsage.total_tokens.toLocaleString()}</span>
+                </div>                {tokenUsage.estimated_cost_usd && tokenUsage.estimated_cost_usd > 0 && (
+                  <div className="flex justify-between border-t border-gray-600 pt-1">
+                    <span className="text-gray-300 font-medium">Estimated Cost:</span>
+                    <span className="text-green-400 font-mono font-medium">
+                      ${tokenUsage.estimated_cost_usd < 0.000001 
+                        ? '<$0.000001' 
+                        : tokenUsage.estimated_cost_usd.toFixed(6)
+                      }
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    )
+  }
   const renderOutputForMessage = (result: any, messageId: string) => {
     if (!result) return null
 
     if (result.source_documents || result.sources || result.answer || result.rag_prompt) {
       return (
         <div className="w-full">
-          <h3 className="text-lg font-medium text-white mb-4">Document Analysis</h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-medium text-white">Document Analysis</h3>
+            <TokenUsageInfoButton result={result} messageId={messageId} />
+          </div>
           <div className="whitespace-pre-wrap text-gray-300 mb-4 p-4 bg-black/30 rounded-lg border border-purple-900/20 relative group">
             {result.answer || result.response || result.output || "No response available"}
             <button
@@ -1614,17 +1710,18 @@ export default function ServicePage() {
       )
     }
 
-    switch (service?.output_type) {
-      case "text":
+    switch (service?.output_type) {      case "text":
         const textOutput = result.final_output || result.output || result.results?.[0]?.output
         return (
           <div className="w-full">
-            <h3 className="text-lg font-medium text-white mb-4">Result</h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-medium text-white">Result</h3>
+              <TokenUsageInfoButton result={result} messageId={messageId} />
+            </div>
             <div className="whitespace-pre-wrap text-gray-300 p-4 bg-black/30 rounded-lg border border-purple-900/20 relative group">
-              {textOutput || "No output available"}
-              <button
+              {textOutput || "No output available"}              <button
                 onClick={() => copyToClipboard(textOutput || "", `text-${messageId}`)}
-                className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded bg-purple-600/20 hover:bg-purple-600/40"
+                className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 h-6 w-6 rounded bg-purple-600/20 hover:bg-purple-600/40 flex items-center justify-center"
                 title="Copy text"
               >
                 {copiedStates[`text-${messageId}`] ? (
@@ -1641,10 +1738,13 @@ export default function ServicePage() {
         const audioUrl = extractAudioUrl(result)
         return (
           <div className="w-full">
-            <h3 className="text-lg font-medium text-white mb-4 flex items-center">
-              <Headphones className="h-5 w-5 mr-2 text-purple-400" />
-              Audio Result
-            </h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-medium text-white flex items-center">
+                <Headphones className="h-5 w-5 mr-2 text-purple-400" />
+                Audio Result
+              </h3>
+              <TokenUsageInfoButton result={result} messageId={messageId} />
+            </div>
             {audioUrl ? (
               <div className="space-y-4">
                 <div className="bg-black/30 rounded-lg p-4 border border-purple-900/20">
@@ -1695,8 +1795,7 @@ export default function ServicePage() {
                   </svg>
                   No audio output available
                 </p>
-              </div>
-            )}
+              </div>            )}
           </div>
         )
 
@@ -1704,7 +1803,10 @@ export default function ServicePage() {
         const imageUrl = result.image_url || result.final_output
         return (
           <div className="w-full">
-            <h3 className="text-lg font-medium text-white mb-4">Generated Image</h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-medium text-white">Generated Image</h3>
+              <TokenUsageInfoButton result={result} messageId={messageId} />
+            </div>
             {imageUrl && (
               <div className="flex justify-center">
                 <div className="relative group">
@@ -1716,16 +1818,15 @@ export default function ServicePage() {
                     }
                     alt="Generated image"
                     className="max-w-full rounded-lg shadow-lg max-h-[500px]"
-                  />
-                  <button
+                  />                  <button
                     onClick={() => copyToClipboard(imageUrl, `image-${messageId}`)}
-                    className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-2 rounded bg-black/60 hover:bg-black/80"
+                    className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 h-6 w-6 rounded bg-black/60 hover:bg-black/80 flex items-center justify-center"
                     title="Copy image URL"
                   >
                     {copiedStates[`image-${messageId}`] ? (
-                      <Check className="h-4 w-4 text-green-400" />
+                      <Check className="h-3 w-3 text-green-400" />
                     ) : (
-                      <Copy className="h-4 w-4 text-white" />
+                      <Copy className="h-3 w-3 text-white" />
                     )}
                   </button>
                 </div>
@@ -1738,7 +1839,10 @@ export default function ServicePage() {
         const videoUrl = result.video_url || result.final_output
         return (
           <div className="w-full">
-            <h3 className="text-lg font-medium text-white mb-4">Processed Video</h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-medium text-white">Processed Video</h3>
+              <TokenUsageInfoButton result={result} messageId={messageId} />
+            </div>
             {videoUrl && (
               <div>
                 <video controls className="w-full rounded-lg">
@@ -1749,21 +1853,22 @@ export default function ServicePage() {
                   Your browser does not support the video element.
                 </video>
               </div>
-            )}
-          </div>
+            )}          </div>
         )
 
       default:
         return (
           <div className="w-full">
-            <h3 className="text-lg font-medium text-white mb-4">Result</h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-medium text-white">Result</h3>
+              <TokenUsageInfoButton result={result} messageId={messageId} />
+            </div>
             <div className="relative group">
               <pre className="text-xs text-gray-400 overflow-auto max-h-[400px] p-4 bg-black/30 rounded-lg border border-purple-900/20">
                 {JSON.stringify(result, null, 2)}
-              </pre>
-              <button
+              </pre>              <button
                 onClick={() => copyToClipboard(JSON.stringify(result, null, 2), `json-${messageId}`)}
-                className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded bg-purple-600/20 hover:bg-purple-600/40"
+                className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 h-6 w-6 rounded bg-purple-600/20 hover:bg-purple-600/40 flex items-center justify-center"
                 title="Copy JSON"
               >
                 {copiedStates[`json-${messageId}`] ? (
@@ -2445,8 +2550,7 @@ export default function ServicePage() {
                   <h2 className="text-xl font-bold text-white">Analytics</h2>
                 </div>
 
-                <div className="space-y-4">
-                  <div className="bg-black/30 rounded-xl p-4 border border-purple-900/20 backdrop-blur-sm">
+                <div className="space-y-4">                  <div className="bg-black/30 rounded-xl p-4 border border-purple-900/20 backdrop-blur-sm">
                     <div className="text-purple-300 text-sm mb-2 font-medium">Total Runs</div>
                     <div className="text-white text-3xl font-bold mb-1">
                       {service?.run_time !== undefined && !isNaN(service.run_time) && service.run_time > 0
@@ -2459,6 +2563,19 @@ export default function ServicePage() {
                         : "No runs yet"}
                     </div>
                   </div>
+
+                    {service?.average_token_usage?.avg_pricing?.estimated_cost_usd && 
+                     service.average_token_usage.avg_pricing.estimated_cost_usd > 0 && (
+                    <div className="bg-black/30 rounded-xl p-4 border border-purple-900/20 backdrop-blur-sm">
+                      <div className="text-purple-300 text-sm mb-2 font-medium">Average API Cost</div>
+                      <div className="text-white text-3xl font-bold mb-1">
+                      ${service.average_token_usage.avg_pricing.estimated_cost_usd.toFixed(6)}
+                      </div>
+                      <div className="text-gray-400 text-xs">
+                      Per execution
+                      </div>
+                    </div>
+                    )}
 
                   {service?.average_token_usage && (
                     <div className="space-y-3">
@@ -2493,9 +2610,28 @@ export default function ServicePage() {
                             ? Math.round(service.average_token_usage.total_tokens).toLocaleString()
                             : "—"}
                         </div>
-                      </div>
-                    </div>
+                      </div>                    </div>
                   )}
+                </div>
+
+                {/* Analytics Disclaimer */}
+                <div className="mt-6 p-4 bg-gray-900/20 border border-gray-700/30 rounded-lg">
+                  <div className="flex items-start space-x-2">
+                    <svg className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                    </svg>
+                    <div>
+                      <p className="text-gray-300 text-xs leading-relaxed">
+                        <span className="font-medium">Disclaimer:</span> These statistics represent average usage from all users of this service. 
+                        Actual token consumption and associated costs may vary significantly based on your specific input complexity and length.
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
 
