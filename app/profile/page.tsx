@@ -461,28 +461,44 @@ export default function ProfilePage() {
                     <p>No recent processes found</p>
                   </div>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="space-y-2">
                     {recentProcesses.map((process, index) => (
                       <div 
                         key={process.id} 
                         className="bg-gradient-to-r from-gray-900/50 to-gray-800/30 rounded-xl p-4 border border-gray-700/30 hover:border-indigo-500/50 transition-all duration-300 group"
                       >
                         <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-4">
-                            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-indigo-600 to-indigo-800 flex items-center justify-center text-white font-semibold text-sm">
+                          <div className="flex items-center space-x-3 flex-grow">
+                            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-600 to-indigo-800 flex items-center justify-center text-white font-semibold text-xs flex-shrink-0">
                               {index + 1}
                             </div>
-                            <div className="flex-grow">
-                              <div className="flex items-center space-x-3 mb-1">
-                                <span className="text-white font-medium">Process #{process.id}</span>
-                                {process.mini_service_id && (
-                                  <span className="text-xs text-indigo-400 bg-indigo-900/30 px-2 py-1 rounded-full">
-                                    Service: {process.mini_service_id}
+                            <div className="flex-grow min-w-0">
+                              {/* Header with service info */}
+                              <div className="flex items-center flex-wrap gap-2 mb-1">
+                                <span className="text-white font-medium truncate">
+                                  {process.mini_service_name || `Process #${process.id}`}
+                                </span>
+                                {process.mini_service_is_enhanced && (
+                                  <span className="text-xs text-purple-400 bg-purple-900/30 px-2 py-1 rounded-full">
+                                    Enhanced
                                   </span>
                                 )}
                               </div>
-                              <div className="flex items-center space-x-4 text-sm text-gray-400">
-                                <span>User: {process.user_id}</span>
+
+                              {/* Input/Output types and date */}
+                              <div className="flex items-center flex-wrap gap-3 text-xs text-gray-400">
+                                {process.mini_service_input_type && (
+                                  <span className="flex items-center">
+                                    <span className="text-xs bg-gray-700/50 px-1.5 py-0.5 rounded mr-1">IN</span>
+                                    {process.mini_service_input_type}
+                                  </span>
+                                )}
+                                {process.mini_service_output_type && (
+                                  <span className="flex items-center">
+                                    <span className="text-xs bg-gray-700/50 px-1.5 py-0.5 rounded mr-1">OUT</span>
+                                    {process.mini_service_output_type}
+                                  </span>
+                                )}
                                 <span>•</span>
                                 <span>
                                   {new Date(process.created_at).toLocaleDateString('en-US', {
@@ -494,19 +510,58 @@ export default function ProfilePage() {
                                 </span>
                               </div>
                             </div>
-                          </div>                          <div className="text-right">
-                            <div className="text-lg font-semibold text-white">
+                          </div>
+
+                          {/* Stats section */}
+                          <div className="text-right ml-4 flex-shrink-0">
+                            <div className="flex items-center space-x-4">
                               {(() => {
                                 const tokens = process.total_tokens
-                                if (tokens) {
-                                  // Always use total_tokens field as it's most reliable
-                                  const tokenCount = tokens.total_tokens ?? 0
-                                  return tokenCount.toLocaleString()
+                                const tokenCount = tokens?.total_tokens ?? 0
+                                
+                                if (tokenCount === 0) {
+                                  // No API key required - only show tokens info
+                                  return (
+                                    <div className="text-center">
+                                      <div className="text-sm font-semibold text-gray-400">
+                                        No API key
+                                      </div>
+                                      <div className="text-xs text-gray-400">required</div>
+                                    </div>
+                                  )
+                                } else {
+                                  // API key required - show both cost and tokens
+                                  return (
+                                    <>
+                                      {/* Cost */}
+                                      <div className="text-center">
+                                        <div className="text-sm font-semibold text-emerald-400">
+                                          {(() => {
+                                            const cost = process.total_tokens?.pricing?.estimated_cost_usd
+                                            if (typeof cost === 'number') {
+                                              if (cost > 0 && cost < 0.00001) {
+                                                return '<$0.00001'
+                                              }
+                                              return `$${cost.toFixed(5)}`
+                                            }
+                                            return '$0.0000'
+                                          })()}
+                                        </div>
+                                        <div className="text-xs text-gray-400">cost</div>
+                                      </div>
+                                      
+                                      {/* Tokens */}
+                                      <div className="text-center">
+                                        <div className="text-sm font-semibold text-white">
+                                          {tokenCount.toLocaleString()}
+                                        </div>
+                                        <div className="text-xs text-gray-400">tokens</div>
+                                      </div>
+                                    </>
+                                  )
                                 }
-                                return 'N/A'
                               })()}
                             </div>
-                            <div className="text-xs text-gray-400">tokens</div>
                           </div>
                         </div>
                       </div>
