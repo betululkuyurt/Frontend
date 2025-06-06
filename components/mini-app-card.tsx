@@ -413,10 +413,18 @@ export function MiniAppCard({
                         {usageStats?.output_type ?? "Text"}
                       </div>
                     </div>
-                  </div>
+                  </div>                  {/* Modern action buttons with glassmorphism - Vertical Layout */}
+                  <div className="absolute top-0 right-0 flex flex-col gap-1">
+                    {/* Info button with modern design */}
+                    <button
+                      onClick={handleInfoClick}
+                      className="p-1.5 rounded-lg bg-gradient-to-r from-gray-800/60 to-gray-900/60 backdrop-blur-sm text-gray-400 hover:text-blue-400 hover:from-blue-500/20 hover:to-blue-600/20 transition-all duration-150 border border-gray-600/30 hover:border-blue-500/50 shadow-lg"
+                      aria-label="Show description"
+                      title="Show description"
+                    >
+                      <Info className="h-3 w-3" />
+                    </button>
 
-                  {/* Modern action buttons with glassmorphism */}
-                  <div className="absolute top-0 right-0 flex gap-1.5">
                     {/* Favorite star button with modern design */}
                     <button
                       onClick={(e) => {
@@ -424,7 +432,7 @@ export function MiniAppCard({
                         handleFavoriteClick();
                       }}
                       className={cn(
-                        "p-2 rounded-xl backdrop-blur-sm transition-all duration-150 border shadow-lg",
+                        "p-1.5 rounded-lg backdrop-blur-sm transition-all duration-150 border shadow-lg",
                         isFavorite
                           ? "bg-gradient-to-r from-orange-500/60 to-amber-500/60 text-orange-300 border-orange-400/50 hover:from-orange-400/60 hover:to-amber-400/60"
                           : "bg-gradient-to-r from-gray-800/60 to-gray-900/60 text-gray-400 border-gray-600/30 hover:text-orange-400 hover:from-orange-500/20 hover:to-orange-600/20 hover:border-orange-500/50"
@@ -434,34 +442,24 @@ export function MiniAppCard({
                       disabled={isTogglingFavorite}
                     >
                       {isTogglingFavorite ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin text-purple-400" />
+                        <Loader2 className="h-3 w-3 animate-spin text-purple-400" />
                       ) : (
-                        <Star className={cn("h-3.5 w-3.5", isFavorite && "fill-current")} />
+                        <Star className={cn("h-3 w-3", isFavorite && "fill-current")} />
                       )}
-                    </button>
-
-                    {/* Info button with modern design */}
-                    <button
-                      onClick={handleInfoClick}
-                      className="p-2 rounded-xl bg-gradient-to-r from-gray-800/60 to-gray-900/60 backdrop-blur-sm text-gray-400 hover:text-blue-400 hover:from-blue-500/20 hover:to-blue-600/20 transition-all duration-150 border border-gray-600/30 hover:border-blue-500/50 shadow-lg"
-                      aria-label="Show description"
-                      title="Show description"
-                    >
-                      <Info className="h-3.5 w-3.5" />
                     </button>
 
                     {/* Delete button with modern design */}
                     {isCustom && isCurrentUserOwner() && (
                       <button
                         onClick={handleDeleteClick}
-                        className="p-2 rounded-xl bg-gradient-to-r from-gray-800/60 to-gray-900/60 backdrop-blur-sm text-gray-400 hover:text-red-400 hover:from-red-500/20 hover:to-red-600/20 transition-all duration-150 border border-gray-600/30 hover:border-red-500/50 shadow-lg"
+                        className="p-1.5 rounded-lg bg-gradient-to-r from-gray-800/60 to-gray-900/60 backdrop-blur-sm text-gray-400 hover:text-red-400 hover:from-red-500/20 hover:to-red-600/20 transition-all duration-150 border border-gray-600/30 hover:border-red-500/50 shadow-lg"
                         aria-label="Delete service"
                         disabled={isDeleting}
                       >
                         {isDeleting ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin text-purple-400" />
+                          <Loader2 className="h-3 w-3 animate-spin text-purple-400" />
                         ) : (
-                          <Trash2 className="h-3.5 w-3.5" />
+                          <Trash2 className="h-3 w-3" />
                         )}
                       </button>
                     )}
