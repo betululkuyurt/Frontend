@@ -288,7 +288,7 @@ export default function ServiceWorkflowBuilder() {
   const [searchQuery, setSearchQuery] = useState("")
   // **[NEW STATE]** - Add state for agent type filter tabs and sorting
   const [agentTypeFilter, setAgentTypeFilter] = useState("All")
-  const [agentSortBy, setAgentSortBy] = useState<"mostFavorited" | "trending" | "recentlyAdded">("mostFavorited")
+  const [agentSortBy, setAgentSortBy] = useState<"mostFavorited" | "trending" | "recentlyAdded">("recentlyAdded")
     // **[NEW STATE]** - Add state for agent ownership filter
   const [agentOwnershipFilter, setAgentOwnershipFilter] = useState<"All Agents" | "My Agents" | "My Favorites">("All Agents")
   
@@ -336,8 +336,7 @@ export default function ServiceWorkflowBuilder() {
     try {
       setIsLoading(true)
 
-      try {
-        const response = await fetch(`http://127.0.0.1:8000/api/v1/agents/?current_user_id=${userId}`, {
+      try {        const response = await fetch(`http://127.0.0.1:8000/api/v1/agents/?current_user_id=${userId}`, {
           method: "GET",
           headers: {
             "Content-Type": "application/json",
@@ -364,6 +363,7 @@ export default function ServiceWorkflowBuilder() {
           apiKeyId: a.api_key_id,
           type: a.agent_type,
           favorites: 0, // Will be updated by fetchFavoriteCounts
+          createdAt: a.created_at || a.date_created || new Date().toISOString(), // Add created date
         }))
 
         console.log("Mapped agents:", agents);
