@@ -47,6 +47,7 @@ interface MiniAppCardProps {
   is_enhanced?: boolean | null
   requiresApiKey?: boolean
   owner_username?: string
+  is_public?: boolean
 }
 
 export function MiniAppCard({
@@ -63,6 +64,7 @@ export function MiniAppCard({
   is_enhanced,
   requiresApiKey,
   owner_username,
+  is_public,
 }: Readonly<MiniAppCardProps>) {
   const router = useRouter()
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
@@ -77,11 +79,11 @@ export function MiniAppCard({
   const backTitleRef = useRef<HTMLSpanElement>(null)
   const backContainerRef = useRef<HTMLDivElement>(null)
   const [isFavorite, setIsFavorite] = useState(false)
-  const [favoriteCount, setFavoriteCount] = useState(0)
-
-  // Check if current user is the owner of the service
+  const [favoriteCount, setFavoriteCount] = useState(0)  // Check if current user is the owner of the service
   const isCurrentUserOwner = (): boolean => {
-    if (!owner_username) return true // If no owner specified, allow delete (backward compatibility)
+    if (!owner_username) {
+      return true // If no owner specified, allow delete (backward compatibility)
+    }
     
     try {
       const token = getAccessToken()
@@ -375,18 +377,33 @@ export function MiniAppCard({
                           {title}
                         </span>
                       </h3>
-                    </div>
-                    
-                    {/* Owner username with modern styling */}
-                    {owner_username && (
-                      <div className="mb-2">
+                    </div>                      {/* Owner username and privacy indicator side by side */}
+                    <div className="mb-2 flex items-center gap-2 flex-wrap">
+                      {/* Owner username with modern styling */}
+                      {owner_username && (
                         <div className="inline-flex items-center bg-gradient-to-r from-purple-500/10 to-blue-500/10 border border-purple-400/20 rounded-full px-2 py-1">
                           <div className="w-1.5 h-1.5 bg-purple-400 rounded-full mr-1.5"></div>
                           <span className="text-[11px] text-gray-400">created by </span>
                           <span className="text-[11px] font-medium text-purple-300 ml-1">{owner_username}</span>
                         </div>
-                      </div>
-                    )}
+                      )}
+                      
+                      {/* Privacy indicator for owner */}
+                      {isCurrentUserOwner() && (
+                        <div className={`inline-flex items-center rounded-full px-2 py-1 border ${
+                          is_public === true
+                            ? "bg-gradient-to-r from-green-500/10 to-emerald-500/10 border-green-400/20 text-green-300" 
+                            : "bg-gradient-to-r from-blue-500/10 to-cyan-500/10 border-blue-400/20 text-blue-300"
+                        }`}>
+                          <div className={`w-1.5 h-1.5 rounded-full mr-1.5 ${
+                            is_public === true ? "bg-green-400" : "bg-blue-400"
+                          }`}></div>
+                          <span className="text-[11px] font-medium">
+                            {is_public === true ? "Public" : "Private"}
+                          </span>
+                        </div>
+                      )}
+                    </div>
                     
                     {/* Modern service type indicators with glassmorphism */}
                     <div className="flex items-center space-x-2">

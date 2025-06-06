@@ -127,6 +127,7 @@ interface MiniService {
   run_time: number
   is_enhanced: boolean
   created_at: string
+  is_public: boolean
 }
 
 // Define the process type from API
@@ -536,9 +537,7 @@ export default function DashboardPage() {
             }
 
             // Get color based on service type
-            const color = getColorForService(service.input_type, service.output_type)
-
-            // Fetch favorite count and status for this service
+            const color = getColorForService(service.input_type, service.output_type)            // Fetch favorite count and status for this service
             const [favoriteCount, isFavorited] = await Promise.all([
               getFavoriteCount(service.id),
               checkIfFavorited(service.id)
@@ -565,6 +564,7 @@ export default function DashboardPage() {
               is_enhanced: service.is_enhanced,
               created_at: service.created_at,
               favorite_count: favoriteCount, // Add favorite count for sorting
+              is_public: service.is_public, // Add privacy status
             }
           })
 
@@ -674,9 +674,7 @@ export default function DashboardPage() {
             }
 
             // Get color based on service type
-            const color = getColorForService(service.input_type, service.output_type)
-
-            // Fetch favorite count and state for this service (same as regular services)
+            const color = getColorForService(service.input_type, service.output_type)            // Fetch favorite count and state for this service (same as regular services)
             const [favoriteCount, isFavorited] = await Promise.all([
               getFavoriteCount(service.id),
               checkIfFavorited(service.id)
@@ -702,6 +700,7 @@ export default function DashboardPage() {
               is_enhanced: service.is_enhanced,
               created_at: service.created_at,
               favorite_count: favoriteCount, // Add favorite count for consistency with other views
+              is_public: service.is_public
             }
             
             console.log("Formatted favorite service:", formattedService)

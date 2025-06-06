@@ -22,6 +22,7 @@ export interface FavoriteService {
   average_token_usage: any;
   run_time: number;
   favorite_count?: number; // Add favorite count field for trending
+  is_public: boolean;
 }
 
 export interface FavoriteCountResponse {
@@ -284,9 +285,7 @@ export async function getTrendingServices(): Promise<any[]> {
       }
 
       // Get color based on service type
-      const color = getColorForService(service.input_type, service.output_type)
-
-      // Fetch favorite count and status for this service
+      const color = getColorForService(service.input_type, service.output_type)      // Fetch favorite count and status for this service
       const [favoriteCount, isFavorited] = await Promise.all([
         getFavoriteCount(service.id),
         checkIfFavorited(service.id)
@@ -312,7 +311,8 @@ export async function getTrendingServices(): Promise<any[]> {
         is_enhanced: service.is_enhanced,
         created_at: service.created_at,
         favorite_count: favoriteCount,
-        is_favorited: isFavorited
+        is_favorited: isFavorited,
+        is_public: service.is_public
       }
     });
 
