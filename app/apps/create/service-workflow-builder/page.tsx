@@ -2884,17 +2884,49 @@ export default function ServiceWorkflowBuilder() {
                             </div>
                           </div>
                         </div>
-                      </div>
-                    )}
+                      </div>                    )}
                   </div>
-                      {/* Create Agent Dialog */}
-                    <Dialog open={isAgentDialogOpen} onOpenChange={setIsAgentDialogOpen}>
-                    <DialogTrigger asChild>
-                      <Button className="w-full bg-gradient-to-r from-purple-600 to-purple-800 text-white hover:opacity-90 transition-all duration-300 hover:shadow-purple-500/30">
-                      <Plus className="h-4 w-4 mr-2" />
-                      Create New Agent
-                      </Button>
-                    </DialogTrigger>
+                      {/* Enhanced Create Agent Section */}
+                  <div className="relative">
+                    {/* Subtle background gradient */}
+                    <div className="absolute inset-0 bg-gradient-to-r from-purple-900/10 via-indigo-900/10 to-purple-900/10 rounded-xl blur-sm"></div>
+                    
+                    <div className="relative bg-black/20 backdrop-blur-sm rounded-xl border border-purple-900/30 p-6">
+                      <div className="flex items-center justify-between mb-4">
+                        <div>
+                          <h4 className="text-lg font-semibold text-white/95">Agent Management</h4>
+                          <p className="text-gray-300/70 text-sm">Create custom AI agents for your workflow</p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          {/* Agent counter badge */}
+                          <div className="bg-purple-900/30 border border-purple-700/50 rounded-full px-3 py-1">
+                            <span className="text-purple-200 text-xs font-medium">
+                              {availableAgents.length} Available
+                            </span>
+                          </div>
+                        </div>
+                      </div>                      {/* Create Agent Dialog */}
+                      <Dialog open={isAgentDialogOpen} onOpenChange={setIsAgentDialogOpen}>                        <DialogTrigger asChild>
+                          <Button className="group relative overflow-hidden bg-gradient-to-r from-purple-600 via-purple-700 to-indigo-600 text-white font-medium rounded-xl px-6 py-6 transition-all duration-500 hover:scale-[1.02] hover:shadow-2xl hover:shadow-purple-500/25 border-2 border-transparent hover:bg-transparent hover:border-transparent">
+                            {/* Gradient border overlay for hover state */}
+                            <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-purple-600 via-purple-700 to-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                            <div className="absolute inset-[2px] rounded-[10px] bg-black/90 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                            
+                            {/* Animated shimmer effect */}
+                            <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/5 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
+                            
+                            {/* Content */}
+                            <div className="relative flex items-center justify-center z-10">
+                              <div className="bg-white/10 rounded-lg p-1.5 mr-3 group-hover:bg-purple-500/20 transition-colors duration-500">
+                                <Plus className="h-4 w-4 transition-colors duration-500 group-hover:text-purple-300" />
+                              </div>
+                              <span className="text-sm font-semibold tracking-wide transition-colors duration-500 group-hover:text-purple-200">Create New Agent</span>
+                            </div>
+                            
+                            {/* Enhanced glow effect */}
+                            <div className="absolute inset-0 rounded-xl bg-purple-500/20 blur-md group-hover:bg-purple-400/40 group-hover:blur-lg transition-all duration-500 -z-10"></div>
+                          </Button>
+                        </DialogTrigger>
 
                     <DialogContent
                       className="bg-black/50 backdrop-blur-xl border border-white/20 text-white w-[95vw] sm:w-[90vw] md:w-[80vw] lg:w-[70vw] xl:w-[60vw] max-w-4xl shadow-2xl shadow-purple-500/30 relative rounded-2xl z-50 overflow-y-auto max-h-[90vh] backdrop-saturate-150"
@@ -3854,9 +3886,10 @@ export default function ServiceWorkflowBuilder() {
                         </div>
                     
 
-                      
-                    </DialogContent>
+                        </DialogContent>
                   </Dialog>
+                    </div>
+                  </div>
 
                   <div className="flex justify-between">
                     <Button
