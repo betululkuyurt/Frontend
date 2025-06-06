@@ -257,7 +257,7 @@ export default function ServiceWorkflowBuilder() {
     "Media": ["edge_tts", "bark_tts", "whisper", "transcribe"],
     "Document": ["rag", "pdf_reader", "document_analyzer", "file_output"],
     "Translate": ["google_translate"],
-    "TTS": ["edge_tts", "bark_tts"]
+    "TTS": ["edge_tts", "bark_tts"],
   };
 
   const [workflow, setWorkflow] = useState<WorkflowStep[]>([])
@@ -1302,7 +1302,8 @@ export default function ServiceWorkflowBuilder() {
         "Media": ["whisper", "transcribe"],
         "Document": ["rag", "pdf_reader", "document_analyzer"],
         "Translation": ["google_translate"],
-        "Custom": ["custom_endpoint_llm"]
+        "Custom": ["custom_endpoint_llm"],
+        "File Output": ["file_output"]
       }
       
       const typeList = agentTypeMapping[agentTypeFilter] || []
@@ -1818,11 +1819,9 @@ export default function ServiceWorkflowBuilder() {
     });
 
     // Update the workflow state with new order
-    setWorkflow(newWorkflowOrder);
-
-    // Update visual positioning to snap to grid
+    setWorkflow(newWorkflowOrder);    // Update visual positioning to snap to grid
     const baseX = 40;
-    const stepX = 250;
+    const stepX = 350;
     
     const repositionedNodes = nodes.map(node => {
       if (node.type === 'agent') {
@@ -1879,12 +1878,11 @@ export default function ServiceWorkflowBuilder() {
   const handleAddAgent = () => {
     setSelectedAgent('select');
   };
-
   // --- REACT FLOW NODES SYNCED TO WORKFLOW ---
   useEffect(() => {
     // Always show input and output nodes
     const baseX = 40;
-    const stepX = 250;
+    const stepX = 350;
     const nodesArr = [];
     // Input node
     nodesArr.push({
@@ -2582,7 +2580,7 @@ export default function ServiceWorkflowBuilder() {
                               <div className="space-y-2">
                                 <h4 className="text-xs font-medium text-gray-300/90">Filter by Agent Type</h4>
                                 <div className="flex flex-wrap gap-1">
-                                  {["All", "Gemini", "ChatGPT", "Claude", "TTS", "Media", "Document", "Translation", "Custom"].map((type) => (
+                                  {["All", "Gemini", "ChatGPT", "Claude", "TTS", "Media", "Document", "Translation", "Custom", "File Output"].map((type) => (
                                     <button
                                       key={type}
                                       onClick={() => setAgentTypeFilter(type)}
