@@ -83,6 +83,7 @@ import {
 
 // Define the service type
 interface Service {
+  is_public: boolean | undefined
   id: number;
   name: string;
   description: string;
@@ -1594,8 +1595,7 @@ export default function DashboardPage() {
                           className="h-[320px] bg-black/40 backdrop-blur-sm rounded-xl border border-purple-900/30 animate-pulse"
                         />
                       ))
-                    ) : (
-                      getFilteredMiniServices().map((service) => (
+                    ) : (                      getFilteredMiniServices().map((service) => (
                         <MiniAppCard
                           key={`mini-service-${service.id}`}
                           title={service.name}
@@ -1610,6 +1610,7 @@ export default function DashboardPage() {
                           is_enhanced={service.is_enhanced}
                           requiresApiKey={service.requiresApiKey}
                           owner_username={service.owner_username}
+                          is_public={service.is_public}
                         />
                       ))
                     )}
