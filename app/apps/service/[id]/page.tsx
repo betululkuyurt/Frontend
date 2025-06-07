@@ -36,6 +36,7 @@ import {
   Menu,
   Info,
   Code,
+  Download,
 } from "lucide-react"
 import { toast } from "@/components/ui/use-toast"
 import { deleteMiniService } from "@/lib/services"
@@ -761,7 +762,7 @@ export default function ServicePage() {
 
       if (agentDetail && doesAgentTypeRequireApiKey(agentType)) {
         let providerType = agentType
-        if (agentType.includes("rag")) {
+        if (agentType.includes("rag") || agentType === "file_output") {
           providerType = "gemini"
         } else if (agentType.includes("gemini_text2image") || agentType === "gemini_text2image") {
           providerType = "gemini"
@@ -2246,6 +2247,59 @@ export default function ServicePage() {
                 </video>
               </div>
             )}
+          </div>
+        )
+
+      case "document":
+  
+        const fullFileName = result.final_output || result.file_name || result.fileName || "output_document.txt"
+        const fileName = fullFileName.includes('.') ? fullFileName.substring(0, fullFileName.lastIndexOf('.')) : fullFileName
+        const fileFormat = fullFileName.includes('.') ? fullFileName.substring(fullFileName.lastIndexOf('.') + 1) : 'txt'
+        return (
+          <div className="w-full">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-medium text-white flex items-center">
+                <FileText className="h-5 w-5 mr-2 text-purple-400" />
+                Document Result
+              </h3>
+              <TokenUsageInfoButton result={result} messageId={messageId} />
+            </div>
+            <div className="bg-black/30 rounded-lg border border-purple-900/20 p-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="flex-shrink-0">
+                    <div className="w-12 h-12 bg-purple-600/20 rounded-lg flex items-center justify-center">
+                      <FileText className="h-6 w-6 text-purple-400" />
+                    </div>
+                  </div>
+                  <div>
+                    <h4 className="text-white font-medium">{fullFileName}</h4>
+                    <p className="text-gray-400 text-sm">Document ready for download</p>
+                  </div>
+                </div>                <Button
+                  onClick={() => {
+                    const { currentUserId } = getAuthHeaders()
+                    const downloadUrl = `http://127.0.0.1:8000/api/v1/mini-services/file-output/${service?.id}?file_name=${encodeURIComponent(fullFileName)}&current_user_id=${currentUserId}`
+                    window.open(downloadUrl, "_blank")
+                  }}
+                  className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
+                >
+                  <Download className="h-4 w-4" />
+                  <span>Download</span>
+                </Button>
+              </div>
+              <div className="mt-4 pt-4 border-t border-purple-900/20">
+                <div className="flex items-center space-x-4 text-sm text-gray-400">
+                  <div className="flex items-center space-x-1">
+                    <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                    <span>File generated successfully</span>
+                  </div>
+                  <div className="flex items-center space-x-1">
+                    <span>Format: {fileFormat.toUpperCase()}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         )
 

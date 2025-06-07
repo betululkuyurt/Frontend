@@ -249,16 +249,15 @@ export default function ServiceWorkflowBuilder() {
   // **[NEW STATE]** - Filter tabs and agent type selection grid auto-close
   const [activeFilterTab, setActiveFilterTab] = useState("All");
   const [isAgentTypeGridOpen, setIsAgentTypeGridOpen] = useState(false);
-
   // **[AGENT TYPE CATEGORIES]** - Define categories for filtering
   const agentTypeCategories = {
     "All": [],
     "LLM": ["gemini", "openai", "claude", "custom_endpoint_llm"],
     "Image Generation": ["gemini_text2image", "midjourney", "dalle"],
     "Media": ["edge_tts", "bark_tts", "whisper", "transcribe"],
-    "Document": ["rag", "pdf_reader", "document_analyzer"],
+    "Document": ["rag", "pdf_reader", "document_analyzer", "file_output"],
     "Translate": ["google_translate"],
-    "TTS": ["edge_tts", "bark_tts"]
+    "TTS": ["edge_tts", "bark_tts"],
   };
 
   const [workflow, setWorkflow] = useState<WorkflowStep[]>([])
@@ -289,7 +288,7 @@ export default function ServiceWorkflowBuilder() {
   const [searchQuery, setSearchQuery] = useState("")
   // **[NEW STATE]** - Add state for agent type filter tabs and sorting
   const [agentTypeFilter, setAgentTypeFilter] = useState("All")
-  const [agentSortBy, setAgentSortBy] = useState<"mostFavorited" | "trending" | "recentlyAdded">("mostFavorited")
+  const [agentSortBy, setAgentSortBy] = useState<"mostFavorited" | "trending" | "recentlyAdded">("recentlyAdded")
     // **[NEW STATE]** - Add state for agent ownership filter
   const [agentOwnershipFilter, setAgentOwnershipFilter] = useState<"All Agents" | "My Agents" | "My Favorites">("All Agents")
   
@@ -337,8 +336,7 @@ export default function ServiceWorkflowBuilder() {
     try {
       setIsLoading(true)
 
-      try {
-        const response = await fetch(`http://127.0.0.1:8000/api/v1/agents/?current_user_id=${userId}`, {
+      try {        const response = await fetch(`http://127.0.0.1:8000/api/v1/agents/?current_user_id=${userId}`, {
           method: "GET",
           headers: {
             "Content-Type": "application/json",
@@ -365,6 +363,7 @@ export default function ServiceWorkflowBuilder() {
           apiKeyId: a.api_key_id,
           type: a.agent_type,
           favorites: 0, // Will be updated by fetchFavoriteCounts
+          createdAt: a.created_at || a.date_created || new Date().toISOString(), // Add created date
         }))
 
         console.log("Mapped agents:", agents);
@@ -958,17 +957,91 @@ export default function ServiceWorkflowBuilder() {
         return data;
       } else {
         // **[JSON REQUEST]** - Non-RAG agents use JSON
-        const agentData = {
-          name: newAgentData.name,
-          description: newAgentData.description,
-          input_type: newAgentData.inputType,
-          output_type: newAgentData.outputType,
-          system_instruction: newAgentData.systemInstruction,
-          config: config,
-          is_public: newAgentData.isPublic,
-          agent_type: newAgentData.agentType,
-          enhance_prompt: newAgentData.enhancePrompt ? 1 : 0
-        };
+        
+        // **[FILE OUTPUT SPECIAL CASE]** - Handle file_output agent type with special config format
+        if (newAgentData.agentType === "file_output") {
+          const agentData = {
+            name: newAgentData.name,
+            description: newAgentData.description,
+            input_type: newAgentData.inputType,
+            output_type: newAgentData.outputType,
+            system_instruction: newAgentData.systemInstruction,
+            config: {
+              document_type: newAgentData.config.document_type,
+              use_ai_formatting: true, // Always true for file_output agents
+              model_name: newAgentData.config.model_name
+            },
+            is_public: newAgentData.isPublic,
+            agent_type: newAgentData.agentType,
+            enhance_prompt: newAgentData.enhancePrompt ? 1 : 0
+          };
+
+          console.log("Creating file_output agent with data:", {
+            ...agentData,
+            config: agentData.config
+          });
+
+          const apiUrl = `http://127.0.0.1:8000/api/v1/agents/?enhance_prompt=${agentData.enhance_prompt}&current_user_id=${userId}`;
+
+          const response = await fetch(apiUrl, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${Cookies.get("access_token")}`
+            },
+            body: JSON.stringify(agentData)
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            console.error("File Output Agent Creation Error:", {
+              status: response.status,
+              statusText: response.statusText,
+              error: errorData
+            });
+            throw new Error(`Failed to create file output agent: ${JSON.stringify(errorData)}`);
+          }
+
+          const data = await response.json();
+          console.log("File Output Agent created successfully:", data);
+
+          // Success handling
+          await fetchAgents();
+          toast({
+            title: "File Output Agent Created",
+            description: `Agent "${newAgentData.name}" has been created with file output capabilities.`,
+          });
+
+          // Reset form
+          setNewAgentData({
+            name: "",
+            description: "",
+            inputType: "text",
+            outputType: "text",
+            systemInstruction: "",
+            enhancePrompt: false,
+            config: {},
+            isPublic: false,
+            agentType: ""
+          });
+          setSelectedApiKey("");
+          setCustomApiKey("");
+          setUseCustomApiKey(false);
+
+          return data;
+        } else {
+          // **[STANDARD JSON REQUEST]** - All other non-RAG agents use standard JSON
+          const agentData = {
+            name: newAgentData.name,
+            description: newAgentData.description,
+            input_type: newAgentData.inputType,
+            output_type: newAgentData.outputType,
+            system_instruction: newAgentData.systemInstruction,
+            config: config,
+            is_public: newAgentData.isPublic,
+            agent_type: newAgentData.agentType,
+            enhance_prompt: newAgentData.enhancePrompt ? 1 : 0
+          };
         
         console.log("Creating agent with data:", {
           ...agentData,
@@ -1015,9 +1088,8 @@ export default function ServiceWorkflowBuilder() {
         });
         setSelectedApiKey("");
         setCustomApiKey("");
-        setUseCustomApiKey(false);
-
-        return data;
+        setUseCustomApiKey(false);          return data;
+        }
       }
     } catch (error: any) {
       console.error("Agent creation error:", error);
@@ -1230,7 +1302,8 @@ export default function ServiceWorkflowBuilder() {
         "Media": ["whisper", "transcribe"],
         "Document": ["rag", "pdf_reader", "document_analyzer"],
         "Translation": ["google_translate"],
-        "Custom": ["custom_endpoint_llm"]
+        "Custom": ["custom_endpoint_llm"],
+        "File Output": ["file_output"]
       }
       
       const typeList = agentTypeMapping[agentTypeFilter] || []
@@ -1746,11 +1819,9 @@ export default function ServiceWorkflowBuilder() {
     });
 
     // Update the workflow state with new order
-    setWorkflow(newWorkflowOrder);
-
-    // Update visual positioning to snap to grid
+    setWorkflow(newWorkflowOrder);    // Update visual positioning to snap to grid
     const baseX = 40;
-    const stepX = 250;
+    const stepX = 350;
     
     const repositionedNodes = nodes.map(node => {
       if (node.type === 'agent') {
@@ -1807,12 +1878,11 @@ export default function ServiceWorkflowBuilder() {
   const handleAddAgent = () => {
     setSelectedAgent('select');
   };
-
   // --- REACT FLOW NODES SYNCED TO WORKFLOW ---
   useEffect(() => {
     // Always show input and output nodes
     const baseX = 40;
-    const stepX = 250;
+    const stepX = 350;
     const nodesArr = [];
     // Input node
     nodesArr.push({
@@ -2510,7 +2580,7 @@ export default function ServiceWorkflowBuilder() {
                               <div className="space-y-2">
                                 <h4 className="text-xs font-medium text-gray-300/90">Filter by Agent Type</h4>
                                 <div className="flex flex-wrap gap-1">
-                                  {["All", "Gemini", "ChatGPT", "Claude", "TTS", "Media", "Document", "Translation", "Custom"].map((type) => (
+                                  {["All", "Gemini", "ChatGPT", "Claude", "TTS", "Media", "Document", "Translation", "Custom", "File Output"].map((type) => (
                                     <button
                                       key={type}
                                       onClick={() => setAgentTypeFilter(type)}
@@ -2812,17 +2882,49 @@ export default function ServiceWorkflowBuilder() {
                             </div>
                           </div>
                         </div>
-                      </div>
-                    )}
+                      </div>                    )}
                   </div>
-                      {/* Create Agent Dialog */}
-                    <Dialog open={isAgentDialogOpen} onOpenChange={setIsAgentDialogOpen}>
-                    <DialogTrigger asChild>
-                      <Button className="w-full bg-gradient-to-r from-purple-600 to-purple-800 text-white hover:opacity-90 transition-all duration-300 hover:shadow-purple-500/30">
-                      <Plus className="h-4 w-4 mr-2" />
-                      Create New Agent
-                      </Button>
-                    </DialogTrigger>
+                      {/* Enhanced Create Agent Section */}
+                  <div className="relative">
+                    {/* Subtle background gradient */}
+                    <div className="absolute inset-0 bg-gradient-to-r from-purple-900/10 via-indigo-900/10 to-purple-900/10 rounded-xl blur-sm"></div>
+                    
+                    <div className="relative bg-black/20 backdrop-blur-sm rounded-xl border border-purple-900/30 p-6">
+                      <div className="flex items-center justify-between mb-4">
+                        <div>
+                          <h4 className="text-lg font-semibold text-white/95">Agent Management</h4>
+                          <p className="text-gray-300/70 text-sm">Create custom AI agents for your workflow</p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          {/* Agent counter badge */}
+                          <div className="bg-purple-900/30 border border-purple-700/50 rounded-full px-3 py-1">
+                            <span className="text-purple-200 text-xs font-medium">
+                              {availableAgents.length} Available
+                            </span>
+                          </div>
+                        </div>
+                      </div>                      {/* Create Agent Dialog */}
+                      <Dialog open={isAgentDialogOpen} onOpenChange={setIsAgentDialogOpen}>                        <DialogTrigger asChild>
+                          <Button className="group relative overflow-hidden bg-gradient-to-r from-purple-600 via-purple-700 to-indigo-600 text-white font-medium rounded-xl px-6 py-6 transition-all duration-500 hover:scale-[1.02] hover:shadow-2xl hover:shadow-purple-500/25 border-2 border-transparent hover:bg-transparent hover:border-transparent">
+                            {/* Gradient border overlay for hover state */}
+                            <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-purple-600 via-purple-700 to-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                            <div className="absolute inset-[2px] rounded-[10px] bg-black/90 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                            
+                            {/* Animated shimmer effect */}
+                            <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/5 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
+                            
+                            {/* Content */}
+                            <div className="relative flex items-center justify-center z-10">
+                              <div className="bg-white/10 rounded-lg p-1.5 mr-3 group-hover:bg-purple-500/20 transition-colors duration-500">
+                                <Plus className="h-4 w-4 transition-colors duration-500 group-hover:text-purple-300" />
+                              </div>
+                              <span className="text-sm font-semibold tracking-wide transition-colors duration-500 group-hover:text-purple-200">Create New Agent</span>
+                            </div>
+                            
+                            {/* Enhanced glow effect */}
+                            <div className="absolute inset-0 rounded-xl bg-purple-500/20 blur-md group-hover:bg-purple-400/40 group-hover:blur-lg transition-all duration-500 -z-10"></div>
+                          </Button>
+                        </DialogTrigger>
 
                     <DialogContent
                       className="bg-black/50 backdrop-blur-xl border border-white/20 text-white w-[95vw] sm:w-[90vw] md:w-[80vw] lg:w-[70vw] xl:w-[60vw] max-w-4xl shadow-2xl shadow-purple-500/30 relative rounded-2xl z-50 overflow-y-auto max-h-[90vh] backdrop-saturate-150"
@@ -3625,9 +3727,118 @@ export default function ServiceWorkflowBuilder() {
                                 When users query this agent, relevant sections will be retrieved and used to generate accurate responses.
                               </p>
                             </div>
+                          </div>                        </div>
+                      )}                      
+
+                      {/* File Output Agent Configuration */}
+                      {newAgentData.agentType === "file_output" && (
+                        <div className="bg-black/40 p-4 rounded-lg border border-purple-900/30">
+                          <h4 className="text-sm font-medium text-purple-200 mb-3 flex items-center">
+                            <FileText className="h-4 w-4 mr-2" />
+                            File Output Configuration
+                          </h4>
+                          <div className="space-y-4">
+                            {/* Document Type Selection */}
+                            <div className="space-y-2">
+                              <Label htmlFor="documentType" className="text-white font-medium">
+                                Document Type <span className="text-red-500">*</span>
+                              </Label>
+                              <Select
+                                value={newAgentData.config.document_type || ""}
+                                onValueChange={(value) =>
+                                  setNewAgentData({
+                                    ...newAgentData,
+                                    config: { ...newAgentData.config, document_type: value }
+                                  })
+                                }
+                              >
+                                <SelectTrigger className="bg-black/50 border-purple-900/40 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all">
+                                  <SelectValue placeholder="Select document type" />
+                                </SelectTrigger>
+                                <SelectContent className="max-h-[200px] overflow-y-auto">
+                                  <div className="bg-black/90 border-purple-900/40 text-white">
+                                    <SelectItem value="txt" className="hover:bg-purple-900/20">Plain Text (.txt)</SelectItem>
+                                    <SelectItem value="docx" className="hover:bg-purple-900/20">Word Document (.docx)</SelectItem>
+                                    <SelectItem value="pdf" className="hover:bg-purple-900/20">PDF Document (.pdf)</SelectItem>
+                                    <SelectItem value="py" className="hover:bg-purple-900/20">Python Code (.py)</SelectItem>
+                                    <SelectItem value="java" className="hover:bg-purple-900/20">Java Code (.java)</SelectItem>
+                                    <SelectItem value="c" className="hover:bg-purple-900/20">C Code (.c)</SelectItem>
+                                    <SelectItem value="cpp" className="hover:bg-purple-900/20">C++ Code (.cpp)</SelectItem>
+                                    <SelectItem value="js" className="hover:bg-purple-900/20">JavaScript Code (.js)</SelectItem>
+                                    <SelectItem value="ts" className="hover:bg-purple-900/20">TypeScript Code (.ts)</SelectItem>
+                                  </div>
+                                </SelectContent>
+                              </Select>
+                              {newAgentData.agentType === "file_output" && !newAgentData.config.document_type && (
+                                <p className="text-xs text-red-500">Please select a document type</p>
+                              )}
+                            </div>
+
+                            {/* AI Formatting Toggle - Always True */}
+                            <div className="space-y-2">
+                              <Label className="text-white font-medium">AI Formatting</Label>
+                              <div className="flex items-center space-x-2">
+                                <div className="w-4 h-4 bg-green-500 rounded-sm flex items-center justify-center">
+                                  <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                  </svg>
+                                </div>
+                                <span className="text-green-300 text-sm">Enabled (Always active for file output agents)</span>
+                              </div>
+                              <p className="text-xs text-gray-400">
+                                Content will be automatically formatted using AI for better readability and structure.
+                              </p>
+                            </div>
+
+                            
+                             
+
+                            {/* Model Name Selection */}
+                            <div className="space-y-2">
+                              <Label className="text-white font-medium">
+                                Model Name <span className="text-red-500">*</span>
+                              </Label>
+                              <Select
+                                value={newAgentData.config.model_name || ""}
+                                onValueChange={(value) =>
+                                  setNewAgentData({
+                                    ...newAgentData,
+                                    config: { ...newAgentData.config, model_name: value }
+                                  })
+                                }
+                              >
+                                <SelectTrigger className="bg-black/50 border-purple-900/40 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all">
+                                  <SelectValue placeholder="Select model" />
+                                </SelectTrigger>
+                                <SelectContent className="max-h-[200px] overflow-y-auto">
+                                  <div className="bg-black/90 border-purple-900/40 text-white">
+                                    <SelectItem value="gpt-4o" className="hover:bg-purple-900/20">GPT-4o</SelectItem>
+                                    <SelectItem value="gpt-4o-mini" className="hover:bg-purple-900/20">GPT-4o Mini</SelectItem>
+                                    <SelectItem value="gpt-4-turbo" className="hover:bg-purple-900/20">GPT-4 Turbo</SelectItem>
+                                    <SelectItem value="gpt-3.5-turbo" className="hover:bg-purple-900/20">GPT-3.5 Turbo</SelectItem>
+                                    <SelectItem value="gemini-1.5-pro" className="hover:bg-purple-900/20">Gemini 1.5 Pro</SelectItem>
+                                    <SelectItem value="gemini-1.5-flash" className="hover:bg-purple-900/20">Gemini 1.5 Flash</SelectItem>
+                                    <SelectItem value="claude-3-opus" className="hover:bg-purple-900/20">Claude 3 Opus</SelectItem>
+                                    <SelectItem value="claude-3-sonnet" className="hover:bg-purple-900/20">Claude 3 Sonnet</SelectItem>
+                                    <SelectItem value="claude-3-haiku" className="hover:bg-purple-900/20">Claude 3 Haiku</SelectItem>
+                                  </div>
+                                </SelectContent>
+                              </Select>
+                              {newAgentData.agentType === "file_output" && !newAgentData.config.model_name && (
+                                <p className="text-xs text-red-500">Please select a model</p>
+                              )}
+                            </div>
+
+                            <div className="bg-blue-950/30 border border-blue-800/30 rounded-lg p-3">
+                              <h5 className="text-xs font-semibold text-blue-200 mb-2">File Output Agent</h5>
+                              <p className="text-xs text-blue-300/80 leading-relaxed">
+                                This agent will generate files in the specified format using AI formatting. 
+                                The content will be processed and formatted appropriately for the selected document type.
+                              </p>
+                            </div>
                           </div>
                         </div>
-                      )}                      
+                      )}
 
                       <div className="flex justify-end pt-4">
                           <Button
@@ -3643,19 +3854,18 @@ export default function ServiceWorkflowBuilder() {
                               } finally {
                                 setIsCreatingAgent(false);
                               }
-                            }}                            className="bg-gradient-to-r from-purple-600 to-purple-800 text-white hover:opacity-90 transition-all duration-300 hover:shadow-purple-500/30 hover:scale-105 w-full sm:w-auto"
-                            disabled={
+                            }}                            className="bg-gradient-to-r from-purple-600 to-purple-800 text-white hover:opacity-90 transition-all duration-300 hover:shadow-purple-500/30 hover:scale-105 w-full sm:w-auto"                            disabled={
                               isCreatingAgent || 
                               !newAgentData.name || 
                               !newAgentData.agentType ||
                               (newAgentData.agentType === "google_translate" && !newAgentData.config.target_language) ||
-                              (newAgentData.agentType === "rag" && !ragDocumentFile)
+                              (newAgentData.agentType === "rag" && !ragDocumentFile) ||
+                              (newAgentData.agentType === "file_output" && (!newAgentData.config.document_type  || !newAgentData.config.model_name))
                             }
                           >
                             {isCreatingAgent ? (
                               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            ) : null}
-                            {!newAgentData.name ? (
+                            ) : null}                            {!newAgentData.name ? (
                               "Enter agent name"
                             ) : !newAgentData.agentType ? (
                               "Select agent type"
@@ -3663,6 +3873,10 @@ export default function ServiceWorkflowBuilder() {
                               "Select target language"
                             ) : newAgentData.agentType === "rag" && !ragDocumentFile ? (
                               "Upload RAG document"
+                            ) : newAgentData.agentType === "file_output" && !newAgentData.config.document_type ? (
+                              "Select document type"
+                            ) : newAgentData.agentType === "file_output" && !newAgentData.config.model_name ? (
+                              "Select model name"
                             ) : (
                               "Create Agent"
                             )}
@@ -3670,9 +3884,10 @@ export default function ServiceWorkflowBuilder() {
                         </div>
                     
 
-                      
-                    </DialogContent>
+                        </DialogContent>
                   </Dialog>
+                    </div>
+                  </div>
 
                   <div className="flex justify-between">
                     <Button

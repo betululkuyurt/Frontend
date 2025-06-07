@@ -47,6 +47,7 @@ interface MiniAppCardProps {
   is_enhanced?: boolean | null
   requiresApiKey?: boolean
   owner_username?: string
+  is_public?: boolean
 }
 
 export function MiniAppCard({
@@ -63,6 +64,7 @@ export function MiniAppCard({
   is_enhanced,
   requiresApiKey,
   owner_username,
+  is_public,
 }: Readonly<MiniAppCardProps>) {
   const router = useRouter()
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
@@ -77,19 +79,19 @@ export function MiniAppCard({
   const backTitleRef = useRef<HTMLSpanElement>(null)
   const backContainerRef = useRef<HTMLDivElement>(null)
   const [isFavorite, setIsFavorite] = useState(false)
-  const [favoriteCount, setFavoriteCount] = useState(0)
-
-  // Check if current user is the owner of the service
+  const [favoriteCount, setFavoriteCount] = useState(0)  // Check if current user is the owner of the service
   const isCurrentUserOwner = (): boolean => {
-    if (!owner_username) return true // If no owner specified, allow delete (backward compatibility)
-    
+    if (!owner_username) {
+      return true // If no owner specified, allow delete (backward compatibility)
+    }
+
     try {
       const token = getAccessToken()
       if (!token) return false
-      
+
       const decodedToken = decodeJWT(token)
       if (!decodedToken?.username) return false
-      
+
       return decodedToken.username === owner_username
     } catch (error) {
       console.error("Error checking user ownership:", error)
@@ -104,7 +106,7 @@ export function MiniAppCard({
       const containerWidth = containerRef.current.clientWidth - 60 // Account for smaller buttons and padding
       setTitleNeedsAnimation(titleWidth > containerWidth)
     }
-    
+
     if (backTitleRef.current && backContainerRef.current && !isAddCard) {
       const titleWidth = backTitleRef.current.scrollWidth
       const containerWidth = backContainerRef.current.clientWidth - 30 // Account for smaller back button
@@ -203,10 +205,10 @@ export function MiniAppCard({
 
     try {
       const result = await toggleFavorite(id);
-      
+
       if (result.success) {
         setIsFavorite(result.isFavorited);
-        
+
         // Refresh favorite count from server to ensure accuracy
         try {
           const updatedCount = await getFavoriteCount(id);
@@ -220,12 +222,12 @@ export function MiniAppCard({
             setFavoriteCount(Math.max(0, favoriteCount - 1));
           }
         }
-        
+
         toast({
           title: "Success",
           description: `"${title}" has been ${result.isFavorited ? "added to" : "removed from"} favorites.`,
         });
-        
+
         // Dispatch event to notify other components about favorite change
         window.dispatchEvent(new Event("favoriteToggled"));
       } else {
@@ -248,16 +250,16 @@ export function MiniAppCard({
     if (id) {
       const loadFavoriteStatus = async () => {
         try {
-          
+
           const isFavorited = await checkIfFavorited(id);
-          
+
           setIsFavorite(isFavorited);
-          
+
           const count = await getFavoriteCount(id);
-         
+
           setFavoriteCount(count);
         } catch (error) {
-         
+
         }
       };
       loadFavoriteStatus();
@@ -299,7 +301,7 @@ export function MiniAppCard({
             style={{ backfaceVisibility: 'hidden' }}
           >
             {/* Lightweight background glow effect on hover */}
-            <div 
+            <div
               className={cn(
                 "absolute inset-0 rounded-2xl bg-gradient-to-br opacity-0 transition-opacity duration-200",
                 isHovering && "opacity-10",
@@ -365,7 +367,7 @@ export function MiniAppCard({
                   <div className="flex-1 min-w-0 pr-16" ref={containerRef}>
                     <div className="flex items-center mb-2">
                       <h3 className="text-base font-bold text-white tracking-wide flex items-center bg-gradient-to-r from-white via-gray-100 to-gray-200 bg-clip-text text-transparent overflow-hidden">
-                        <span 
+                        <span
                           ref={titleRef}
                           className={cn(
                             "whitespace-nowrap",
@@ -375,19 +377,30 @@ export function MiniAppCard({
                           {title}
                         </span>
                       </h3>
-                    </div>
-                    
-                    {/* Owner username with modern styling */}
-                    {owner_username && (
-                      <div className="mb-2">
+                    </div>                      {/* Owner username and privacy indicator side by side */}
+                    <div className="mb-2 flex items-center gap-2 flex-wrap">
+                      {/* Owner username with modern styling */}
+                      {owner_username && (
                         <div className="inline-flex items-center bg-gradient-to-r from-purple-500/10 to-blue-500/10 border border-purple-400/20 rounded-full px-2 py-1">
                           <div className="w-1.5 h-1.5 bg-purple-400 rounded-full mr-1.5"></div>
                           <span className="text-[11px] text-gray-400">created by </span>
                           <span className="text-[11px] font-medium text-purple-300 ml-1">{owner_username}</span>
                         </div>
-                      </div>
-                    )}
-                    
+                      )}                      {/* Privacy indicator for owner */}
+                      {isCurrentUserOwner() && (
+                        <div className={`inline-flex items-center rounded-full px-2 py-1 border ${is_public === true
+                            ? "bg-gradient-to-r from-green-500/10 to-emerald-500/10 border-green-400/20 text-green-300"
+                            : "bg-gradient-to-r from-blue-500/10 to-cyan-500/10 border-blue-400/20 text-blue-300"
+                          }`}>
+                          <div className={`w-1.5 h-1.5 rounded-full mr-1.5 ${is_public === true ? "bg-green-400" : "bg-blue-400"
+                            }`}></div>
+                          <span className="text-[11px] font-medium">
+                            {is_public === true ? "Public" : "Private"}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
                     {/* Modern service type indicators with glassmorphism */}
                     <div className="flex items-center space-x-2">
                       <div className="inline-flex items-center text-[11px] font-medium text-gray-300 bg-gradient-to-r from-emerald-500/10 to-green-500/10 border border-emerald-400/20 px-2 py-1 rounded-full backdrop-blur-sm">
@@ -400,10 +413,18 @@ export function MiniAppCard({
                         {usageStats?.output_type ?? "Text"}
                       </div>
                     </div>
-                  </div>
+                  </div>                  {/* Modern action buttons with glassmorphism - Vertical Layout */}
+                  <div className="absolute top-0 right-0 flex flex-col gap-1">
+                    {/* Info button with modern design */}
+                    <button
+                      onClick={handleInfoClick}
+                      className="p-1.5 rounded-lg bg-gradient-to-r from-gray-800/60 to-gray-900/60 backdrop-blur-sm text-gray-400 hover:text-blue-400 hover:from-blue-500/20 hover:to-blue-600/20 transition-all duration-150 border border-gray-600/30 hover:border-blue-500/50 shadow-lg"
+                      aria-label="Show description"
+                      title="Show description"
+                    >
+                      <Info className="h-3 w-3" />
+                    </button>
 
-                  {/* Modern action buttons with glassmorphism */}
-                  <div className="absolute top-0 right-0 flex gap-1.5">
                     {/* Favorite star button with modern design */}
                     <button
                       onClick={(e) => {
@@ -411,7 +432,7 @@ export function MiniAppCard({
                         handleFavoriteClick();
                       }}
                       className={cn(
-                        "p-2 rounded-xl backdrop-blur-sm transition-all duration-150 border shadow-lg",
+                        "p-1.5 rounded-lg backdrop-blur-sm transition-all duration-150 border shadow-lg",
                         isFavorite
                           ? "bg-gradient-to-r from-orange-500/60 to-amber-500/60 text-orange-300 border-orange-400/50 hover:from-orange-400/60 hover:to-amber-400/60"
                           : "bg-gradient-to-r from-gray-800/60 to-gray-900/60 text-gray-400 border-gray-600/30 hover:text-orange-400 hover:from-orange-500/20 hover:to-orange-600/20 hover:border-orange-500/50"
@@ -421,34 +442,24 @@ export function MiniAppCard({
                       disabled={isTogglingFavorite}
                     >
                       {isTogglingFavorite ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin text-purple-400" />
+                        <Loader2 className="h-3 w-3 animate-spin text-purple-400" />
                       ) : (
-                        <Star className={cn("h-3.5 w-3.5", isFavorite && "fill-current")} />
+                        <Star className={cn("h-3 w-3", isFavorite && "fill-current")} />
                       )}
                     </button>
-                    
-                    {/* Info button with modern design */}
-                    <button
-                      onClick={handleInfoClick}
-                      className="p-2 rounded-xl bg-gradient-to-r from-gray-800/60 to-gray-900/60 backdrop-blur-sm text-gray-400 hover:text-blue-400 hover:from-blue-500/20 hover:to-blue-600/20 transition-all duration-150 border border-gray-600/30 hover:border-blue-500/50 shadow-lg"
-                      aria-label="Show description"
-                      title="Show description"
-                    >
-                      <Info className="h-3.5 w-3.5" />
-                    </button>
-                    
+
                     {/* Delete button with modern design */}
                     {isCustom && isCurrentUserOwner() && (
                       <button
                         onClick={handleDeleteClick}
-                        className="p-2 rounded-xl bg-gradient-to-r from-gray-800/60 to-gray-900/60 backdrop-blur-sm text-gray-400 hover:text-red-400 hover:from-red-500/20 hover:to-red-600/20 transition-all duration-150 border border-gray-600/30 hover:border-red-500/50 shadow-lg"
+                        className="p-1.5 rounded-lg bg-gradient-to-r from-gray-800/60 to-gray-900/60 backdrop-blur-sm text-gray-400 hover:text-red-400 hover:from-red-500/20 hover:to-red-600/20 transition-all duration-150 border border-gray-600/30 hover:border-red-500/50 shadow-lg"
                         aria-label="Delete service"
                         disabled={isDeleting}
                       >
                         {isDeleting ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin text-purple-400" />
+                          <Loader2 className="h-3 w-3 animate-spin text-purple-400" />
                         ) : (
-                          <Trash2 className="h-3.5 w-3.5" />
+                          <Trash2 className="h-3 w-3" />
                         )}
                       </button>
                     )}
@@ -461,7 +472,7 @@ export function MiniAppCard({
                     <div className="w-2 h-2 bg-gradient-to-r from-emerald-400 to-blue-400 rounded-full"></div>
                     <span className="text-xs font-medium text-gray-300">{usageStats?.run_time !== undefined && !isNaN(usageStats.run_time) ? `${Math.round(usageStats.run_time)} runs` : "No runs"}</span>
                   </div>
-                  
+
                   {/* Status indicator */}
                   <div className="flex items-center space-x-1">
                     {/* Favorites badge */}
@@ -469,7 +480,7 @@ export function MiniAppCard({
                       <Star className="h-3 w-3 text-orange-400 mr-1" />
                       <span className="text-orange-300 text-[10px] font-medium">{favoriteCount} favorites</span>
                     </div>
-                    
+
                     {is_enhanced === true && (
                       <div className="inline-flex items-center bg-gradient-to-r from-yellow-500/10 to-orange-500/10 border border-yellow-400/20 rounded-full px-2 py-1">
                         <span className="text-yellow-400 text-xs">✨</span>
@@ -492,7 +503,7 @@ export function MiniAppCard({
 
                   {/* Subtle shimmer effect */}
                   <div className="absolute inset-0 opacity-0 group-hover/button:opacity-100 bg-gradient-to-r from-transparent via-white/10 to-transparent transition-all duration-600 ease-in-out rounded-b-xl transform -skew-x-12 group-hover/button:translate-x-full"></div>
-                  
+
                   {/* Top highlight */}
                   <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/50 to-transparent opacity-60"></div>
                 </button>
@@ -510,7 +521,7 @@ export function MiniAppCard({
               style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}
             >
               {/* Lightweight background glow effect on hover */}
-              <div 
+              <div
                 className={cn(
                   "absolute inset-0 rounded-2xl bg-gradient-to-br opacity-0 transition-opacity duration-200",
                   isHovering && "opacity-10",
@@ -580,13 +591,13 @@ export function MiniAppCard({
                     <span className="block text-blue-300 text-[10px] font-medium mb-1">Avg. API Token Usage</span>
                     <span className="text-gray-200 text-[10px] font-semibold">
                       {(() => {
-                        const hasTokenUsage = usageStats?.average_token_usage?.total_tokens !== undefined && 
-                                            !isNaN(usageStats.average_token_usage.total_tokens) && 
-                                            usageStats.average_token_usage.total_tokens > 0;
-                        const hasRuns = usageStats?.run_time !== undefined && 
-                                       !isNaN(usageStats.run_time) && 
-                                       usageStats.run_time > 0;
-                        
+                        const hasTokenUsage = usageStats?.average_token_usage?.total_tokens !== undefined &&
+                          !isNaN(usageStats.average_token_usage.total_tokens) &&
+                          usageStats.average_token_usage.total_tokens > 0;
+                        const hasRuns = usageStats?.run_time !== undefined &&
+                          !isNaN(usageStats.run_time) &&
+                          usageStats.run_time > 0;
+
                         if (hasTokenUsage) {
                           return Math.round(usageStats.average_token_usage.total_tokens).toLocaleString();
                         } else if (hasRuns && !hasTokenUsage) {

@@ -83,6 +83,7 @@ import {
 
 // Define the service type
 interface Service {
+  is_public: boolean | undefined
   id: number;
   name: string;
   description: string;
@@ -127,6 +128,7 @@ interface MiniService {
   run_time: number
   is_enhanced: boolean
   created_at: string
+  is_public: boolean
 }
 
 // Define the process type from API
@@ -536,9 +538,7 @@ export default function DashboardPage() {
             }
 
             // Get color based on service type
-            const color = getColorForService(service.input_type, service.output_type)
-
-            // Fetch favorite count and status for this service
+            const color = getColorForService(service.input_type, service.output_type)            // Fetch favorite count and status for this service
             const [favoriteCount, isFavorited] = await Promise.all([
               getFavoriteCount(service.id),
               checkIfFavorited(service.id)
@@ -565,6 +565,7 @@ export default function DashboardPage() {
               is_enhanced: service.is_enhanced,
               created_at: service.created_at,
               favorite_count: favoriteCount, // Add favorite count for sorting
+              is_public: service.is_public, // Add privacy status
             }
           })
 
@@ -674,9 +675,7 @@ export default function DashboardPage() {
             }
 
             // Get color based on service type
-            const color = getColorForService(service.input_type, service.output_type)
-
-            // Fetch favorite count and state for this service (same as regular services)
+            const color = getColorForService(service.input_type, service.output_type)            // Fetch favorite count and state for this service (same as regular services)
             const [favoriteCount, isFavorited] = await Promise.all([
               getFavoriteCount(service.id),
               checkIfFavorited(service.id)
@@ -702,6 +701,7 @@ export default function DashboardPage() {
               is_enhanced: service.is_enhanced,
               created_at: service.created_at,
               favorite_count: favoriteCount, // Add favorite count for consistency with other views
+              is_public: service.is_public
             }
             
             console.log("Formatted favorite service:", formattedService)
@@ -1304,14 +1304,28 @@ export default function DashboardPage() {
                     {getFilteredMiniServices().length}
                   </span>
                 </h2>
-                
-                {/* Create New Mini Service Button - now positioned at the rightmost */}
+                  {/* Create New Mini Service Button - now positioned at the rightmost */}
                 <Button
                   onClick={() => router.push("/apps/create")}
-                  className="bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white border-0 shadow-lg transition-all duration-200 hover:shadow-purple-500/25 whitespace-nowrap"
+                  className="group relative overflow-hidden bg-gradient-to-r from-purple-600 via-purple-700 to-indigo-600 text-white font-medium rounded-xl px-6 py-6 transition-all duration-500 hover:scale-[1.02] hover:shadow-2xl hover:shadow-purple-500/25 border-2 border-transparent hover:bg-transparent hover:border-transparent whitespace-nowrap"
                 >
-                  <Sparkles className="h-4 w-4 mr-2" />
-                  Create New Mini Service
+                  {/* Gradient border overlay for hover state */}
+                  <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-purple-600 via-purple-700 to-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                  <div className="absolute inset-[2px] rounded-[10px] bg-black/90 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                  
+                  {/* Animated shimmer effect */}
+                  <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/5 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
+                  
+                  {/* Content */}
+                  <div className="relative flex items-center justify-center z-10">
+                    <div className="bg-white/10 rounded-lg p-1.5 mr-3 group-hover:bg-purple-500/20 transition-colors duration-500">
+                      <Sparkles className="h-4 w-4 transition-colors duration-500 group-hover:text-purple-300" />
+                    </div>
+                    <span className="text-sm font-semibold tracking-wide transition-colors duration-500 group-hover:text-purple-200">Create New Mini Service</span>
+                  </div>
+                  
+                  {/* Enhanced glow effect */}
+                  <div className="absolute inset-0 rounded-xl bg-purple-500/20 blur-md group-hover:bg-purple-400/40 group-hover:blur-lg transition-all duration-500 -z-10"></div>
                 </Button>
               </div>  
               {/* Reorganized layout: Search & Filters on left, Sort & View controls on right */}
@@ -1595,8 +1609,7 @@ export default function DashboardPage() {
                           className="h-[320px] bg-black/40 backdrop-blur-sm rounded-xl border border-purple-900/30 animate-pulse"
                         />
                       ))
-                    ) : (
-                      getFilteredMiniServices().map((service) => (
+                    ) : (                      getFilteredMiniServices().map((service) => (
                         <MiniAppCard
                           key={`mini-service-${service.id}`}
                           title={service.name}
@@ -1611,6 +1624,7 @@ export default function DashboardPage() {
                           is_enhanced={service.is_enhanced}
                           requiresApiKey={service.requiresApiKey}
                           owner_username={service.owner_username}
+                          is_public={service.is_public}
                         />
                       ))
                     )}
