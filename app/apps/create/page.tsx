@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from "next/navigation"
 import { NavBar } from "@/components/nav-bar"
 import { Button } from "@/components/ui/button"
@@ -153,6 +153,16 @@ export default function ServiceCreationPage() {
   const [currentWorkflowState, setCurrentWorkflowState] = useState<WorkflowState | null>(null)
   const [serviceSpecification, setServiceSpecification] = useState<ServiceSpecification | null>(null)
   const [readyForApproval, setReadyForApproval] = useState(false)
+
+  // Ref for chat messages container for auto-scroll
+  const chatMessagesRef = useRef<HTMLDivElement>(null)
+
+  // Auto-scroll to bottom when new messages are added
+  useEffect(() => {
+    if (chatMessagesRef.current) {
+      chatMessagesRef.current.scrollTop = chatMessagesRef.current.scrollHeight
+    }
+  }, [chatHistory, isTyping])
 
   // Authentication check
   useEffect(() => {
@@ -593,10 +603,8 @@ export default function ServiceCreationPage() {
                           </Button>
                         </div>
                       </div>
-                    </div>
-
-                    {/* Chat Messages */}
-                    <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                    </div>                    {/* Chat Messages */}
+                    <div className="flex-1 overflow-y-auto p-4 space-y-4" ref={chatMessagesRef}>
                       {chatHistory.map((message) => (
                         <div 
                           key={message.id}
