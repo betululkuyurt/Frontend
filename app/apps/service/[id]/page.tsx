@@ -547,6 +547,18 @@ export default function ServicePage() {
 
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
+  // Handle clicking outside sidebar to close it
+  const handleMainContentClick = useCallback(() => {
+    if (sidebarOpen) {
+      setSidebarOpen(false)
+    }
+  }, [sidebarOpen])
+
+  // Prevent sidebar from closing when clicking inside it
+  const handleSidebarClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation()
+  }, [])
+
   useEffect(() => {
     const fetchAgentTypes = async () => {
       try {
@@ -2510,6 +2522,7 @@ export default function ServicePage() {
 
       <main
         className={`pt-16 min-h-screen flex transition-all duration-500 ${codePanelOpen ? "mr-96 lg:mr-[500px]" : ""}`}
+        onClick={handleMainContentClick}
       >
         {/* Main Content Area */}
         <div className={`flex-1 flex flex-col transition-all duration-300 ${sidebarOpen ? "sm:mr-80 xl:mr-96" : ""}`}>
@@ -2636,7 +2649,7 @@ export default function ServicePage() {
           ) : (
             /* Chat Mode */
             <div className="flex-1 p-4 lg:p-6 pt-2 lg:pt-4">
-              <div className="bg-black/40 backdrop-blur-sm rounded-2xl border border-purple-900/30 flex flex-col h-[calc(100vh-200px)]">
+              <div className="bg-black/40 backdrop-blur-sm rounded-2xl border border-purple-900/30 flex flex-col h-[calc(100vh-80px)]">
                 {/* Chat Messages Area */}
                 <div className="flex-1 overflow-y-auto p-6 scroll-smooth" ref={chatMessagesRef}>
                   <div className="max-w-4xl mx-auto">
@@ -2780,15 +2793,7 @@ export default function ServicePage() {
                         </div>
                       )}
 
-                      {/* Transcription info */}
-                      {checkIfTranscriptionService() && !uploadedFile && (
-                        <div className="bg-indigo-950/30 border border-indigo-800/30 rounded-lg p-3 text-indigo-200 mb-4">
-                          <p className="text-xs text-indigo-300/80 flex items-center">
-                            <LucideMic className="h-3 w-3 mr-2" />
-                            Upload an audio or video file to get started with transcription
-                          </p>
-                        </div>
-                      )}
+                      
 
                       {/* Chat Input Row */}
                       <div className="flex items-end space-x-3">
@@ -2838,9 +2843,10 @@ export default function ServicePage() {
 
         {/* Right Sidebar - Settings Panel */}
         <div
-          className={`fixed top-32 right-0 h-[calc(100vh-128px)] ${
+          className={`fixed top-16 right-0 h-[calc(100vh-64px)] ${
             sidebarOpen ? "w-full sm:w-80 xl:w-96" : "w-0"
           } border-l border-purple-900/30 transition-all duration-300 ease-in-out overflow-hidden bg-black/40 backdrop-blur-md z-50 sm:z-30`}
+          onClick={handleSidebarClick}
         >
           {sidebarOpen && (
             <div className="h-full overflow-y-auto p-6 space-y-8">
