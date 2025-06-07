@@ -32,10 +32,10 @@ import {
   Copy,
   Check,
   MessageSquare,
-  Settings,
   X,
   Menu,
   Info,
+  Code,
 } from "lucide-react"
 import { toast } from "@/components/ui/use-toast"
 import { deleteMiniService } from "@/lib/services"
@@ -43,6 +43,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { decodeJWT, getAccessToken } from "@/lib/auth"
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter"
+import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism"
+import { TypingCodePanel } from "@/components/typing-code-panel"
 
 interface MiniService {
   id: number
@@ -107,6 +110,366 @@ const getAgentTypeConfig = (agentType: string, agentTypesInfo: AgentTypeInfo[]):
   return agentTypesInfo.find((info) => info.type.toLowerCase() === normalizedType) || null
 }
 
+// Code detection and parsing utilities
+const detectCodeBlocks = (text: string) => {
+  // Pattern for fenced code blocks (```language\ncode\n```)
+  const fencedCodeBlockPattern = /```(\w+)?\n?([\s\S]*?)```/g
+  // Pattern for inline code (`code`)
+  const inlineCodePattern = /`([^`\n]+)`/g
+  // Pattern for code without fences (common programming constructs)
+  const bareCodePattern =
+    /^(def |class |function |const |let |var |import |from |#include |<\?php|<!DOCTYPE|<html|<script)/gm
+
+  const codeBlocks: Array<{
+    type: "fenced" | "inline" | "bare"
+    language?: string
+    code: string
+    startIndex: number
+    endIndex: number
+  }> = []
+
+  // Find fenced code blocks
+  let match
+  while ((match = fencedCodeBlockPattern.exec(text)) !== null) {
+    codeBlocks.push({
+      type: "fenced",
+      language: match[1] || "text",
+      code: match[2].trim(),
+      startIndex: match.index,
+      endIndex: match.index + match[0].length,
+    })
+  }
+
+  // Find inline code (only if no fenced blocks found)
+  if (codeBlocks.length === 0) {
+    fencedCodeBlockPattern.lastIndex = 0
+    while ((match = inlineCodePattern.exec(text)) !== null) {
+      codeBlocks.push({
+        type: "inline",
+        code: match[1],
+        startIndex: match.index,
+        endIndex: match.index + match[0].length,
+      })
+    }
+  }
+
+  // Detect bare code patterns (for responses that contain code without markdown formatting)
+  if (codeBlocks.length === 0 && bareCodePattern.test(text)) {
+    codeBlocks.push({
+      type: "bare",
+      language: detectLanguage(text),
+      code: text,
+      startIndex: 0,
+      endIndex: text.length,
+    })
+  }
+
+  return codeBlocks
+}
+
+const detectLanguage = (code: string): string => {
+  const trimmedCode = code.trim().toLowerCase()
+
+  // JavaScript/TypeScript
+  if (
+    trimmedCode.includes("function ") ||
+    trimmedCode.includes("const ") ||
+    trimmedCode.includes("let ") ||
+    trimmedCode.includes("var ") ||
+    trimmedCode.includes("import ") ||
+    trimmedCode.includes("export ") ||
+    trimmedCode.includes("=>") ||
+    trimmedCode.includes("console.log")
+  ) {
+    return trimmedCode.includes("interface ") || trimmedCode.includes("type ") ? "typescript" : "javascript"
+  }
+
+  // Python
+  if (
+    trimmedCode.includes("def ") ||
+    trimmedCode.includes("import ") ||
+    trimmedCode.includes("class ") ||
+    trimmedCode.includes("print(") ||
+    trimmedCode.includes("if __name__")
+  ) {
+    return "python"
+  }
+
+  // Java
+  if (
+    trimmedCode.includes("public class ") ||
+    trimmedCode.includes("public static void main") ||
+    trimmedCode.includes("System.out.println")
+  ) {
+    return "java"
+  }
+
+  // C/C++
+  if (
+    trimmedCode.includes("#include") ||
+    trimmedCode.includes("int main(") ||
+    trimmedCode.includes("printf(") ||
+    trimmedCode.includes("cout <<")
+  ) {
+    return trimmedCode.includes("cout") ? "cpp" : "c"
+  }
+
+  // HTML
+  if (
+    trimmedCode.includes("<!doctype") ||
+    trimmedCode.includes("<html") ||
+    trimmedCode.includes("<div") ||
+    trimmedCode.includes("<script")
+  ) {
+    return "html"
+  }
+
+  // CSS
+  if (
+    trimmedCode.includes("{") &&
+    trimmedCode.includes("}") &&
+    (trimmedCode.includes("color:") ||
+      trimmedCode.includes("background:") ||
+      trimmedCode.includes("margin:") ||
+      trimmedCode.includes("padding:"))
+  ) {
+    return "css"
+  }
+
+  // SQL
+  if (
+    trimmedCode.includes("select ") ||
+    trimmedCode.includes("insert ") ||
+    trimmedCode.includes("update ") ||
+    trimmedCode.includes("delete ") ||
+    trimmedCode.includes("create table")
+  ) {
+    return "sql"
+  }
+
+  // JSON
+  if (
+    (trimmedCode.startsWith("{") && trimmedCode.endsWith("}")) ||
+    (trimmedCode.startsWith("[") && trimmedCode.endsWith("]"))
+  ) {
+    try {
+      JSON.parse(code)
+      return "json"
+    } catch (e) {
+      // Not valid JSON
+    }
+  }
+
+  // PHP
+  if (trimmedCode.includes("<?php") || (trimmedCode.includes("$") && trimmedCode.includes("->"))) {
+    return "php"
+  }
+
+  // Bash/Shell
+  if (
+    trimmedCode.includes("#!/bin/bash") ||
+    trimmedCode.includes("#!/bin/sh") ||
+    trimmedCode.includes("echo ") ||
+    trimmedCode.includes("cd ") ||
+    (trimmedCode.includes("$") && trimmedCode.includes("|"))
+  ) {
+    return "bash"
+  }
+
+  return "text"
+}
+
+// CodeBlock component for rendering code with syntax highlighting
+interface CodeBlockProps {
+  code: string
+  language?: string
+  isInline?: boolean
+  messageId: string
+  blockIndex?: number
+  onCodeGenerated?: (code: string, language: string) => void
+}
+
+const CodeBlock: React.FC<CodeBlockProps> = ({
+  code,
+  language = "text",
+  isInline = false,
+  messageId,
+  blockIndex = 0,
+  onCodeGenerated,
+}) => {
+  const [copied, setCopied] = useState(false)
+  const copyKey = `code-${messageId}-${blockIndex}`
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(code)
+      setCopied(true)
+      toast({
+        title: "Copied!",
+        description: "Code copied to clipboard",
+      })
+      setTimeout(() => setCopied(false), 2000)
+    } catch (err) {
+      console.error("Failed to copy code: ", err)
+      toast({
+        title: "Copy failed",
+        description: "Failed to copy code to clipboard",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleOpenInPanel = () => {
+    if (onCodeGenerated) {
+      onCodeGenerated(code, language)
+    }
+  }
+
+  if (isInline) {
+    return (
+      <code className="bg-purple-900/30 text-purple-200 px-2 py-1 rounded text-sm font-mono border border-purple-800/30">
+        {code}
+      </code>
+    )
+  }
+
+  return (
+    <div className="relative group bg-zinc-900/50 rounded-lg border border-purple-900/30 overflow-hidden my-4">
+      {/* Header with language and action buttons */}
+      <div className="flex items-center justify-between bg-zinc-800/80 px-4 py-2 border-b border-purple-900/20">
+        <div className="flex items-center space-x-2">
+          <Code className="h-4 w-4 text-purple-400" />
+          <span className="text-sm font-medium text-purple-300 capitalize">
+            {language === "text" ? "Code" : language}
+          </span>
+        </div>
+        <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleOpenInPanel}
+            className="p-1 h-6 w-6 text-gray-400 hover:text-purple-400 hover:bg-purple-600/20 transition-colors"
+            title="Open in side panel"
+          >
+            <Code className="h-3 w-3" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleCopy}
+            className="p-1 h-6 w-6 text-gray-400 hover:text-purple-400 hover:bg-purple-600/20 transition-colors"
+            title="Copy code"
+          >
+            {copied ? <Check className="h-3 w-3 text-green-400" /> : <Copy className="h-3 w-3" />}
+          </Button>
+        </div>
+      </div>
+
+      {/* Code content */}
+      <div className="relative">
+        <SyntaxHighlighter
+          language={language}
+          style={vscDarkPlus}
+          customStyle={{
+            margin: 0,
+            padding: "16px",
+            background: "transparent",
+            fontSize: "14px",
+            lineHeight: "1.5",
+          }}
+          showLineNumbers={code.split("\n").length > 3}
+          wrapLines={true}
+          wrapLongLines={true}
+        >
+          {code}
+        </SyntaxHighlighter>
+
+        {/* Gradient overlay for better visual separation */}
+        <div className="absolute inset-0 pointer-events-none bg-gradient-to-r from-transparent via-transparent to-purple-900/5"></div>
+      </div>
+    </div>
+  )
+}
+
+// Enhanced text renderer that detects and renders code blocks
+const EnhancedTextRenderer: React.FC<{
+  text: string
+  messageId: string
+  className?: string
+  onCodeGenerated?: (code: string, language: string) => void
+}> = ({ text, messageId, className = "", onCodeGenerated }) => {
+  const codeBlocks = detectCodeBlocks(text)
+
+  if (codeBlocks.length === 0) {
+    return <div className={`whitespace-pre-wrap ${className}`}>{text}</div>
+  }
+
+  // If the entire text is a single code block, render it as such
+  if (
+    codeBlocks.length === 1 &&
+    codeBlocks[0].type === "bare" &&
+    codeBlocks[0].startIndex === 0 &&
+    codeBlocks[0].endIndex === text.length
+  ) {
+    return (
+      <CodeBlock
+        code={codeBlocks[0].code}
+        language={codeBlocks[0].language}
+        messageId={messageId}
+        blockIndex={0}
+        onCodeGenerated={onCodeGenerated}
+      />
+    )
+  }
+
+  // Render mixed content with code blocks
+  let lastIndex = 0
+  const elements: React.ReactNode[] = []
+
+  codeBlocks.forEach((block, index) => {
+    // Add text before this code block
+    if (block.startIndex > lastIndex) {
+      const textBefore = text.substring(lastIndex, block.startIndex)
+      if (textBefore.trim()) {
+        elements.push(
+          <div key={`text-${index}`} className={`whitespace-pre-wrap ${className}`}>
+            {textBefore}
+          </div>,
+        )
+      }
+    }
+
+    // Add the code block
+    elements.push(
+      <CodeBlock
+        key={`code-${index}`}
+        code={block.code}
+        language={block.language}
+        isInline={block.type === "inline"}
+        messageId={messageId}
+        blockIndex={index}
+        onCodeGenerated={onCodeGenerated}
+      />,
+    )
+
+    lastIndex = block.endIndex
+  })
+
+  // Add remaining text after the last code block
+  if (lastIndex < text.length) {
+    const textAfter = text.substring(lastIndex)
+    if (textAfter.trim()) {
+      elements.push(
+        <div key="text-final" className={`whitespace-pre-wrap ${className}`}>
+          {textAfter}
+        </div>,
+      )
+    }
+  }
+
+  return <div className="space-y-2">{elements}</div>
+}
+
 export default function ServicePage() {
   const router = useRouter()
   const params = useParams()
@@ -151,6 +514,17 @@ export default function ServicePage() {
 
   const [agentTypesInfo, setAgentTypesInfo] = useState<AgentTypeInfo[]>([])
   const [agentTypesLoading, setAgentTypesLoading] = useState(true)
+
+  // Code panel state
+  const [codePanelOpen, setCodePanelOpen] = useState(false)
+  const [currentCode, setCurrentCode] = useState("")
+  const [currentLanguage, setCurrentLanguage] = useState("text")
+
+  const handleCodeGenerated = (code: string, language: string) => {
+    setCurrentCode(code)
+    setCurrentLanguage(language)
+    setCodePanelOpen(true)
+  }
 
   useEffect(() => {
     if (chatMessagesRef.current) {
@@ -1208,7 +1582,7 @@ export default function ServicePage() {
 
     return (
       <div className="flex items-end space-x-2">
-        <div className="flex-1">
+        <div className="flex-1 w-full">
           <Textarea
             value={userInput}
             onChange={(e) => setUserInput(e.target.value)}
@@ -1488,7 +1862,7 @@ export default function ServicePage() {
         const { token, currentUserId } = getAuthHeaders()
 
         const agentId = getRAGAgentId()
-        
+
         if (!agentId) {
           console.error("RAG agent ID not found")
           setDocumentCollection((prev) => ({ ...prev, isLoading: false }))
@@ -1508,7 +1882,7 @@ export default function ServicePage() {
           console.error("Failed to fetch document collection:", {
             status: response.status,
             statusText: response.statusText,
-            errorText
+            errorText,
           })
           setDocumentCollection((prev) => ({ ...prev, isLoading: false }))
           return
@@ -1557,17 +1931,17 @@ export default function ServicePage() {
     if (!service?.workflow?.nodes) {
       return null
     }
-    
+
     for (const [nodeId, node] of Object.entries(service.workflow.nodes)) {
       const agentId = node.agent_id
       const agentDetail = agentDetails[agentId]
       const agentType = agentDetail?.agent_type?.toLowerCase() || node.agent_type?.toLowerCase() || ""
-      
+
       if (agentType === "rag") {
         return agentId
       }
     }
-    
+
     return null
   }
 
@@ -1589,7 +1963,9 @@ export default function ServicePage() {
         description: "Failed to copy content to clipboard",
         variant: "destructive",
       })
-    }  }
+    }
+  }
+
   // Function to extract token usage data from message result
   const extractTokenUsage = (result: any) => {
     if (!result) return null
@@ -1602,33 +1978,34 @@ export default function ServicePage() {
     const promptTokens = tokenUsage.prompt_tokens || 0
     const completionTokens = tokenUsage.completion_tokens || 0
     const totalTokens = tokenUsage.total_tokens || promptTokens + completionTokens
-    
+
     // Try to get cost from multiple locations
-    let estimatedCostUsd = tokenUsage.estimated_cost_usd || 
-                result.estimated_cost_usd || 
-                result.pricing?.estimated_cost_usd ||
-                result.metadata?.estimated_cost_usd || 
-                result.cost_usd || 
-                tokenUsage.cost_usd
+    let estimatedCostUsd =
+      tokenUsage.estimated_cost_usd ||
+      result.estimated_cost_usd ||
+      result.pricing?.estimated_cost_usd ||
+      result.metadata?.estimated_cost_usd ||
+      result.cost_usd ||
+      tokenUsage.cost_usd
 
     // If no cost provided, estimate based on common pricing (rough estimate for GPT-4-turbo)
     if (!estimatedCostUsd && totalTokens > 0) {
       // Very rough estimate: $0.01 per 1K prompt tokens, $0.03 per 1K completion tokens
-      estimatedCostUsd = (promptTokens * 0.01 / 1000) + (completionTokens * 0.03 / 1000)
+      estimatedCostUsd = (promptTokens * 0.01) / 1000 + (completionTokens * 0.03) / 1000
     }
 
     return {
       prompt_tokens: promptTokens,
       completion_tokens: completionTokens,
       total_tokens: totalTokens,
-      estimated_cost_usd: estimatedCostUsd
+      estimated_cost_usd: estimatedCostUsd,
     }
   }
 
   // Component for the token usage info button
   const TokenUsageInfoButton = ({ result, messageId }: { result: any; messageId: string }) => {
     const tokenUsage = extractTokenUsage(result)
-    
+
     if (!tokenUsage || tokenUsage.total_tokens === 0) return null
 
     return (
@@ -1644,10 +2021,7 @@ export default function ServicePage() {
               <Info className="h-3 w-3" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent 
-            side="left" 
-            className="bg-black/90 border border-purple-900/50 text-white p-3 max-w-xs"
-          >
+          <TooltipContent side="left" className="bg-black/90 border border-purple-900/50 text-white p-3 max-w-xs">
             <div className="space-y-2">
               <div className="font-medium text-purple-300 text-sm mb-2">Token Usage</div>
               <div className="space-y-1 text-xs">
@@ -1661,15 +2035,18 @@ export default function ServicePage() {
                 </div>
                 <div className="flex justify-between border-t border-gray-600 pt-1">
                   <span className="text-gray-300 font-medium">Total Tokens:</span>
-                  <span className="text-purple-300 font-mono font-medium">{tokenUsage.total_tokens.toLocaleString()}</span>
-                </div>                {tokenUsage.estimated_cost_usd && tokenUsage.estimated_cost_usd > 0 && (
+                  <span className="text-purple-300 font-mono font-medium">
+                    {tokenUsage.total_tokens.toLocaleString()}
+                  </span>
+                </div>
+                {tokenUsage.estimated_cost_usd && tokenUsage.estimated_cost_usd > 0 && (
                   <div className="flex justify-between border-t border-gray-600 pt-1">
                     <span className="text-gray-300 font-medium">Estimated Cost:</span>
                     <span className="text-green-400 font-mono font-medium">
-                      ${tokenUsage.estimated_cost_usd < 0.000001 
-                        ? '<$0.000001' 
-                        : tokenUsage.estimated_cost_usd.toFixed(6)
-                      }
+                      $
+                      {tokenUsage.estimated_cost_usd < 0.000001
+                        ? "<$0.000001"
+                        : tokenUsage.estimated_cost_usd.toFixed(6)}
                     </span>
                   </div>
                 )}
@@ -1680,6 +2057,7 @@ export default function ServicePage() {
       </TooltipProvider>
     )
   }
+
   const renderOutputForMessage = (result: any, messageId: string) => {
     if (!result) return null
 
@@ -1690,8 +2068,13 @@ export default function ServicePage() {
             <h3 className="text-lg font-medium text-white">Document Analysis</h3>
             <TokenUsageInfoButton result={result} messageId={messageId} />
           </div>
-          <div className="whitespace-pre-wrap text-gray-300 mb-4 p-4 bg-black/30 rounded-lg border border-purple-900/20 relative group">
-            {result.answer || result.response || result.output || "No response available"}
+          <div className="p-4 bg-black/30 rounded-lg border border-purple-900/20 relative group">
+            <EnhancedTextRenderer
+              text={result.answer || result.response || result.output || "No response available"}
+              messageId={messageId}
+              className="text-gray-300"
+              onCodeGenerated={handleCodeGenerated}
+            />
             <button
               onClick={() =>
                 copyToClipboard(result.answer || result.response || result.output || "", `text-${messageId}`)
@@ -1710,7 +2093,8 @@ export default function ServicePage() {
       )
     }
 
-    switch (service?.output_type) {      case "text":
+    switch (service?.output_type) {
+      case "text":
         const textOutput = result.final_output || result.output || result.results?.[0]?.output
         return (
           <div className="w-full">
@@ -1718,8 +2102,14 @@ export default function ServicePage() {
               <h3 className="text-lg font-medium text-white">Result</h3>
               <TokenUsageInfoButton result={result} messageId={messageId} />
             </div>
-            <div className="whitespace-pre-wrap text-gray-300 p-4 bg-black/30 rounded-lg border border-purple-900/20 relative group">
-              {textOutput || "No output available"}              <button
+            <div className="p-4 bg-black/30 rounded-lg border border-purple-900/20 relative group">
+              <EnhancedTextRenderer
+                text={textOutput || "No output available"}
+                messageId={messageId}
+                className="text-gray-300"
+                onCodeGenerated={handleCodeGenerated}
+              />
+              <button
                 onClick={() => copyToClipboard(textOutput || "", `text-${messageId}`)}
                 className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 h-6 w-6 rounded bg-purple-600/20 hover:bg-purple-600/40 flex items-center justify-center"
                 title="Copy text"
@@ -1795,7 +2185,8 @@ export default function ServicePage() {
                   </svg>
                   No audio output available
                 </p>
-              </div>            )}
+              </div>
+            )}
           </div>
         )
 
@@ -1818,7 +2209,8 @@ export default function ServicePage() {
                     }
                     alt="Generated image"
                     className="max-w-full rounded-lg shadow-lg max-h-[500px]"
-                  />                  <button
+                  />
+                  <button
                     onClick={() => copyToClipboard(imageUrl, `image-${messageId}`)}
                     className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 h-6 w-6 rounded bg-black/60 hover:bg-black/80 flex items-center justify-center"
                     title="Copy image URL"
@@ -1853,7 +2245,8 @@ export default function ServicePage() {
                   Your browser does not support the video element.
                 </video>
               </div>
-            )}          </div>
+            )}
+          </div>
         )
 
       default:
@@ -1866,7 +2259,8 @@ export default function ServicePage() {
             <div className="relative group">
               <pre className="text-xs text-gray-400 overflow-auto max-h-[400px] p-4 bg-black/30 rounded-lg border border-purple-900/20">
                 {JSON.stringify(result, null, 2)}
-              </pre>              <button
+              </pre>
+              <button
                 onClick={() => copyToClipboard(JSON.stringify(result, null, 2), `json-${messageId}`)}
                 className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 h-6 w-6 rounded bg-purple-600/20 hover:bg-purple-600/40 flex items-center justify-center"
                 title="Copy JSON"
@@ -1947,8 +2341,7 @@ export default function ServicePage() {
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(120,119,198,0.1),transparent_50%)]" />
         <div className="absolute inset-0 bg-[linear-gradient(45deg,transparent_25%,rgba(120,119,198,0.02)_50%,transparent_75%)]" />
 
-        <NavBar />
-        <main className="pt-16 h-[calc(100vh-64px)] flex items-center justify-center">
+        <main className="pt-8 h-[calc(100vh-32px)] flex items-center justify-center">
           <Loader2 className="h-8 w-8 text-purple-400 animate-spin" />
         </main>
       </div>
@@ -1961,8 +2354,7 @@ export default function ServicePage() {
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(120,119,198,0.1),transparent_50%)]" />
         <div className="absolute inset-0 bg-[linear-gradient(45deg,transparent_25%,rgba(120,119,198,0.02)_50%,transparent_75%)]" />
 
-        <NavBar />
-        <main className="pt-16 h-[calc(100vh-64px)] flex items-center justify-center">
+        <main className="pt-8 h-[calc(100vh-32px)] flex items-center justify-center">
           <div className="max-w-md mx-auto p-6">
             <Card className="bg-black/40 backdrop-blur-sm border border-purple-900/30 p-6">
               <h2 className="text-2xl font-bold text-white mb-4">Service Not Found</h2>
@@ -1986,10 +2378,17 @@ export default function ServicePage() {
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(120,119,198,0.1),transparent_50%)]" />
       <div className="absolute inset-0 bg-[linear-gradient(45deg,transparent_25%,rgba(120,119,198,0.02)_50%,transparent_75%)]" />
 
-      <NavBar />
+      {/* Typing Code Panel */}
+      <TypingCodePanel
+        isOpen={codePanelOpen}
+        onClose={() => setCodePanelOpen(false)}
+        code={currentCode}
+        language={currentLanguage}
+        title="Generated Code"
+      />
 
-      {/* Fixed header with service info and controls - Always visible */}
-      <div className="fixed top-16 left-0 right-0 z-40 bg-black/20 backdrop-blur-md border-b border-purple-900/20">
+      {/* Fixed header with service info and controls - Now at top since no navbar */}
+      <div className="fixed top-0 left-0 right-0 z-40 bg-black/20 backdrop-blur-md border-b border-purple-900/20">
         <div className="px-4 py-3">
           <div className="flex items-center justify-between max-w-7xl mx-auto">
             <div className="flex items-center space-x-4">
@@ -2055,13 +2454,15 @@ export default function ServicePage() {
         </div>
       </div>
 
-      <main className="pt-32 min-h-screen flex transition-all duration-500">
+      <main
+        className={`pt-16 min-h-screen flex transition-all duration-500 ${codePanelOpen ? "mr-96 lg:mr-[500px]" : ""}`}
+      >
         {/* Main Content Area */}
         <div className={`flex-1 flex flex-col transition-all duration-300 ${sidebarOpen ? "sm:mr-80 xl:mr-96" : ""}`}>
           {/* Conditional Layout: Centered Input or Chat Interface */}
           {chatHistory.length === 0 ? (
             /* Initial State - Centered Input */
-            <div className="flex-1 flex items-center justify-center p-4 lg:p-6 min-h-[calc(100vh-200px)]">
+            <div className="flex-1 flex items-center justify-center p-4 lg:p-6 min-h-[calc(100vh-100px)]">
               <div className="w-full max-w-2xl">
                 {/* Centered Service Header - Only show when no chat history */}
                 {chatHistory.length === 0 && (
@@ -2366,12 +2767,14 @@ export default function ServicePage() {
             </div>
           )}
 
-           {/* Workflow Visualization - Always visible at bottom */}
-           <div className={`p-4 lg:p-6 pt-0 transition-all duration-300 ${sidebarOpen ? "hidden sm:block" : ""}`}>
+          {/* Workflow Visualization - Always visible at bottom */}
+          <div className={`p-4 lg:p-6 pt-0 transition-all duration-300 ${sidebarOpen ? "hidden sm:block" : ""}`}>
             <div className="bg-black/30 backdrop-blur-sm rounded-xl border border-purple-900/20 p-3 lg:p-4">
               <h3 className="text-lg font-semibold text-white mb-3 text-center">Workflow</h3>
               <div className="overflow-x-auto">
-                <div className={`flex justify-center min-w-fit origin-center transition-all duration-300 ${sidebarOpen ? 'scale-75' : 'scale-75 lg:scale-90'}`}>
+                <div
+                  className={`flex justify-center min-w-fit origin-center transition-all duration-300 ${sidebarOpen ? "scale-75" : "scale-75 lg:scale-90"}`}
+                >
                   {renderWorkflow()}
                 </div>
               </div>
@@ -2382,9 +2785,7 @@ export default function ServicePage() {
         {/* Right Sidebar - Settings Panel */}
         <div
           className={`fixed top-32 right-0 h-[calc(100vh-128px)] ${
-            sidebarOpen 
-              ? "w-full sm:w-80 xl:w-96" 
-              : "w-0"
+            sidebarOpen ? "w-full sm:w-80 xl:w-96" : "w-0"
           } border-l border-purple-900/30 transition-all duration-300 ease-in-out overflow-hidden bg-black/40 backdrop-blur-md z-50 sm:z-30`}
         >
           {sidebarOpen && (
@@ -2496,7 +2897,12 @@ export default function ServicePage() {
                   {!areAllRequiredApiKeysSelected && (
                     <div className="mt-6 bg-amber-900/20 border border-amber-700/30 rounded-lg p-4">
                       <div className="flex items-center space-x-2">
-                        <svg className="w-4 h-4 text-amber-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg
+                          className="w-4 h-4 text-amber-400 flex-shrink-0"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
                           <path
                             strokeLinecap="round"
                             strokeLinejoin="round"
@@ -2550,7 +2956,8 @@ export default function ServicePage() {
                   <h2 className="text-xl font-bold text-white">Analytics</h2>
                 </div>
 
-                <div className="space-y-4">                  <div className="bg-black/30 rounded-xl p-4 border border-purple-900/20 backdrop-blur-sm">
+                <div className="space-y-4">
+                  <div className="bg-black/30 rounded-xl p-4 border border-purple-900/20 backdrop-blur-sm">
                     <div className="text-purple-300 text-sm mb-2 font-medium">Total Runs</div>
                     <div className="text-white text-3xl font-bold mb-1">
                       {service?.run_time !== undefined && !isNaN(service.run_time) && service.run_time > 0
@@ -2564,17 +2971,15 @@ export default function ServicePage() {
                     </div>
                   </div>
 
-                    {service?.average_token_usage?.avg_pricing?.estimated_cost_usd && 
-                     service.average_token_usage.avg_pricing.estimated_cost_usd > 0 && (
-                    <div className="bg-black/30 rounded-xl p-4 border border-purple-900/20 backdrop-blur-sm">
-                      <div className="text-purple-300 text-sm mb-2 font-medium">Average API Cost</div>
-                      <div className="text-white text-3xl font-bold mb-1">
-                      ${service.average_token_usage.avg_pricing.estimated_cost_usd.toFixed(6)}
+                  {service?.average_token_usage?.avg_pricing?.estimated_cost_usd &&
+                    service.average_token_usage.avg_pricing.estimated_cost_usd > 0 && (
+                      <div className="bg-black/30 rounded-xl p-4 border border-purple-900/20 backdrop-blur-sm">
+                        <div className="text-purple-300 text-sm mb-2 font-medium">Average API Cost</div>
+                        <div className="text-white text-3xl font-bold mb-1">
+                          ${service.average_token_usage.avg_pricing.estimated_cost_usd.toFixed(6)}
+                        </div>
+                        <div className="text-gray-400 text-xs">Per execution</div>
                       </div>
-                      <div className="text-gray-400 text-xs">
-                      Per execution
-                      </div>
-                    </div>
                     )}
 
                   {service?.average_token_usage && (
@@ -2610,14 +3015,20 @@ export default function ServicePage() {
                             ? Math.round(service.average_token_usage.total_tokens).toLocaleString()
                             : "—"}
                         </div>
-                      </div>                    </div>
+                      </div>
+                    </div>
                   )}
                 </div>
 
                 {/* Analytics Disclaimer */}
                 <div className="mt-6 p-4 bg-gray-900/20 border border-gray-700/30 rounded-lg">
                   <div className="flex items-start space-x-2">
-                    <svg className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg
+                      className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
                       <path
                         strokeLinecap="round"
                         strokeLinejoin="round"
@@ -2627,15 +3038,14 @@ export default function ServicePage() {
                     </svg>
                     <div>
                       <p className="text-gray-300 text-xs leading-relaxed">
-                        <span className="font-medium">Disclaimer:</span> These statistics represent average usage from all users of this service. 
-                        Actual token consumption and associated costs may vary significantly based on your specific input complexity and length.
+                        <span className="font-medium">Disclaimer:</span> These statistics represent average usage from
+                        all users of this service. Actual token consumption and associated costs may vary significantly
+                        based on your specific input complexity and length.
                       </p>
                     </div>
                   </div>
                 </div>
               </div>
-
-             
             </div>
           )}
         </div>

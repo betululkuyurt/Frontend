@@ -9,7 +9,11 @@ import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 
-export function NavBar() {
+interface NavBarProps {
+  hideOnRoutes?: string[]
+}
+
+export function NavBar({ hideOnRoutes = [] }: NavBarProps) {
   const pathname = usePathname()
   const router = useRouter()
   const { isAuthenticated, isLoading, signOut, userId } = useAuth()
@@ -18,6 +22,13 @@ export function NavBar() {
     showUserNav: false,
     checkCount: 0
   })
+
+  // Hide navbar on specific routes
+  const shouldHideNavbar = hideOnRoutes.some(route => pathname === route || pathname.startsWith(route))
+  
+  if (shouldHideNavbar) {
+    return null
+  }
 
   // Güvenilir bir isAuthenticated kontrolü ekleyin
   useEffect(() => {
