@@ -48,6 +48,167 @@ import { Prism as SyntaxHighlighter } from "react-syntax-highlighter"
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism"
 import { TypingCodePanel } from "@/components/typing-code-panel"
 
+// Typing Text Component for assistant messages
+interface TypingTextProps {
+  text: string
+  onComplete?: () => void
+  speed?: number
+}
+
+const TypingText: React.FC<TypingTextProps> = ({ text, onComplete, speed = 8 }) => {
+  const [displayedText, setDisplayedText] = useState("")
+  const [isTyping, setIsTyping] = useState(false)
+  const intervalRef = useRef<NodeJS.Timeout | null>(null)
+
+  useEffect(() => {
+    if (text) {
+      setDisplayedText("")
+      setIsTyping(true)
+
+      let currentIndex = 0
+
+      intervalRef.current = setInterval(() => {
+        if (currentIndex < text.length) {
+          setDisplayedText(text.substring(0, currentIndex + 1))
+          currentIndex++
+        } else {
+          setIsTyping(false)
+          onComplete?.()
+          if (intervalRef.current) {
+            clearInterval(intervalRef.current)
+          }
+        }
+      }, speed)
+    }
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current)
+      }
+    }
+  }, [text, speed, onComplete])
+
+  // Enhanced rendering with code block support
+  const renderEnhancedContent = () => {
+    // Split text into segments based on code blocks
+    const segments = []
+    const codeBlockRegex = /```(\w+)?\n?([\s\S]*?)```/g
+    let lastIndex = 0
+    let match
+
+    while ((match = codeBlockRegex.exec(text)) !== null) {
+      // Add text before this code block
+      if (match.index > lastIndex) {
+        segments.push({
+          type: 'text',
+          content: text.slice(lastIndex, match.index),
+          start: lastIndex,
+          end: match.index
+        })
+      }
+
+      // Add the code block
+      segments.push({
+        type: 'code',
+        content: match[2] || '',
+        language: match[1] || 'text',
+        start: match.index,
+        end: match.index + match[0].length,
+        fullMatch: match[0]
+      })
+
+      lastIndex = match.index + match[0].length
+    }
+
+    // Add remaining text after last code block
+    if (lastIndex < text.length) {
+      segments.push({
+        type: 'text',
+        content: text.slice(lastIndex),
+        start: lastIndex,
+        end: text.length
+      })
+    }
+
+    // If no segments (no code blocks), return simple text
+    if (segments.length === 0) {
+      return <span className="whitespace-pre-wrap">{displayedText}</span>
+    }
+
+    // Render segments based on how much text has been typed
+    const renderedSegments = []
+    
+    for (const segment of segments) {
+      if (displayedText.length <= segment.start) {
+        // Haven't reached this segment yet
+        break
+      }
+
+      if (segment.type === 'text') {
+        // Regular text segment
+        const visibleLength = Math.min(displayedText.length - segment.start, segment.content.length)
+        const visibleText = segment.content.slice(0, visibleLength)
+        
+        if (visibleText) {
+          renderedSegments.push(
+            <span key={segment.start} className="whitespace-pre-wrap">
+              {visibleText}
+            </span>
+          )
+        }
+      } else if (segment.type === 'code') {
+        // Code block segment
+        const fenceLength = `\`\`\`${segment.language}\n`.length
+        const closingFenceLength = 3 // ```
+        
+        if (displayedText.length >= segment.start + fenceLength) {
+          // We've typed past the opening fence, show as code block
+          const typedInCode = displayedText.length - (segment.start + fenceLength)
+          const visibleCode = segment.content.slice(0, Math.max(0, typedInCode - closingFenceLength))
+          
+          renderedSegments.push(
+            <div key={segment.start} className="my-4">
+              <SyntaxHighlighter
+                language={segment.language}
+                style={vscDarkPlus}
+                className="rounded-md text-sm"
+                customStyle={{
+                  margin: 0,
+                  padding: '12px',
+                  backgroundColor: '#1e1e1e'
+                }}
+              >
+                {visibleCode}
+              </SyntaxHighlighter>
+            </div>
+          )
+        } else {
+          // Still typing the opening fence, show as regular text
+          const visibleFence = displayedText.slice(segment.start)
+          renderedSegments.push(
+            <span key={segment.start} className="whitespace-pre-wrap">
+              {visibleFence}
+            </span>
+          )
+        }
+      }
+    }
+
+    return renderedSegments.length > 0 ? renderedSegments : (
+      <span className="whitespace-pre-wrap">{displayedText}</span>
+    )
+  }
+
+  return (
+    <div className="relative">
+      {renderEnhancedContent()}
+      {isTyping && (
+        <span className="inline-block w-0.5 h-4 bg-purple-400 ml-0.5 animate-blink"></span>
+      )}
+    </div>
+  )
+}
+
 interface MiniService {
   id: number
   name: string
@@ -499,7 +660,6 @@ export default function ServicePage() {
   })
 
   const [copiedStates, setCopiedStates] = useState<{ [key: string]: boolean }>({})
-
   const [chatHistory, setChatHistory] = useState<
     Array<{
       id: string
@@ -508,8 +668,11 @@ export default function ServicePage() {
       file?: File
       result?: any
       timestamp: Date
+      isTyping?: boolean
     }>
   >([])
+
+  const [typingMessageId, setTypingMessageId] = useState<string | null>(null)
 
   const chatMessagesRef = useRef<HTMLDivElement>(null)
 
@@ -899,14 +1062,13 @@ export default function ServicePage() {
         id: `user-${Date.now()}`,
         type: "user" as const,
         content: userInput?.trim() || "",
-        timestamp: new Date(),
-      }
+        timestamp: new Date(),      }
       setChatHistory((prev) => [...prev, userMessage])
 
       const currentInput = userInput
       setUserInput("")
       setError(null)
-
+      
       setIsLoading(true)
       setResult(null)
 
@@ -919,8 +1081,10 @@ export default function ServicePage() {
           content: "",
           result: response,
           timestamp: new Date(),
+          isTyping: true,
         }
         setChatHistory((prev) => [...prev, assistantMessage])
+        setTypingMessageId(assistantMessage.id)
       } catch (err: any) {
         console.error("Error running RAG service:", err)
 
@@ -987,8 +1151,7 @@ export default function ServicePage() {
       if (hasFileUploadAgents) {
         response = await performUnifiedFileUpload(currentInput, currentFile)
       } else if (fileUploadRequirements?.type === "document") {
-        response = await performDocumentUpload(currentInput, currentFile)
-      } else {
+        response = await performDocumentUpload(currentInput, currentFile)      } else {
         response = await performRegularServiceSubmit(currentInput, currentFile)
       }
 
@@ -998,8 +1161,10 @@ export default function ServicePage() {
         content: "",
         result: response,
         timestamp: new Date(),
+        isTyping: true,
       }
       setChatHistory((prev) => [...prev, assistantMessage])
+      setTypingMessageId(assistantMessage.id)
 
       setDocumentProcessingState({
         isProcessing: false,
@@ -2067,7 +2232,57 @@ export default function ServicePage() {
             </div>
           </TooltipContent>
         </Tooltip>
-      </TooltipProvider>
+      </TooltipProvider>    )
+  }
+
+  // Component to render messages with typing animation
+  const TypingMessageRenderer: React.FC<{
+    result: any
+    messageId: string
+    onComplete: () => void
+  }> = ({ result, messageId, onComplete }) => {
+    const getTextContent = (result: any): string => {
+      if (result.source_documents || result.sources || result.answer || result.rag_prompt) {
+        return result.answer || result.response || result.output || "No response available"
+      }
+      
+      // Handle different service output types
+      if (service?.output_type === "text") {
+        return result.final_output || result.output || result.results?.[0]?.output || "No output available"
+      }
+      
+      // For other types, extract any text content
+      return result.output || result.response || result.final_output || "Response received"
+    }
+
+    const textContent = getTextContent(result)
+
+    return (
+      <div className="w-full">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-medium text-white">
+            {(result.source_documents || result.sources || result.answer || result.rag_prompt) ? "Document Analysis" : "Result"}
+          </h3>
+          <TokenUsageInfoButton result={result} messageId={messageId} />
+        </div>        <div className="p-4 bg-black/30 rounded-lg border border-purple-900/20 relative group">
+          <TypingText 
+            text={textContent}
+            onComplete={onComplete}
+            speed={3}
+          />
+          <button
+            onClick={() => copyToClipboard(textContent, `text-${messageId}`)}
+            className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 h-6 w-6 rounded bg-purple-600/20 hover:bg-purple-600/40 flex items-center justify-center"
+            title="Copy text"
+          >
+            {copiedStates[`text-${messageId}`] ? (
+              <Check className="h-3 w-3 text-green-400" />
+            ) : (
+              <Copy className="h-3 w-3 text-gray-300" />
+            )}
+          </button>
+        </div>
+      </div>
     )
   }
 
@@ -2575,7 +2790,7 @@ export default function ServicePage() {
                               strokeLinejoin="round"
                               strokeWidth={2}
                               d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.082 16.5c-.77.833.192 2.5 1.732 2.5z"
-                            />
+                          />
                           </svg>
                         </div>
                         <div className="flex-1">
@@ -2699,10 +2914,28 @@ export default function ServicePage() {
                               >
                                 {getServiceIcon() &&
                                   React.cloneElement(getServiceIcon(), { className: "h-4 w-4 text-white" })}
-                              </div>
-                              <div className="bg-zinc-800/80 backdrop-blur-sm rounded-2xl rounded-tl-sm p-4 max-w-3xl relative group flex-1">
+                              </div>                              <div className="bg-zinc-800/80 backdrop-blur-sm rounded-2xl rounded-tl-sm p-4 max-w-3xl relative group flex-1">
                                 {message.result ? (
-                                  <div className="w-full">{renderOutputForMessage(message.result, message.id)}</div>
+                                  <div className="w-full">
+                                    {message.isTyping && typingMessageId === message.id ? (
+                                      <TypingMessageRenderer 
+                                        result={message.result} 
+                                        messageId={message.id}
+                                        onComplete={() => {
+                                          setChatHistory(prev => 
+                                            prev.map(msg => 
+                                              msg.id === message.id 
+                                                ? { ...msg, isTyping: false }
+                                                : msg
+                                            )
+                                          )
+                                          setTypingMessageId("")
+                                        }}
+                                      />
+                                    ) : (
+                                      renderOutputForMessage(message.result, message.id)
+                                    )}
+                                  </div>
                                 ) : (
                                   <div className="text-red-300 text-sm">
                                     {message.content || "An error occurred while processing your request"}
@@ -2755,7 +2988,7 @@ export default function ServicePage() {
                                   strokeLinejoin="round"
                                   strokeWidth={2}
                                   d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.082 16.5c-.77.833.192 2.5 1.732 2.5z"
-                                />
+                              />
                               </svg>
                             </div>
                             <div className="flex-1">

@@ -44,11 +44,19 @@ module.exports = {
           700: "#7e22ce",
           900: "#581c87",
         },
-      },
-      borderRadius: {
+      },      borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+      },
+      animation: {
+        blink: 'blink 1s infinite',
+      },
+      keyframes: {
+        blink: {
+          '0%, 50%': { opacity: '1' },
+          '51%, 100%': { opacity: '0' },
+        },
       },
     },
   },

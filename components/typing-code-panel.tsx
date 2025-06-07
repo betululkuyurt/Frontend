@@ -28,26 +28,11 @@ export const TypingCodePanel: React.FC<TypingCodePanelProps> = ({
   const [copied, setCopied] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
   const typingIntervalRef = useRef<NodeJS.Timeout | null>(null)
-
   useEffect(() => {
     if (isOpen && code) {
-      setDisplayedCode("")
-      setIsTyping(true)
-
-      let currentIndex = 0
-      const typingSpeed = 15 // milliseconds per character
-
-      typingIntervalRef.current = setInterval(() => {
-        if (currentIndex < code.length) {
-          setDisplayedCode(code.substring(0, currentIndex + 1))
-          currentIndex++
-        } else {
-          setIsTyping(false)
-          if (typingIntervalRef.current) {
-            clearInterval(typingIntervalRef.current)
-          }
-        }
-      }, typingSpeed)
+      // Display code immediately without typing animation
+      setDisplayedCode(code)
+      setIsTyping(false)
     }
 
     return () => {
@@ -149,9 +134,7 @@ export const TypingCodePanel: React.FC<TypingCodePanelProps> = ({
               <span>Generating code...</span>
             </div>
           </div>
-        )}
-
-        {/* Code Content */}
+        )}        {/* Code Content */}
         <div className="flex-1 overflow-hidden">
           <div className="h-full overflow-y-auto">
             {displayedCode ? (
@@ -174,13 +157,6 @@ export const TypingCodePanel: React.FC<TypingCodePanelProps> = ({
               </SyntaxHighlighter>
             ) : (
               <div className="p-4 text-gray-400 text-sm">Waiting for code generation...</div>
-            )}
-
-            {/* Typing cursor */}
-            {isTyping && (
-              <div className="absolute bottom-4 right-4">
-                <div className="w-2 h-4 bg-purple-400 animate-pulse"></div>
-              </div>
             )}
           </div>
         </div>
