@@ -81,6 +81,61 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 
+// Add custom CSS animations
+const customStyles = `
+  @keyframes gradient-x {
+    0%, 100% {
+      background-position: 0% 50%;
+    }
+    50% {
+      background-position: 100% 50%;
+    }
+  }
+  
+  .animate-gradient-x {
+    background-size: 200% 200%;
+    animation: gradient-x 3s ease infinite;
+  }
+  
+  @keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-10px); }
+  }
+  
+  .animate-float {
+    animation: float 3s ease-in-out infinite;
+  }
+  
+  @keyframes pulse-slow {
+    0%, 100% {
+      opacity: 0.5;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 1;
+      transform: scale(1.02);
+    }
+  }
+  
+  .animate-pulse-slow {
+    animation: pulse-slow 2s ease-in-out infinite;
+  }
+  
+  .bg-electric-blue {
+    background: linear-gradient(45deg, #00f5ff, #0080ff);
+    box-shadow: 0 0 10px #00f5ff;
+  }
+  
+  .bg-electric-pink {
+    background: linear-gradient(45deg, #ff1493, #ff69b4);
+    box-shadow: 0 0 10px #ff1493;
+  }
+  
+  .perspective-1000 {
+    perspective: 1000px;
+  }
+`;
+
 // Define the service type
 interface Service {
   is_public: boolean | undefined
@@ -1286,6 +1341,9 @@ export default function DashboardPage() {
   }
 
   return (    <div className="min-h-screen bg-gradient-to-b from-black via-purple-950/20 to-black">
+      {/* Add custom styles */}
+      <style jsx>{customStyles}</style>
+      
       <NavBar />
 
       <main className="pt-24 pb-16 px-6">
@@ -1304,28 +1362,46 @@ export default function DashboardPage() {
                     {getFilteredMiniServices().length}
                   </span>
                 </h2>
-                  {/* Create New Mini Service Button - now positioned at the rightmost */}
+                  {/* Create New Mini Service Button - 3D Neon Effect */}
                 <Button
                   onClick={() => router.push("/apps/create")}
-                  className="group relative overflow-hidden bg-gradient-to-r from-purple-600 via-purple-700 to-indigo-600 text-white font-medium rounded-xl px-6 py-6 transition-all duration-500 hover:scale-[1.02] hover:shadow-2xl hover:shadow-purple-500/25 border-2 border-transparent hover:bg-transparent hover:border-transparent whitespace-nowrap"
+                  className="group relative bg-gray-900 text-white font-medium rounded-xl px-6 py-3 transition-all duration-500 hover:scale-110 whitespace-nowrap border-2 border-purple-500/30 hover:border-purple-400 hover:-rotate-1 hover:skew-x-1 transform-gpu perspective-1000"
+                  onMouseEnter={(e) => {
+                    const rect = e.currentTarget.getBoundingClientRect()
+                    const x = e.clientX - rect.left - rect.width / 2
+                    const y = e.clientY - rect.top - rect.height / 2
+                    e.currentTarget.style.transform = `
+                      perspective(1000px) 
+                      rotateX(${y / 10}deg) 
+                      rotateY(${-x / 10}deg) 
+                      scale(1.1)
+                    `
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'perspective(1000px) rotateX(0deg) rotateY(0deg) scale(1)'
+                  }}
                 >
-                  {/* Gradient border overlay for hover state */}
-                  <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-purple-600 via-purple-700 to-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                  <div className="absolute inset-[2px] rounded-[10px] bg-black/90 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                  {/* Single neon glow background */}
+                  <div className="absolute -inset-1 bg-gradient-to-r from-purple-600 via-pink-600 to-blue-600 rounded-xl opacity-0 group-hover:opacity-80 transition-opacity duration-500 blur-md"></div>
                   
-                  {/* Animated shimmer effect */}
-                  <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/5 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
-                  
-                  {/* Content */}
-                  <div className="relative flex items-center justify-center z-10">
-                    <div className="bg-white/10 rounded-lg p-1.5 mr-3 group-hover:bg-purple-500/20 transition-colors duration-500">
-                      <Sparkles className="h-4 w-4 transition-colors duration-500 group-hover:text-purple-300" />
-                    </div>
-                    <span className="text-sm font-semibold tracking-wide transition-colors duration-500 group-hover:text-purple-200">Create New Mini Service</span>
+                  {/* Animated border */}
+                  <div className="absolute inset-0 bg-gradient-to-r from-purple-400 via-pink-400 to-blue-400 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 animate-pulse-slow p-[2px]">
+                    <div className="w-full h-full bg-gray-900 rounded-xl"></div>
                   </div>
                   
-                  {/* Enhanced glow effect */}
-                  <div className="absolute inset-0 rounded-xl bg-purple-500/20 blur-md group-hover:bg-purple-400/40 group-hover:blur-lg transition-all duration-500 -z-10"></div>
+                  {/* Content */}
+                  <div className="relative flex items-center gap-3 z-10">
+                    <div className="bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg p-1.5 group-hover:from-pink-400 group-hover:to-blue-400 group-hover:shadow-lg group-hover:shadow-purple-500/50 transition-all duration-300">
+                      <Sparkles className="h-4 w-4 text-white group-hover:rotate-180 group-hover:scale-125 group-hover:drop-shadow-lg transition-all duration-700 ease-out" />
+                    </div>
+                    <span className="text-sm font-semibold tracking-wide group-hover:text-transparent group-hover:bg-gradient-to-r group-hover:from-purple-400 group-hover:to-pink-400 group-hover:bg-clip-text transition-all duration-300">
+                      Create New Mini Service
+                    </span>
+                  </div>
+                  
+                  {/* Simple electric particles */}
+                  <div className="absolute -top-1 -right-1 w-2 h-2 bg-electric-blue rounded-full opacity-0 group-hover:opacity-100 group-hover:animate-bounce transition-opacity duration-300 delay-100"></div>
+                  <div className="absolute -bottom-1 -left-1 w-2 h-2 bg-electric-pink rounded-full opacity-0 group-hover:opacity-100 group-hover:animate-bounce transition-opacity duration-300 delay-200"></div>
                 </Button>
               </div>  
               {/* Reorganized layout: Search & Filters on left, Sort & View controls on right */}
