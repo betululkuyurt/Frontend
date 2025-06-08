@@ -104,6 +104,104 @@
   }
 }
 
+/* Apple Intelligence RGB Gradient Animation - Border and Shadow Only */
+@keyframes apple-intelligence-gradient {
+  0% {
+    
+    background-size: 400% 400%;
+    background-position: 0% 50%;
+  }
+  25% {
+  
+    background-size: 400% 400%;
+    background-position: 100% 50%;
+  }
+  50% {
+
+    background-size: 400% 400%;
+    background-position: 0% 50%;
+  }
+  75% {
+
+    background-size: 400% 400%;
+    background-position: 100% 50%;
+  }
+  100% {
+
+    background-size: 400% 400%;
+    background-position: 0% 50%;
+  }
+}
+@keyframes apple-intelligence-glow {
+  0% {
+    box-shadow: 
+      2px 0 10px rgba(255, 20, 147, 0.7),
+      0 0 8px rgba(255, 20, 147, 0.5),
+      0 0 15px rgba(255, 20, 147, 0.3);
+  }
+  25% {
+    box-shadow: 
+      0 2px 10px rgba(0, 191, 255, 0.7),
+      0 0 8px rgba(0, 191, 255, 0.5),
+      0 0 15px rgba(0, 191, 255, 0.3);
+  }
+  50% {
+    box-shadow: 
+      -2px 0 10px rgba(255, 215, 0, 0.8),
+      0 0 8px rgba(255, 215, 0, 0.6),
+      0 0 15px rgba(255, 215, 0, 0.4);
+  }
+  75% {
+    box-shadow: 
+      0 -2px 10px rgba(50, 205, 50, 0.7),
+      0 0 8px rgba(50, 205, 50, 0.5),
+      0 0 15px rgba(50, 205, 50, 0.3);
+  }
+  100% {
+    box-shadow: 
+      2px 0 10px rgba(255, 20, 147, 0.7),
+      0 0 8px rgba(255, 20, 147, 0.5),
+      0 0 15px rgba(255, 20, 147, 0.3);
+  }
+}
+
+.apple-intelligence-border {
+  position: relative;
+  border-radius: 0.5rem;
+}
+
+.apple-intelligence-border::before {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  
+  background-size: 400% 400%;
+  border-radius: inherit;
+  z-index: 0;
+  opacity: 0;
+  transition: opacity 0.3s ease-in-out;
+  pointer-events: none;
+}
+
+.apple-intelligence-border.enhancing::before {
+  opacity: 1;
+  animation: apple-intelligence-gradient 2s ease-in-out infinite;
+}
+
+.apple-intelligence-border.enhancing {
+  animation: apple-intelligence-glow 2s ease-in-out infinite;
+}
+
+/* Ensure textarea maintains its background and stays on top */
+.apple-intelligence-border > textarea {
+  position: relative;
+  z-index: 1;
+  background: rgba(0, 0, 0, 0.5) !important;
+}
+
 /* Flip card styles */
 .perspective-1000 {
   perspective: 1000px;
