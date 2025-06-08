@@ -38,31 +38,28 @@ export default defineConfig({
     { 
       name: 'setup', 
       testMatch: '**/auth.setup.ts' 
-    },
-      // Public tests (no authentication needed) - landing page, navigation, accessibility, performance
+    },    // Public tests (no authentication needed) - landing page, navigation, accessibility, performance
     {
       name: 'public-chromium',
-      testMatch: ['**/landing.spec.ts', '**/navigation.spec.ts', '**/accessibility.spec.ts', '**/performance.spec.ts', '**/forms.spec.ts', '**/visual.spec.ts', '**/smoke.spec.ts', '**/test-1.spec.ts'],
+      testMatch: ['**/landing.spec.ts', '**/navigation.spec.ts', '**/accessibility.spec.ts', '**/performance.spec.ts', '**/forms.spec.ts', '**/visual.spec.ts', '**/smoke.spec.ts', '**/test-1.spec.ts', '**/edge-cases.spec.ts'],
       use: { 
         ...devices['Desktop Chrome'],
         // Explicitly no storageState - test public experience
         storageState: undefined,
       },
       dependencies: [], // No dependencies - these are public pages
-    },
-      {
+    },      {
       name: 'public-firefox',
-      testMatch: ['**/landing.spec.ts', '**/navigation.spec.ts', '**/accessibility.spec.ts', '**/performance.spec.ts', '**/forms.spec.ts', '**/visual.spec.ts', '**/smoke.spec.ts', '**/test-1.spec.ts'],
+      testMatch: ['**/landing.spec.ts', '**/navigation.spec.ts', '**/accessibility.spec.ts', '**/performance.spec.ts', '**/forms.spec.ts', '**/visual.spec.ts', '**/smoke.spec.ts', '**/test-1.spec.ts', '**/edge-cases.spec.ts'],
       use: { 
         ...devices['Desktop Firefox'],
         // Explicitly no storageState - test public experience
         storageState: undefined,
       },
       dependencies: [], // No dependencies - these are public pages
-    },
-      {
+    },      {
       name: 'public-webkit',
-      testMatch: ['**/landing.spec.ts', '**/navigation.spec.ts', '**/accessibility.spec.ts', '**/performance.spec.ts', '**/forms.spec.ts', '**/visual.spec.ts', '**/smoke.spec.ts', '**/test-1.spec.ts'],
+      testMatch: ['**/landing.spec.ts', '**/navigation.spec.ts', '**/accessibility.spec.ts', '**/performance.spec.ts', '**/forms.spec.ts', '**/visual.spec.ts', '**/smoke.spec.ts', '**/test-1.spec.ts', '**/edge-cases.spec.ts'],
       use: { 
         ...devices['Desktop Safari'],
         // Explicitly no storageState - test public experience
@@ -70,8 +67,7 @@ export default defineConfig({
       },
       dependencies: [], // No dependencies - these are public pages
     },
-    
-    // Authentication flow tests (clean slate - no stored auth, no setup dependencies)
+      // Authentication flow tests (clean slate - no stored auth, no setup dependencies)
     {
       name: 'auth-chromium',
       testMatch: ['**/auth.*.spec.ts', '**/manual-auth.spec.ts'],
@@ -82,8 +78,7 @@ export default defineConfig({
       },
       dependencies: [], // Explicitly no dependencies - no setup
     },
-    
-    {
+      {
       name: 'auth-firefox',
       testMatch: ['**/auth.*.spec.ts', '**/manual-auth.spec.ts'],
       use: { 
@@ -93,8 +88,7 @@ export default defineConfig({
       },
       dependencies: [], // Explicitly no dependencies - no setup
     },
-    
-    {
+      {
       name: 'auth-webkit',
       testMatch: ['**/auth.*.spec.ts', '**/manual-auth.spec.ts'],
       use: { 
@@ -103,20 +97,18 @@ export default defineConfig({
         storageState: undefined,
       },
       dependencies: [], // Explicitly no dependencies - no setup
-    },
-      // Protected tests that require authentication (apps dashboard, authenticated features)
+    },      // Protected tests that require authentication (apps dashboard, authenticated features)
     {
       name: 'protected-chromium',
-      testMatch: ['**/apps.*.spec.ts', '**/test-2.spec.ts'],
+      testMatch: ['**/apps.*.spec.ts', '**/test-2.spec.ts', '**/profile.spec.ts', '**/settings.spec.ts'],
       use: { 
         ...devices['Desktop Chrome'],
         storageState: 'tests/e2e/.auth/user.json',
       },
       dependencies: ['setup'],
-    },
-      {
+    },{
       name: 'protected-firefox',
-      testMatch: ['**/apps.*.spec.ts', '**/test-2.spec.ts'],
+      testMatch: ['**/apps.*.spec.ts', '**/test-2.spec.ts', '**/profile.spec.ts', '**/settings.spec.ts'],
       use: { 
         ...devices['Desktop Firefox'],
         storageState: 'tests/e2e/.auth/user.json',
@@ -124,7 +116,7 @@ export default defineConfig({
       dependencies: ['setup'],
     },    {
       name: 'protected-webkit',
-      testMatch: ['**/apps.*.spec.ts', '**/test-2.spec.ts'],
+      testMatch: ['**/apps.*.spec.ts', '**/test-2.spec.ts', '**/profile.spec.ts', '**/settings.spec.ts'],
       use: { 
         ...devices['Desktop Safari'],
         storageState: 'tests/e2e/.auth/user.json',
@@ -133,37 +125,34 @@ export default defineConfig({
     },    // Mobile browsers - public tests
     {
       name: 'public-mobile-chrome',
-      testMatch: ['**/landing.spec.ts', '**/navigation.spec.ts', '**/accessibility.spec.ts', '**/performance.spec.ts', '**/test-1.spec.ts'],
+      testMatch: ['**/landing.spec.ts', '**/navigation.spec.ts', '**/accessibility.spec.ts', '**/performance.spec.ts', '**/test-1.spec.ts', '**/edge-cases.spec.ts'],
       use: { 
         ...devices['Pixel 5'],
         storageState: undefined,
       },
       dependencies: [],
-    },
-      {
+    },      {
       name: 'public-mobile-safari',
-      testMatch: ['**/landing.spec.ts', '**/navigation.spec.ts', '**/accessibility.spec.ts', '**/performance.spec.ts', '**/test-1.spec.ts'],
+      testMatch: ['**/landing.spec.ts', '**/navigation.spec.ts', '**/accessibility.spec.ts', '**/performance.spec.ts', '**/test-1.spec.ts', '**/edge-cases.spec.ts'],
       use: { 
         ...devices['iPhone 12'],
         storageState: undefined,
       },
       dependencies: [],
     },
-    
-    // Mobile browsers - protected tests
+      // Mobile browsers - protected tests
     {
       name: 'protected-mobile-chrome',
-      testMatch: ['**/apps.*.spec.ts'],
+      testMatch: ['**/apps.*.spec.ts', '**/profile.spec.ts', '**/settings.spec.ts'],
       use: { 
         ...devices['Pixel 5'],
         storageState: 'tests/e2e/.auth/user.json',
       },
       dependencies: ['setup'],
     },
-    
-    {
+      {
       name: 'protected-mobile-safari',
-      testMatch: ['**/apps.*.spec.ts'],
+      testMatch: ['**/apps.*.spec.ts', '**/profile.spec.ts', '**/settings.spec.ts'],
       use: { 
         ...devices['iPhone 12'],
         storageState: 'tests/e2e/.auth/user.json',
