@@ -1362,46 +1362,37 @@ export default function DashboardPage() {
                     {getFilteredMiniServices().length}
                   </span>
                 </h2>
-                  {/* Create New Mini Service Button - 3D Neon Effect */}
+                  {/* Create New Mini Service Button - Simplified 3D Effect */}
                 <Button
                   onClick={() => router.push("/apps/create")}
-                  className="group relative bg-gray-900 text-white font-medium rounded-xl px-6 py-3 transition-all duration-500 hover:scale-110 whitespace-nowrap border-2 border-purple-500/30 hover:border-purple-400 hover:-rotate-1 hover:skew-x-1 transform-gpu perspective-1000"
+                  className="group relative bg-gray-900 hover:bg-gray-800 text-white font-medium rounded-xl px-5 py-6 transition-all duration-300 hover:scale-105 whitespace-nowrap border-2 border-purple-500/40 hover:border-purple-400 transform-gpu"
                   onMouseEnter={(e) => {
                     const rect = e.currentTarget.getBoundingClientRect()
                     const x = e.clientX - rect.left - rect.width / 2
                     const y = e.clientY - rect.top - rect.height / 2
                     e.currentTarget.style.transform = `
                       perspective(1000px) 
-                      rotateX(${y / 10}deg) 
-                      rotateY(${-x / 10}deg) 
-                      scale(1.1)
+                      rotateX(${y / 20}deg) 
+                      rotateY(${-x / 20}deg) 
+                      scale(1.05)
                     `
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.transform = 'perspective(1000px) rotateX(0deg) rotateY(0deg) scale(1)'
                   }}
                 >
-                  {/* Single neon glow background */}
-                  <div className="absolute -inset-1 bg-gradient-to-r from-purple-600 via-pink-600 to-blue-600 rounded-xl opacity-0 group-hover:opacity-80 transition-opacity duration-500 blur-md"></div>
-                  
-                  {/* Animated border */}
-                  <div className="absolute inset-0 bg-gradient-to-r from-purple-400 via-pink-400 to-blue-400 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 animate-pulse-slow p-[2px]">
-                    <div className="w-full h-full bg-gray-900 rounded-xl"></div>
-                  </div>
+                  {/* Simple neon glow */}
+                  <div className="absolute inset-0 bg-gradient-to-r from-purple-600 via-pink-600 to-blue-600 rounded-xl opacity-0 group-hover:opacity-20 transition-opacity duration-300 blur-md -z-10"></div>
                   
                   {/* Content */}
-                  <div className="relative flex items-center gap-3 z-10">
-                    <div className="bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg p-1.5 group-hover:from-pink-400 group-hover:to-blue-400 group-hover:shadow-lg group-hover:shadow-purple-500/50 transition-all duration-300">
-                      <Sparkles className="h-4 w-4 text-white group-hover:rotate-180 group-hover:scale-125 group-hover:drop-shadow-lg transition-all duration-700 ease-out" />
+                  <div className="relative flex items-center gap-4 z-10">
+                    <div className="bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg p-3 group-hover:from-pink-400 group-hover:to-blue-400 transition-all duration-300">
+                      <Sparkles className="h-3 w-3 text-white group-hover:rotate-180 transition-transform duration-500" />
                     </div>
-                    <span className="text-sm font-semibold tracking-wide group-hover:text-transparent group-hover:bg-gradient-to-r group-hover:from-purple-400 group-hover:to-pink-400 group-hover:bg-clip-text transition-all duration-300">
+                    <span className="text-lg font-semibold tracking-wide group-hover:text-purple-300 transition-colors duration-300">
                       Create New Mini Service
                     </span>
                   </div>
-                  
-                  {/* Simple electric particles */}
-                  <div className="absolute -top-1 -right-1 w-2 h-2 bg-electric-blue rounded-full opacity-0 group-hover:opacity-100 group-hover:animate-bounce transition-opacity duration-300 delay-100"></div>
-                  <div className="absolute -bottom-1 -left-1 w-2 h-2 bg-electric-pink rounded-full opacity-0 group-hover:opacity-100 group-hover:animate-bounce transition-opacity duration-300 delay-200"></div>
                 </Button>
               </div>  
               {/* Reorganized layout: Search & Filters on left, Sort & View controls on right */}
