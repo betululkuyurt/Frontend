@@ -3136,13 +3136,13 @@ export default function ServiceWorkflowBuilder() {
                             </Badge>
                           )}
                           </div>
-                          <div className={`relative ${isEnhancingPrompt ? 'system-instruction enhancing' : ''}`}>
+                          <div className={`relative ${isEnhancingPrompt ? 'apple-intelligence-border enhancing' : ''}`}>
                             <Textarea
                             id="systemInstruction"
                             value={newAgentData.systemInstruction}
                             onChange={(e) => setNewAgentData({ ...newAgentData, systemInstruction: e.target.value })}
                             placeholder="Instructions for the agent..."
-                            className={`${isEnhancingPrompt ? 'pointer-events-none' : ''} bg-black/50 border-purple-900/40 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all ${newAgentData.enhancePrompt ? 'min-h-[200px]' : 'min-h-[80px]'}`}
+                            className={`${isEnhancingPrompt ? 'pointer-events-none border-transparent' : 'border-purple-900/40'} bg-black/50 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all ${newAgentData.enhancePrompt ? 'min-h-[200px]' : 'min-h-[80px]'} relative z-10`}
                             disabled={isEnhancingPrompt}
                             />
                           </div>
@@ -3226,7 +3226,7 @@ export default function ServiceWorkflowBuilder() {
                                         enhancePrompt: true
                                       });
 
-                                      // Create typing animation using interval
+                                      // Create typing animation using interval with auto-scroll
                                       const typingInterval = setInterval(() => {
                                         if (charIndex < enhancedPrompt.length) {
                                           currentText += enhancedPrompt.charAt(charIndex);
@@ -3234,9 +3234,26 @@ export default function ServiceWorkflowBuilder() {
                                             ...prev,
                                             systemInstruction: currentText
                                           }));
+                                          
+                                          // Auto-scroll to bottom of textarea as text is being typed
+                                          setTimeout(() => {
+                                            const textarea = document.getElementById('systemInstruction') as HTMLTextAreaElement;
+                                            if (textarea) {
+                                              textarea.scrollTop = textarea.scrollHeight;
+                                            }
+                                          }, 10); // Small delay to ensure DOM is updated
+                                          
                                           charIndex++;
                                         } else {
                                           clearInterval(typingInterval);
+                                          
+                                          // Final scroll to bottom to ensure all text is visible
+                                          setTimeout(() => {
+                                            const textarea = document.getElementById('systemInstruction') as HTMLTextAreaElement;
+                                            if (textarea) {
+                                              textarea.scrollTop = textarea.scrollHeight;
+                                            }
+                                          }, 50);
                                           
                                           // Wait a moment before stopping the RGB border animation to let it be visible
                                           setTimeout(() => {
