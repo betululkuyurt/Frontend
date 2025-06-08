@@ -37,6 +37,7 @@ import {
   Info,
   Code,
   Download,
+  Trash2,
 } from "lucide-react"
 import { toast } from "@/components/ui/use-toast"
 import { deleteMiniService } from "@/lib/services"
@@ -44,6 +45,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { decodeJWT, getAccessToken } from "@/lib/auth"
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter"
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism"
@@ -697,6 +699,9 @@ export default function ServicePage() {
     messageCount: number
   }>>([])
   const [loadingConversations, setLoadingConversations] = useState(false)
+  const [deletingConversationId, setDeletingConversationId] = useState<string | null>(null)
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [conversationToDelete, setConversationToDelete] = useState<string | null>(null)
 
   const handleCodeGenerated = (code: string, language: string) => {
     setCurrentCode(code)
@@ -1152,6 +1157,72 @@ export default function ServicePage() {
         description: "Failed to load conversation",
         variant: "destructive",
       })
+    }
+  }
+
+  // Delete conversation function
+  const deleteConversation = async (conversationId: string) => {
+    try {
+      setDeletingConversationId(conversationId)
+      const { token, currentUserId } = getAuthHeaders()
+      const response = await fetch(
+        `http://127.0.0.1:8000/api/v1/mini-services/conversations/${conversationId}?current_user_id=${currentUserId}`,
+        {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      )
+
+      if (response.ok) {
+        // Remove from local state
+        setSavedConversations(prev => prev.filter(conv => conv.id !== conversationId))
+        
+        // If the deleted conversation was currently loaded, clear the chat
+        if (currentConversationId === conversationId) {
+          setChatHistory([])
+          setCurrentConversationId(null)
+        }
+
+        toast({
+          title: "Conversation deleted",
+          description: "The conversation has been successfully deleted",
+        })
+      } else {
+        console.error('Failed to delete conversation:', response.statusText)
+        toast({
+          title: "Error",
+          description: "Failed to delete conversation",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error('Error deleting conversation:', error)
+      toast({
+        title: "Error",
+        description: "Failed to delete conversation",
+        variant: "destructive",
+      })
+    } finally {
+      setDeletingConversationId(null)
+      setShowDeleteDialog(false)
+      setConversationToDelete(null)
+    }
+  }
+
+  // Handle delete button click
+  const handleDeleteClick = (conversationId: string, e: React.MouseEvent) => {
+    e.stopPropagation() // Prevent loading the conversation
+    setConversationToDelete(conversationId)
+    setShowDeleteDialog(true)
+  }
+
+  // Handle confirm delete
+  const handleConfirmDelete = () => {
+    if (conversationToDelete) {
+      deleteConversation(conversationToDelete)
     }
   }
 
@@ -3693,131 +3764,240 @@ export default function ServicePage() {
 
       {/* Mode Selection Dialog */}
       <Dialog open={showModeSelection} onOpenChange={setShowModeSelection}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Choose Your Mode</DialogTitle>
-            <DialogDescription>
-              This service supports different interaction modes. Please select your preferred mode:
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4 py-4">
-            <div 
-              className={`p-4 border rounded-lg cursor-pointer transition-colors ${
-                selectedMode === 'chat' 
-                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-950' 
-                  : 'border-gray-200 hover:border-gray-300 dark:border-gray-700 dark:hover:border-gray-600'
-              }`}
-              onClick={() => setSelectedMode('chat')}
-            >
-              <div className="flex items-start space-x-3">
-                <div className={`w-4 h-4 rounded-full border-2 mt-0.5 ${
+        <DialogContent className="sm:max-w-lg bg-black/95 backdrop-blur-xl border border-purple-900/30 shadow-2xl">
+          <div className="absolute inset-0 bg-gradient-to-br from-purple-950/20 via-transparent to-indigo-950/20 rounded-lg" />
+          <div className="relative">
+            <DialogHeader className="space-y-4 pb-6">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-600 to-indigo-600 flex items-center justify-center shadow-lg">
+                  <LucideSparkles className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <DialogTitle className="text-xl font-bold text-white">Choose Your Mode</DialogTitle>
+                  <DialogDescription className="text-gray-400 text-sm mt-1">
+                    Select how you'd like to interact with this service
+                  </DialogDescription>
+                </div>
+              </div>
+            </DialogHeader>
+            
+            <div className="space-y-3 py-4">
+              <div 
+                className={`group relative p-5 rounded-xl cursor-pointer transition-all duration-300 border backdrop-blur-sm ${
                   selectedMode === 'chat' 
-                    ? 'border-blue-500 bg-blue-500' 
-                    : 'border-gray-400'
-                }`} />
-                <div>
-                  <h3 className="font-medium text-gray-900 dark:text-gray-100">Chat Mode</h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                    Context-aware conversations with chat history. More expensive due to conversation context being maintained.
-                  </p>
+                    ? 'border-purple-500/60 bg-gradient-to-br from-purple-950/40 to-indigo-950/40 shadow-lg shadow-purple-900/20 scale-[1.02]' 
+                    : 'border-purple-900/30 bg-black/20 hover:border-purple-700/50 hover:bg-purple-950/20 hover:scale-[1.01]'
+                }`}
+                onClick={() => setSelectedMode('chat')}
+              >
+                <div className="flex items-start space-x-4">
+                  <div className={`relative flex-shrink-0 mt-1 transition-all duration-300 ${
+                    selectedMode === 'chat' ? 'scale-110' : 'group-hover:scale-105'
+                  }`}>
+                    {selectedMode === 'chat' ? (
+                      <div className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-indigo-500 flex items-center justify-center shadow-lg">
+                        <Check className="w-3.5 h-3.5 text-white" />
+                      </div>
+                    ) : (
+                      <div className="w-6 h-6 rounded-full border-2 border-gray-600 group-hover:border-purple-400 transition-colors" />
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center space-x-2 mb-2">
+                      <MessageSquare className={`w-5 h-5 transition-colors ${
+                        selectedMode === 'chat' ? 'text-purple-400' : 'text-gray-500 group-hover:text-purple-400'
+                      }`} />
+                      <h3 className={`font-semibold transition-colors ${
+                        selectedMode === 'chat' ? 'text-white' : 'text-gray-300 group-hover:text-white'
+                      }`}>
+                        Chat Mode
+                      </h3>
+                    </div>
+                    <p className={`text-sm leading-relaxed transition-colors ${
+                      selectedMode === 'chat' ? 'text-gray-300' : 'text-gray-400 group-hover:text-gray-300'
+                    }`}>
+                      Context-aware conversations with chat history. Perfect for complex discussions and follow-up questions.
+                    </p>
+                    <div className={`mt-3 flex items-center space-x-2 text-xs transition-colors ${
+                      selectedMode === 'chat' ? 'text-amber-400' : 'text-gray-500 group-hover:text-amber-400'
+                    }`}>
+                      <Info className="w-3 h-3" />
+                      <span>Higher cost due to conversation context</span>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <div 
-              className={`p-4 border rounded-lg cursor-pointer transition-colors ${
-                selectedMode === 'normal' 
-                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-950' 
-                  : 'border-gray-200 hover:border-gray-300 dark:border-gray-700 dark:hover:border-gray-600'
-              }`}
-              onClick={() => setSelectedMode('normal')}
-            >
-              <div className="flex items-start space-x-3">
-                <div className={`w-4 h-4 rounded-full border-2 mt-0.5 ${
+              <div 
+                className={`group relative p-5 rounded-xl cursor-pointer transition-all duration-300 border backdrop-blur-sm ${
                   selectedMode === 'normal' 
-                    ? 'border-blue-500 bg-blue-500' 
-                    : 'border-gray-400'
-                }`} />
-                <div>
-                  <h3 className="font-medium text-gray-900 dark:text-gray-100">Normal Generation Mode</h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                    Individual requests without conversation context. More cost-effective option.
-                  </p>
+                    ? 'border-purple-500/60 bg-gradient-to-br from-purple-950/40 to-indigo-950/40 shadow-lg shadow-purple-900/20 scale-[1.02]' 
+                    : 'border-purple-900/30 bg-black/20 hover:border-purple-700/50 hover:bg-purple-950/20 hover:scale-[1.01]'
+                }`}
+                onClick={() => setSelectedMode('normal')}
+              >
+                <div className="flex items-start space-x-4">
+                  <div className={`relative flex-shrink-0 mt-1 transition-all duration-300 ${
+                    selectedMode === 'normal' ? 'scale-110' : 'group-hover:scale-105'
+                  }`}>
+                    {selectedMode === 'normal' ? (
+                      <div className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-indigo-500 flex items-center justify-center shadow-lg">
+                        <Check className="w-3.5 h-3.5 text-white" />
+                      </div>
+                    ) : (
+                      <div className="w-6 h-6 rounded-full border-2 border-gray-600 group-hover:border-purple-400 transition-colors" />
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center space-x-2 mb-2">
+                      <Wand2 className={`w-5 h-5 transition-colors ${
+                        selectedMode === 'normal' ? 'text-purple-400' : 'text-gray-500 group-hover:text-purple-400'
+                      }`} />
+                      <h3 className={`font-semibold transition-colors ${
+                        selectedMode === 'normal' ? 'text-white' : 'text-gray-300 group-hover:text-white'
+                      }`}>
+                        Normal Generation Mode
+                      </h3>
+                    </div>
+                    <p className={`text-sm leading-relaxed transition-colors ${
+                      selectedMode === 'normal' ? 'text-gray-300' : 'text-gray-400 group-hover:text-gray-300'
+                    }`}>
+                      Individual requests without conversation context. Ideal for single tasks and cost-effective usage.
+                    </p>
+                    <div className={`mt-3 flex items-center space-x-2 text-xs transition-colors ${
+                      selectedMode === 'normal' ? 'text-green-400' : 'text-gray-500 group-hover:text-green-400'
+                    }`}>
+                      <Check className="w-3 h-3" />
+                      <span>More cost-effective option</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          <DialogFooter>
-            <Button
-              onClick={() => {
-                if (selectedMode) {
-                  setShowModeSelection(false)
-                  if (selectedMode === 'chat') {
-                    setChatHistorySidebar(true)
-                    // Load chat history from backend
-                    loadChatHistory()
+            <DialogFooter className="pt-6">
+              <Button
+                onClick={() => {
+                  if (selectedMode) {
+                    setShowModeSelection(false)
+                    if (selectedMode === 'chat') {
+                      setChatHistorySidebar(true)
+                      // Load chat history from backend
+                      loadChatHistory()
+                    }
                   }
-                }
-              }}
-              disabled={!selectedMode}
-            >
-              Continue
-            </Button>
-          </DialogFooter>
+                }}
+                disabled={!selectedMode}
+                className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl shadow-lg transition-all duration-300 hover:shadow-purple-900/30"
+              >
+                <LucideSparkles className="w-4 h-4 mr-2" />
+                Continue with {selectedMode === 'chat' ? 'Chat Mode' : 'Normal Mode'}
+              </Button>
+            </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 
       {/* Chat History Sidebar */}
       {chatHistorySidebar && selectedMode === 'chat' && (
-        <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex">
-          <div className="w-80 bg-white dark:bg-gray-900 h-full shadow-xl flex flex-col">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex">
+          <div className="w-80 bg-black/95 backdrop-blur-xl border-r border-purple-900/30 h-full shadow-2xl flex flex-col">
+            {/* Background gradient overlay */}
+            <div className="absolute inset-0 bg-gradient-to-br from-purple-950/20 via-transparent to-indigo-950/20" />
+            
             {/* Sidebar Header */}
-            <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Chat History</h2>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setChatHistorySidebar(false)}
-              >
-                <X className="w-4 h-4" />
-              </Button>
+            <div className="relative p-6 border-b border-purple-900/30 bg-black/20 backdrop-blur-sm">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-600 to-indigo-600 flex items-center justify-center shadow-lg">
+                    <MessageSquare className="w-4 h-4 text-white" />
+                  </div>
+                  <h2 className="text-lg font-bold text-white">Chat History</h2>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setChatHistorySidebar(false)}
+                  className="text-gray-400 hover:text-white hover:bg-purple-600/20 rounded-lg"
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+              <p className="text-gray-400 text-sm mt-2">Your conversation history</p>
             </div>
 
             {/* Chat History List */}
-            <div className="flex-1 overflow-y-auto p-4">
+            <div className="relative flex-1 overflow-y-auto p-4">
               {loadingConversations ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="w-6 h-6 animate-spin text-gray-500" />
-                  <span className="ml-2 text-sm text-gray-500">Loading conversations...</span>
+                <div className="flex flex-col items-center justify-center py-12">
+                  <div className="relative">
+                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-600 to-indigo-600 flex items-center justify-center mb-4 shadow-lg">
+                      <Loader2 className="w-6 h-6 animate-spin text-white" />
+                    </div>
+                  </div>
+                  <span className="text-sm text-gray-300 font-medium">Loading conversations...</span>
+                  <span className="text-xs text-gray-500 mt-1">Please wait</span>
                 </div>
               ) : savedConversations.length === 0 ? (
-                <div className="text-center py-8">
-                  <MessageSquare className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-                  <p className="text-sm text-gray-500">No previous conversations found</p>
+                <div className="text-center py-12">
+                  <div className="w-16 h-16 rounded-full bg-purple-900/20 flex items-center justify-center mx-auto mb-4 border border-purple-900/30">
+                    <MessageSquare className="w-8 h-8 text-purple-400" />
+                  </div>
+                  <h3 className="text-white font-medium mb-2">No conversations yet</h3>
+                  <p className="text-sm text-gray-400 leading-relaxed">
+                    Start your first conversation to see your chat history here
+                  </p>
                 </div>
               ) : (
-                <div className="space-y-2">
-                  {savedConversations.map((conversation) => (
+                <div className="space-y-3">
+                  {savedConversations.map((conversation, index) => (
                     <div
                       key={conversation.id}
-                      className="p-3 border border-gray-200 dark:border-gray-700 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                      className="group relative p-4 bg-black/30 backdrop-blur-sm border border-purple-900/20 rounded-xl cursor-pointer hover:border-purple-700/50 hover:bg-purple-950/20 transition-all duration-300 hover:scale-[1.02] hover:shadow-lg hover:shadow-purple-900/10"
                       onClick={() => loadConversation(conversation.id)}
                     >
                       <div className="flex items-start justify-between">
                         <div className="flex-1 min-w-0">
-                          <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
-                            {conversation.title || 'Untitled Conversation'}
-                          </h3>                          <p className="text-xs text-gray-500 mt-1">
-                            {new Date(conversation.timestamp).toLocaleDateString()}
-                          </p>
-                          <p className="text-xs text-gray-400 mt-1 truncate">
-                            {conversation.messageCount} messages
+                          <div className="flex items-center space-x-2 mb-2">
+                            <div className="w-2 h-2 rounded-full bg-gradient-to-r from-purple-500 to-indigo-500 shadow-sm"></div>
+                            <h3 className="text-sm font-semibold text-white truncate group-hover:text-purple-200 transition-colors">
+                              {conversation.title || `Conversation ${index + 1}`}
+                            </h3>
+                          </div>
+                          <div className="flex items-center space-x-3 text-xs text-gray-400 mb-2">
+                            <div className="flex items-center space-x-1">
+                              <div className="w-3 h-3 rounded-full bg-purple-600/20 flex items-center justify-center">
+                                <div className="w-1 h-1 rounded-full bg-purple-400"></div>
+                              </div>
+                              <span>{conversation.messageCount || 0} messages</span>
+                            </div>
+                            <div className="w-1 h-1 rounded-full bg-gray-600"></div>
+                            <span>{new Date(conversation.timestamp).toLocaleDateString()}</span>
+                          </div>
+                          <p className="text-xs text-gray-500 truncate group-hover:text-gray-400 transition-colors">
+                            {conversation.lastMessage || "No preview available"}
                           </p>
                         </div>
-                        <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                        <div className="flex items-center space-x-2 ml-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => handleDeleteClick(conversation.id, e)}
+                            disabled={deletingConversationId === conversation.id}
+                            className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 p-1 h-6 w-6 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-md"
+                          >
+                            {deletingConversationId === conversation.id ? (
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                            ) : (
+                              <Trash2 className="w-3 h-3" />
+                            )}
+                          </Button>
+                          <ChevronRight className="w-4 h-4 text-gray-500 flex-shrink-0 group-hover:text-purple-400 transition-colors" />
+                        </div>
                       </div>
+                      
+                      {/* Subtle hover glow effect */}
+                      <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-purple-600/0 via-purple-600/5 to-indigo-600/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
                     </div>
                   ))}
                 </div>
@@ -3825,29 +4005,79 @@ export default function ServicePage() {
             </div>
 
             {/* New Chat Button */}
-            <div className="p-4 border-t border-gray-200 dark:border-gray-700">              <Button
+            <div className="relative p-4 border-t border-purple-900/30 bg-black/20 backdrop-blur-sm">
+              <Button
                 onClick={() => {
                   // Start a new chat
                   setChatHistory([])
                   setCurrentConversationId(null)
                   setChatHistorySidebar(false)
                 }}
-                className="w-full"
-                variant="outline"
+                className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-semibold py-3 rounded-xl shadow-lg transition-all duration-300 hover:shadow-purple-900/30 hover:scale-[1.02]"
               >
                 <MessageSquare className="w-4 h-4 mr-2" />
                 Start New Chat
               </Button>
+              
+              {/* Additional action button */}
+              <Button
+                variant="ghost"
+                onClick={() => setChatHistorySidebar(false)}
+                className="w-full mt-2 text-gray-400 hover:text-white hover:bg-purple-600/20 py-2 rounded-lg transition-all duration-300"
+              >
+                <X className="w-4 h-4 mr-2" />
+                Close History
+              </Button>
             </div>
           </div>
 
-          {/* Click outside to close */}
+          {/* Click outside to close - Enhanced overlay */}
           <div 
-            className="flex-1" 
+            className="flex-1 bg-gradient-to-r from-transparent via-black/20 to-black/40" 
             onClick={() => setChatHistorySidebar(false)}
           />
         </div>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent className="bg-black/95 backdrop-blur-xl border border-purple-900/30">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-white">Delete Conversation</AlertDialogTitle>
+            <AlertDialogDescription className="text-gray-400">
+              Are you sure you want to delete this conversation? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel 
+              onClick={() => {
+                setShowDeleteDialog(false)
+                setConversationToDelete(null)
+              }}
+              className="bg-gray-700 hover:bg-gray-600 text-white border-gray-600"
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              disabled={deletingConversationId !== null}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              {deletingConversationId ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Delete
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
