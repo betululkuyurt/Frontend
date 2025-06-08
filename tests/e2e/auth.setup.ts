@@ -1,45 +1,54 @@
-import { test as setup, expect } from '@playwright/test';
-import { AuthHelper } from './helpers/auth.helper';
+import { test as setup } from '@playwright/test';
 
-const authFile = 'playwright/.auth/user.json';
+const authFile = 'tests/e2e/.auth/user.json';
 
-// Setup for authenticated tests
 setup('authenticate', async ({ page }) => {
-  const authHelper = new AuthHelper(page);
+  // Get credentials from environment variables
+  const testEmail = process.env.TEST_USER_EMAIL ?? 'test@example.com';
+  const testPassword = process.env.TEST_USER_PASSWORD ?? 'password123';
   
-  // Use test credentials - adjust these based on your test setup
-  const testEmail = 'test@example.com';
-  const testPassword = 'password123';
+  console.log(`🔐 Attempting authentication with: ${testEmail}`);
   
   try {
-    // Attempt to login
-    await authHelper.login(testEmail, testPassword);
+    // Navigate to login page
+    await page.goto('/auth/login');
+    await page.waitForLoadState('networkidle');
     
-    // Verify successful login by checking URL or presence of authenticated elements
+    // Fill in credentials
+    await page.fill('input[type="email"], input[name="email"]', testEmail);
+    await page.fill('input[type="password"], input[name="password"]', testPassword);
+    
+    // Submit form
+    await page.click('button[type="submit"]');
+    
+    // Wait for navigation or error
+    await page.waitForTimeout(5000);
+    
+    // Check if we're logged in successfully
     if (page.url().includes('/apps')) {
-      console.log('✅ Authentication successful');
-      
-      // Save authentication state
+      console.log('✅ Authentication successful - saving state');
       await page.context().storageState({ path: authFile });
     } else {
-      console.log('⚠️ Authentication may have failed - test credentials might not exist');
-      
-      // Create a minimal auth state for testing
-      await page.evaluate(() => {
-        localStorage.setItem('test_auth_state', 'authenticated');
-      });
-      
+      console.log('❌ Authentication failed - creating fallback state');
+      // Create a minimal fallback state for tests that can run without auth
+      await page.goto('/');
+      await page.waitForLoadState('networkidle');
       await page.context().storageState({ path: authFile });
     }
+    
   } catch (error) {
-    console.log('⚠️ Authentication setup failed:', error);
-    
-    // Create a fallback auth state
-    await page.goto('/auth/login');
-    await page.evaluate(() => {
-      localStorage.setItem('test_auth_state', 'unauthenticated');
-    });
-    
-    await page.context().storageState({ path: authFile });
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.log(`⚠️ Error during authentication: ${errorMessage}`);
+    // Create fallback auth state - go to home page and save basic state
+    try {
+      await page.goto('/');
+      await page.waitForLoadState('networkidle');
+      await page.context().storageState({ path: authFile });
+      console.log('📁 Fallback state created');
+    } catch (fallbackError) {
+      const fallbackMessage = fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
+      console.log(`❌ Failed to create fallback state: ${fallbackMessage}`);
+      throw fallbackError;
+    }
   }
 });

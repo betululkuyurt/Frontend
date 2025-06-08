@@ -1,5 +1,20 @@
 import { test, expect } from '@playwright/test';
-import { AuthHelper, generateTestUser, waitForPageLoad } from './helpers/auth.helper';
+import { AuthHelper } from './helpers/auth.helper';
+
+// Helper function to generate test user
+function generateTestUser() {
+  const timestamp = Date.now();
+  return {
+    username: `testuser${timestamp}`,
+    email: `test${timestamp}@example.com`,
+    password: 'TestPassword123!'
+  };
+}
+
+// Helper function to wait for page load
+async function waitForPageLoad(page: any) {
+  await page.waitForLoadState('networkidle');
+}
 
 test.describe('Authentication Flows', () => {
   test.describe('Login Flow', () => {    test('should successfully login with valid credentials and navigate to dashboard', async ({ page }) => {

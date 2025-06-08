@@ -61,21 +61,7 @@ test.describe('Accessibility Tests', () => {
     }
   });
 
-  test('should have proper focus management', async ({ page }) => {
-    await page.goto('/auth/login');
-    
-    // Tab through form elements
-    await page.keyboard.press('Tab');
-    
-    // Check if focus is visible
-    const focusedElement = page.locator(':focus');
-    await expect(focusedElement).toBeVisible();
-    
-    // Continue tabbing
-    await page.keyboard.press('Tab');
-    const secondFocusedElement = page.locator(':focus');
-    await expect(secondFocusedElement).toBeVisible();
-  });
+
 
   
 

@@ -1,4 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
+import * as dotenv from 'dotenv';
+
+// Load test environment variables
+dotenv.config({ path: '.env.test' });
 
 /**
  * @see https://playwright.dev/docs/test-configuration
@@ -29,43 +33,143 @@ export default defineConfig({
     /* Record video on failure */
     video: 'retain-on-failure',
   },
-
-  /* Configure projects for major browsers */
-  projects: [
-    {
-      name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+    projects: [
+    // Setup project to authenticate once for protected tests
+    { 
+      name: 'setup', 
+      testMatch: '**/auth.setup.ts' 
     },
-
+      // Public tests (no authentication needed) - landing page, navigation, accessibility, performance
     {
-      name: 'firefox',
-      use: { ...devices['Desktop Firefox'] },
+      name: 'public-chromium',
+      testMatch: ['**/landing.spec.ts', '**/navigation.spec.ts', '**/accessibility.spec.ts', '**/performance.spec.ts', '**/forms.spec.ts', '**/visual.spec.ts', '**/smoke.spec.ts', '**/test-1.spec.ts'],
+      use: { 
+        ...devices['Desktop Chrome'],
+        // Explicitly no storageState - test public experience
+        storageState: undefined,
+      },
+      dependencies: [], // No dependencies - these are public pages
     },
-
+      {
+      name: 'public-firefox',
+      testMatch: ['**/landing.spec.ts', '**/navigation.spec.ts', '**/accessibility.spec.ts', '**/performance.spec.ts', '**/forms.spec.ts', '**/visual.spec.ts', '**/smoke.spec.ts', '**/test-1.spec.ts'],
+      use: { 
+        ...devices['Desktop Firefox'],
+        // Explicitly no storageState - test public experience
+        storageState: undefined,
+      },
+      dependencies: [], // No dependencies - these are public pages
+    },
+      {
+      name: 'public-webkit',
+      testMatch: ['**/landing.spec.ts', '**/navigation.spec.ts', '**/accessibility.spec.ts', '**/performance.spec.ts', '**/forms.spec.ts', '**/visual.spec.ts', '**/smoke.spec.ts', '**/test-1.spec.ts'],
+      use: { 
+        ...devices['Desktop Safari'],
+        // Explicitly no storageState - test public experience
+        storageState: undefined,
+      },
+      dependencies: [], // No dependencies - these are public pages
+    },
+    
+    // Authentication flow tests (clean slate - no stored auth, no setup dependencies)
     {
-      name: 'webkit',
-      use: { ...devices['Desktop Safari'] },
+      name: 'auth-chromium',
+      testMatch: ['**/auth.*.spec.ts', '**/manual-auth.spec.ts'],
+      use: { 
+        ...devices['Desktop Chrome'],
+        // Explicitly no storageState - start fresh for auth flow testing
+        storageState: undefined,
+      },
+      dependencies: [], // Explicitly no dependencies - no setup
     },
-
-    /* Test against mobile viewports. */
+    
     {
-      name: 'Mobile Chrome',
-      use: { ...devices['Pixel 5'] },
+      name: 'auth-firefox',
+      testMatch: ['**/auth.*.spec.ts', '**/manual-auth.spec.ts'],
+      use: { 
+        ...devices['Desktop Firefox'],
+        // Explicitly no storageState - start fresh for auth flow testing
+        storageState: undefined,
+      },
+      dependencies: [], // Explicitly no dependencies - no setup
     },
+    
     {
-      name: 'Mobile Safari',
-      use: { ...devices['iPhone 12'] },
+      name: 'auth-webkit',
+      testMatch: ['**/auth.*.spec.ts', '**/manual-auth.spec.ts'],
+      use: { 
+        ...devices['Desktop Safari'],
+        // Explicitly no storageState - start fresh for auth flow testing
+        storageState: undefined,
+      },
+      dependencies: [], // Explicitly no dependencies - no setup
     },
-
-    /* Test against branded browsers. */
-    // {
-    //   name: 'Microsoft Edge',
-    //   use: { ...devices['Desktop Edge'], channel: 'msedge' },
-    // },
-    // {
-    //   name: 'Google Chrome',
-    //   use: { ...devices['Desktop Chrome'], channel: 'chrome' },
-    // },
+      // Protected tests that require authentication (apps dashboard, authenticated features)
+    {
+      name: 'protected-chromium',
+      testMatch: ['**/apps.*.spec.ts', '**/test-2.spec.ts'],
+      use: { 
+        ...devices['Desktop Chrome'],
+        storageState: 'tests/e2e/.auth/user.json',
+      },
+      dependencies: ['setup'],
+    },
+      {
+      name: 'protected-firefox',
+      testMatch: ['**/apps.*.spec.ts', '**/test-2.spec.ts'],
+      use: { 
+        ...devices['Desktop Firefox'],
+        storageState: 'tests/e2e/.auth/user.json',
+      },
+      dependencies: ['setup'],
+    },    {
+      name: 'protected-webkit',
+      testMatch: ['**/apps.*.spec.ts', '**/test-2.spec.ts'],
+      use: { 
+        ...devices['Desktop Safari'],
+        storageState: 'tests/e2e/.auth/user.json',
+      },
+      dependencies: ['setup'],
+    },    // Mobile browsers - public tests
+    {
+      name: 'public-mobile-chrome',
+      testMatch: ['**/landing.spec.ts', '**/navigation.spec.ts', '**/accessibility.spec.ts', '**/performance.spec.ts', '**/test-1.spec.ts'],
+      use: { 
+        ...devices['Pixel 5'],
+        storageState: undefined,
+      },
+      dependencies: [],
+    },
+      {
+      name: 'public-mobile-safari',
+      testMatch: ['**/landing.spec.ts', '**/navigation.spec.ts', '**/accessibility.spec.ts', '**/performance.spec.ts', '**/test-1.spec.ts'],
+      use: { 
+        ...devices['iPhone 12'],
+        storageState: undefined,
+      },
+      dependencies: [],
+    },
+    
+    // Mobile browsers - protected tests
+    {
+      name: 'protected-mobile-chrome',
+      testMatch: ['**/apps.*.spec.ts'],
+      use: { 
+        ...devices['Pixel 5'],
+        storageState: 'tests/e2e/.auth/user.json',
+      },
+      dependencies: ['setup'],
+    },
+    
+    {
+      name: 'protected-mobile-safari',
+      testMatch: ['**/apps.*.spec.ts'],
+      use: { 
+        ...devices['iPhone 12'],
+        storageState: 'tests/e2e/.auth/user.json',
+      },
+      dependencies: ['setup'],
+    },
   ],
 
   /* Run your local dev server before starting the tests */
