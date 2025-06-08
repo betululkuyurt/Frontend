@@ -43,6 +43,7 @@ import { deleteMiniService } from "@/lib/services"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { decodeJWT, getAccessToken } from "@/lib/auth"
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter"
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism"
@@ -684,6 +685,19 @@ export default function ServicePage() {
   const [currentCode, setCurrentCode] = useState("")
   const [currentLanguage, setCurrentLanguage] = useState("text")
 
+  // Mode selection and chat history state
+  const [showModeSelection, setShowModeSelection] = useState(false)
+  const [selectedMode, setSelectedMode] = useState<'chat' | 'normal' | null>(null)
+  const [chatHistorySidebar, setChatHistorySidebar] = useState(false)
+  const [savedConversations, setSavedConversations] = useState<Array<{
+    id: string
+    title: string
+    lastMessage: string
+    timestamp: Date
+    messageCount: number
+  }>>([])
+  const [loadingConversations, setLoadingConversations] = useState(false)
+
   const handleCodeGenerated = (code: string, language: string) => {
     setCurrentCode(code)
     setCurrentLanguage(language)
@@ -817,6 +831,13 @@ export default function ServicePage() {
 
     fetchService()
   }, [serviceId, isAuthenticated])
+
+  // Effect to show mode selection popup for text-output services
+  useEffect(() => {
+    if (service && checkIfChatModeEligible() && chatHistory.length === 0 && selectedMode === null) {
+      setShowModeSelection(true)
+    }
+  }, [service])
 
   const fetchAgentDetails = async (nodes: any) => {
     try {
@@ -1042,7 +1063,199 @@ export default function ServicePage() {
 
     return fileUploadAgents
   }, [service?.workflow, agentDetails, agentTypesInfo])
+  // Current conversation ID for chat mode
+  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null)
 
+  // Chat history management functions
+  const loadChatHistory = async () => {
+    if (!service?.id) return
+    
+    setLoadingConversations(true)
+    try {
+      const { token, currentUserId } = getAuthHeaders()
+      const response = await fetch(
+        `http://127.0.0.1:8000/api/v1/mini-services/conv-list?skip=0&limit=50&current_user_id=${currentUserId}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      )
+
+      if (response.ok) {
+        const conversations = await response.json()
+        // Filter conversations for this service and format them
+        const serviceConversations = conversations
+          .filter((conv: any) => conv.mini_service_id === service.id)
+          .map((conv: any) => ({
+            id: conv.id.toString(),
+            title: getConversationTitle(conv.conversation),
+            lastMessage: getLastMessage(conv.conversation),
+            timestamp: new Date(conv.updated_at),
+            messageCount: conv.conversation.length,
+          }))
+        setSavedConversations(serviceConversations)
+      } else {
+        console.error('Failed to load chat history:', response.statusText)
+      }
+    } catch (error) {
+      console.error('Error loading chat history:', error)
+    } finally {
+      setLoadingConversations(false)
+    }
+  }
+
+  const loadConversation = async (conversationId: string) => {
+    try {
+      const { token, currentUserId } = getAuthHeaders()
+      const response = await fetch(
+        `http://127.0.0.1:8000/api/v1/mini-services/conv-get/${conversationId}?current_user_id=${currentUserId}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },        }
+      )
+
+      if (response.ok) {
+        const conversation = await response.json()
+        // Convert backend format to frontend format
+        const messages = conversation.conversation.map((msg: any, index: number) => ({
+          id: `${conversationId}-${index}`,
+          type: msg.role === 'user' ? 'user' : 'assistant',
+          content: msg.content,
+          timestamp: new Date(),
+          // For assistant messages, create a result object that matches expected structure
+          result: msg.role === 'assistant' ? { final_output: msg.content } : undefined,
+        }))
+        setChatHistory(messages)
+        setCurrentConversationId(conversationId)
+        setChatHistorySidebar(false)
+
+        toast({
+          title: "Conversation loaded",
+          description: `Loaded ${messages.length} messages from previous conversation`,
+        })
+      } else {
+        console.error('Failed to load conversation:', response.statusText)
+        toast({
+          title: "Error",
+          description: "Failed to load conversation",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error('Error loading conversation:', error)
+      toast({
+        title: "Error", 
+        description: "Failed to load conversation",
+        variant: "destructive",
+      })
+    }
+  }
+
+  // Helper functions for conversation formatting
+  const getConversationTitle = (conversation: any[]) => {
+    const firstUserMessage = conversation.find(msg => msg.role === 'user')
+    if (firstUserMessage) {
+      return firstUserMessage.content.substring(0, 50) + (firstUserMessage.content.length > 50 ? '...' : '')
+    }
+    return 'Untitled Conversation'
+  }
+
+  const getLastMessage = (conversation: any[]) => {
+    if (conversation.length > 0) {
+      const lastMsg = conversation[conversation.length - 1]
+      return lastMsg.content.substring(0, 100) + (lastMsg.content.length > 100 ? '...' : '')
+    }
+    return ''
+  }  // Convert chat history to API format
+  const formatConversationForAPI = (messages: any[]) => {
+    // Take last 50 messages to avoid token limits
+    const recentMessages = messages.slice(-50)
+    return recentMessages.map(msg => {
+      let content = msg.content
+      
+      // For assistant messages, extract content from result if content is empty
+      if (msg.type === 'assistant' && (!content || content === '') && msg.result) {
+        if (typeof msg.result === 'string') {
+          content = msg.result
+        } else if (msg.result.final_output) {
+          // Extract final_output for chat endpoint
+          content = msg.result.final_output
+        } else if (msg.result.result) {
+          content = msg.result.result
+        } else if (msg.result.text) {
+          content = msg.result.text
+        } else if (msg.result.content) {
+          content = msg.result.content
+        } else {
+          // Fallback: stringify the result
+          content = JSON.stringify(msg.result)
+        }
+      }
+      
+      return {
+        role: msg.type === 'user' ? 'user' : 'assistant',
+        content: content || ''
+      }
+    })
+  }
+
+  // Create or update conversation
+  const saveConversation = async (conversation: any[]) => {
+    if (!service?.id || selectedMode !== 'chat') return
+
+    try {
+      const { token, currentUserId } = getAuthHeaders()
+      
+      if (currentConversationId) {        // Update existing conversation
+        const response = await fetch(
+          `http://127.0.0.1:8000/api/v1/mini-services/conversations/${currentConversationId}?current_user_id=${currentUserId}`,
+          {
+            method: 'PUT',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              conversation: conversation,
+              mini_service_id: service.id
+            })
+          }
+        )
+
+        if (!response.ok) {
+          console.error('Failed to update conversation:', response.statusText)
+        }
+      } else {        // Create new conversation
+        const response = await fetch(
+          `http://127.0.0.1:8000/api/v1/mini-services/${service.id}/conversations?current_user_id=${currentUserId}`,
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              conversation: conversation,
+              mini_service_id: service.id
+            })
+          }
+        )
+
+        if (response.ok) {
+          const newConversation = await response.json()
+          setCurrentConversationId(newConversation.id.toString())
+        } else {
+          console.error('Failed to create conversation:', response.statusText)
+        }
+      }
+    } catch (error) {
+      console.error('Error saving conversation:', error)
+    }
+  }
   const handleSubmit = async () => {
     if (!service) return
 
@@ -1062,8 +1275,12 @@ export default function ServicePage() {
         id: `user-${Date.now()}`,
         type: "user" as const,
         content: userInput?.trim() || "",
-        timestamp: new Date(),      }
-      setChatHistory((prev) => [...prev, userMessage])
+        timestamp: new Date(),
+      }
+
+      // Add user message to chat history
+      const updatedHistory = [...chatHistory, userMessage]
+      setChatHistory(updatedHistory)
 
       const currentInput = userInput
       setUserInput("")
@@ -1073,18 +1290,49 @@ export default function ServicePage() {
       setResult(null)
 
       try {
-        const response = await performRegularServiceSubmit(currentInput, null)
+        let response: any        // If in chat mode, use chat API with conversation history
+        if (selectedMode === 'chat') {
+          // Format conversation for API (include user message we just added)
+          const conversationForAPI = formatConversationForAPI(updatedHistory)
+          
+          // Use regular service submit but include conversation context
+          response = await performRegularServiceSubmit(currentInput, null, conversationForAPI)
+        } else {
+          // Normal mode - single request without history
+          response = await performRegularServiceSubmit(currentInput, null)
+        }
+
+        // Extract content from response for assistant message
+        let assistantContent = ""
+        if (typeof response === 'string') {
+          assistantContent = response
+        } else if (response?.final_output) {
+          assistantContent = response.final_output
+        } else if (response?.result) {
+          assistantContent = response.result
+        } else if (response?.text) {
+          assistantContent = response.text
+        } else if (response?.content) {
+          assistantContent = response.content
+        }
 
         const assistantMessage = {
           id: `assistant-${Date.now()}`,
           type: "assistant" as const,
-          content: "",
+          content: assistantContent,
           result: response,
           timestamp: new Date(),
           isTyping: true,
         }
-        setChatHistory((prev) => [...prev, assistantMessage])
+        const finalHistory = [...updatedHistory, assistantMessage]
+        setChatHistory(finalHistory)
         setTypingMessageId(assistantMessage.id)
+
+        // Save updated conversation in chat mode
+        if (selectedMode === 'chat') {
+          const finalConversationForAPI = formatConversationForAPI(finalHistory)
+          await saveConversation(finalConversationForAPI)
+        }
       } catch (err: any) {
         console.error("Error running RAG service:", err)
 
@@ -1094,7 +1342,14 @@ export default function ServicePage() {
           content: err.message || "An unexpected error occurred while processing your request",
           timestamp: new Date(),
         }
-        setChatHistory((prev) => [...prev, errorMessage])
+        const finalHistory = [...updatedHistory, errorMessage]
+        setChatHistory(finalHistory)
+
+        // Save conversation with error in chat mode
+        if (selectedMode === 'chat') {
+          const finalConversationForAPI = formatConversationForAPI(finalHistory)
+          await saveConversation(finalConversationForAPI)
+        }
 
         setError(err.message || "An unexpected error occurred while processing your request")
       } finally {
@@ -1134,7 +1389,10 @@ export default function ServicePage() {
       file: uploadedFile || undefined,
       timestamp: new Date(),
     }
-    setChatHistory((prev) => [...prev, userMessage])
+
+    // Add user message to chat history
+    const updatedHistory = [...chatHistory, userMessage]
+    setChatHistory(updatedHistory)
 
     const currentInput = userInput
     const currentFile = uploadedFile
@@ -1148,29 +1406,47 @@ export default function ServicePage() {
     try {
       let response: any
 
+      // Determine conversation context for chat mode
+      const conversationForAPI = selectedMode === 'chat' ? formatConversationForAPI(updatedHistory) : undefined
+
       if (hasFileUploadAgents) {
-        response = await performUnifiedFileUpload(currentInput, currentFile)
+        response = await performUnifiedFileUpload(currentInput, currentFile, conversationForAPI)
       } else if (fileUploadRequirements?.type === "document") {
-        response = await performDocumentUpload(currentInput, currentFile)      } else {
-        response = await performRegularServiceSubmit(currentInput, currentFile)
+        response = await performDocumentUpload(currentInput, currentFile, conversationForAPI)      } else {
+        response = await performRegularServiceSubmit(currentInput, currentFile, conversationForAPI)
+      }
+
+      // Extract content from response for assistant message
+      let assistantContent = ""
+      if (typeof response === 'string') {
+        assistantContent = response
+      } else if (response?.final_output) {
+        assistantContent = response.final_output
+      } else if (response?.result) {
+        assistantContent = response.result
+      } else if (response?.text) {
+        assistantContent = response.text
+      } else if (response?.content) {
+        assistantContent = response.content
       }
 
       const assistantMessage = {
         id: `assistant-${Date.now()}`,
         type: "assistant" as const,
-        content: "",
+        content: assistantContent,
         result: response,
         timestamp: new Date(),
         isTyping: true,
       }
-      setChatHistory((prev) => [...prev, assistantMessage])
+      const finalHistory = [...updatedHistory, assistantMessage]
+      setChatHistory(finalHistory)
       setTypingMessageId(assistantMessage.id)
 
-      setDocumentProcessingState({
-        isProcessing: false,
-        stage: "complete",
-        message: "",
-      })
+      // Save updated conversation with assistant response in chat mode
+      if (selectedMode === 'chat') {
+        const finalConversationForAPI = formatConversationForAPI(finalHistory)
+        await saveConversation(finalConversationForAPI)
+      }
     } catch (err: any) {
       console.error("Error running service:", err)
 
@@ -1180,15 +1456,21 @@ export default function ServicePage() {
         content: err.message || "An unexpected error occurred while processing your request",
         timestamp: new Date(),
       }
-      setChatHistory((prev) => [...prev, errorMessage])
+      const finalHistory = [...updatedHistory, errorMessage]
+      setChatHistory(finalHistory)
+
+      // Save conversation with error in chat mode
+      if (selectedMode === 'chat') {
+        const finalConversationForAPI = formatConversationForAPI(finalHistory)
+        await saveConversation(finalConversationForAPI)
+      }
 
       setError(err.message || "An unexpected error occurred while processing your request")
     } finally {
-      setIsLoading(false)
-    }
+      setIsLoading(false)    }
   }
 
-  const performUnifiedFileUpload = async (inputText: string, file: File | null) => {
+  const performUnifiedFileUpload = async (inputText: string, file: File | null, conversation?: any[]) => {
     const fileUploadAgents = getFileUploadAgents()
     const primaryAgent = fileUploadAgents[0]
     const config = primaryAgent.config
@@ -1209,10 +1491,17 @@ export default function ServicePage() {
       const apiKeysForBackend = getApiKeysForBackend()
       if (Object.keys(apiKeysForBackend).length === 0) {
         throw new Error("API key is required for RAG document queries")
+      }      // Prepare input with conversation history if provided (for chat mode)
+      let finalInput = inputText
+      if (conversation && conversation.length > 0) {
+        const historyText = conversation.map(msg => 
+          `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}`
+        ).join('\n')
+        finalInput = `This is the current conversation history: ${historyText} and this is the latest message of the user: ${inputText}`
       }
-
-      const processBody = {
-        input: inputText,
+      
+      const processBody: any = {
+        input: finalInput,
         api_keys: apiKeysForBackend,
         collection_id: `rag_collection_${primaryAgent.id}`,
       }
@@ -1286,10 +1575,17 @@ export default function ServicePage() {
         isProcessing: true,
         stage: "processing",
         message: "Processing uploaded file...",
-      })
-
-      const processBody = {
-        input: uploadData.saved_as,
+      })      // Prepare input with conversation history if provided (for chat mode)
+      let finalInput = uploadData.saved_as
+      if (conversation && conversation.length > 0) {
+        const historyText = conversation.map(msg => 
+          `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}`
+        ).join('\n')
+        finalInput = `This is the current conversation history: ${historyText} and this is the latest message of the user: ${uploadData.saved_as}`
+      }
+      
+      const processBody: any = {
+        input: finalInput,
         api_keys: getApiKeysForBackend(),
       }
 
@@ -1326,10 +1622,19 @@ export default function ServicePage() {
 
     if (file) {
       formData.append(config.fileFieldName, file, file.name)
-    }
-
-    if (inputText && !config.hasSpecialUI) {
-      formData.append("input", inputText)
+    }    // Handle input and conversation history for mini service communication
+    if (conversation && conversation.length > 0) {
+      // For chat mode with history, combine history and current message in input field
+      const historyText = conversation.map(msg => 
+        `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}`
+      ).join('\n')
+      const combinedInput = `This is the current conversation history: ${historyText} and this is the latest message of the user: ${inputText || ''}`
+      formData.append("input", combinedInput)
+    } else {
+      // For non-chat mode or first message, use standard input handling
+      if (inputText && !config.hasSpecialUI) {
+        formData.append("input", inputText)
+      }
     }
 
     Object.entries(config.additionalFields || {}).forEach(([fieldName, fieldValue]) => {
@@ -1341,8 +1646,7 @@ export default function ServicePage() {
           formData.append(fieldName, fieldValue(apiKeysForBackend))
         } else if (fieldName === "include_timestamps") {
           formData.append(fieldName, fieldValue(transcriptionOptions))
-        }
-      } else {
+        }      } else {
         formData.append(fieldName, fieldValue)
       }
     })
@@ -1377,28 +1681,46 @@ export default function ServicePage() {
     const data = await response.json()
     return data
   }
-
-  const performRegularServiceSubmit = async (inputText: string, file: File | null) => {
+  const performRegularServiceSubmit = async (inputText: string, file: File | null, conversation?: any[]) => {
     const { token, currentUserId } = getAuthHeaders()
 
     let body: FormData | string
-    const headers: Record<string, string> = {
-      Authorization: `Bearer ${token}`,
+    const headers: Record<string, string> = {      Authorization: `Bearer ${token}`,
     }
 
     if (service!.input_type === "text") {
-      const bodyData = {
-        input: inputText,
+      const bodyData: any = {
         api_keys: getApiKeysForBackend(),
       }
+      
+      // Add conversation history if provided (for chat mode)
+      if (conversation && conversation.length > 0) {
+        // For chat mode with history, combine history and current message in input field
+        const historyText = conversation.map(msg => 
+          `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}`
+        ).join('\n')
+        bodyData.input = `This is the current conversation history: ${historyText} and this is the latest message of the user: ${inputText}`
+      } else {
+        bodyData.input = inputText
+      }
+      
       body = JSON.stringify(bodyData)
-      headers["Content-Type"] = "application/json"
-    } else if (file) {
+      headers["Content-Type"] = "application/json"    } else if (file) {
       body = new FormData()
       body.append("file", file)
-      if (inputText) {
+      
+      // Handle input and conversation history for file uploads
+      if (conversation && conversation.length > 0) {
+        // For chat mode with history, combine history and current message in input field
+        const historyText = conversation.map(msg => 
+          `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}`
+        ).join('\n')
+        const combinedInput = `This is the current conversation history: ${historyText} and this is the latest message of the user: ${inputText || ''}`
+        body.append("input", combinedInput)
+      } else if (inputText) {
         body.append("input", inputText)
       }
+      
       const backendKeys = getApiKeysForBackend()
       if (Object.keys(backendKeys).length > 0) {
         body.append("api_keys", JSON.stringify(backendKeys))
@@ -1425,7 +1747,7 @@ export default function ServicePage() {
     return data
   }
 
-  const performDocumentUpload = async (inputText: string, file: File | null) => {
+  const performDocumentUpload = async (inputText: string, file: File | null, conversation?: any[]) => {
     if (!file) {
       throw new Error("Document file is required")
     }
@@ -1473,10 +1795,20 @@ export default function ServicePage() {
       message: "Processing uploaded document...",
     })
 
-    const processBody = {
-      input: inputText || uploadData.saved_as,
+    const processBody: any = {
       file: uploadData.saved_as,
       api_keys: getApiKeysForBackend(),
+    }
+
+    // Handle input and conversation history for document processing
+    if (conversation && conversation.length > 0) {
+      // For chat mode with history, combine history and current message in input field
+      const historyText = conversation.map(msg => 
+        `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}`
+      ).join('\n')
+      processBody.input = `This is the current conversation history: ${historyText} and this is the latest message of the user: ${inputText || uploadData.saved_as}`
+    } else {
+      processBody.input = inputText || uploadData.saved_as
     }
 
     const processAbortController = createAbortController()
@@ -2020,7 +2352,7 @@ export default function ServicePage() {
         maxSize: 10,
         hasSpecialUI: false,
         type: "document",
-        agentName: agentDetail?.name || node.agent_name || `Agent ${node.agent_id}`,
+        agentName: agentDetail?.name || node.agent_name || `Agent ${ node.agent_id}`,
       }
     }
 
@@ -2104,23 +2436,26 @@ export default function ServicePage() {
     const fileUploadAgents = getFileUploadAgents()
     return fileUploadAgents.some((agent) => agent.type === "transcribe")
   }
+  // Function to get the RAG agent ID from the service workflow
+  const getRAGAgentId = useCallback((): number | null => {
+    const fileUploadAgents = getFileUploadAgents()
+    const ragAgent = fileUploadAgents.find((agent) => agent.type === "rag")
+    return ragAgent ? ragAgent.id : null
+  }, [getFileUploadAgents])
 
-  const getRAGAgentId = (): number | null => {
-    if (!service?.workflow?.nodes) {
-      return null
+  // New function to check if service is eligible for chat mode
+  const checkIfChatModeEligible = (): boolean => {
+    // RAG services always support chat mode
+    if (checkIfRAGDocumentService()) {
+      return true
     }
 
-    for (const [nodeId, node] of Object.entries(service.workflow.nodes)) {
-      const agentId = node.agent_id
-      const agentDetail = agentDetails[agentId]
-      const agentType = agentDetail?.agent_type?.toLowerCase() || node.agent_type?.toLowerCase() || ""
-
-      if (agentType === "rag") {
-        return agentId
-      }
+    // Services with text output type support chat mode
+    if (service?.output_type === "text") {
+      return true
     }
 
-    return null
+    return false
   }
 
   const copyToClipboard = async (text: string, key: string) => {
@@ -2681,10 +3016,8 @@ export default function ServicePage() {
               >
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 Back
-              </Button>
-
-              {/* Show service card only when chat is active */}
-              {chatHistory.length > 0 && (
+              </Button>              {/* Show service card when chat is active or service is chat-eligible */}
+              {(chatHistory.length > 0 || checkIfChatModeEligible()) && (
                 <div className="flex items-center space-x-3 animate-in slide-in-from-left duration-500">
                   <div
                     className={`w-8 h-8 bg-gradient-to-r ${getServiceColor()} rounded-lg flex items-center justify-center shadow-lg`}
@@ -2695,11 +3028,27 @@ export default function ServicePage() {
                     <h1 className="text-lg font-bold text-white">{service?.name || "Service"}</h1>
                     <div className="flex items-center gap-2">
                       <span className="text-xs bg-purple-800/40 text-purple-200 px-2 py-1 rounded-full">
-                        {service?.input_type} → {service?.output_type}
+                        {service?.input_type}
                       </span>
-                    </div>
+                      <ArrowRightIcon className="h-4 w-4 text-purple-400 animate-pulse" />
+                      <span className="text-xs bg-indigo-800/40 text-indigo-200 px-2 py-1 rounded-full">
+                        {service?.output_type}
+                      </span>                    </div>
                   </div>
                 </div>
+              )}
+
+              {/* Chat History Toggle Button */}
+              {selectedMode === 'chat' && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-gray-400 hover:text-white hover:bg-purple-600/20"
+                  onClick={() => setChatHistorySidebar(true)}
+                >
+                  <MessageSquare className="h-4 w-4 mr-2" />
+                  History
+                </Button>
               )}
             </div>
 
@@ -2739,10 +3088,9 @@ export default function ServicePage() {
         className={`pt-16 min-h-screen flex transition-all duration-500 ${codePanelOpen ? "mr-96 lg:mr-[500px]" : ""}`}
         onClick={handleMainContentClick}
       >
-        {/* Main Content Area */}
-        <div className={`flex-1 flex flex-col transition-all duration-300 ${sidebarOpen ? "sm:mr-80 xl:mr-96" : ""}`}>
+        {/* Main Content Area */}        <div className={`flex-1 flex flex-col transition-all duration-300 ${sidebarOpen ? "sm:mr-80 xl:mr-96" : ""}`}>
           {/* Conditional Layout: Centered Input or Chat Interface */}
-          {chatHistory.length === 0 ? (
+          {chatHistory.length === 0 && !checkIfChatModeEligible() ? (
             /* Initial State - Centered Input */
             <div className="flex-1 flex items-center justify-center p-4 lg:p-6 min-h-[calc(100vh-100px)]">
               <div className="w-full max-w-2xl">
@@ -2988,8 +3336,8 @@ export default function ServicePage() {
                                   strokeLinejoin="round"
                                   strokeWidth={2}
                                   d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.082 16.5c-.77.833.192 2.5 1.732 2.5z"
-                              />
-                              </svg>
+                          />
+                          </svg>
                             </div>
                             <div className="flex-1">
                               <h4 className="text-amber-200 font-medium text-sm mb-1">API Keys Required</h4>
@@ -3340,9 +3688,166 @@ export default function ServicePage() {
                 </div>
               </div>
             </div>
-          )}
-        </div>
+          )}        </div>
       </main>
+
+      {/* Mode Selection Dialog */}
+      <Dialog open={showModeSelection} onOpenChange={setShowModeSelection}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Choose Your Mode</DialogTitle>
+            <DialogDescription>
+              This service supports different interaction modes. Please select your preferred mode:
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div 
+              className={`p-4 border rounded-lg cursor-pointer transition-colors ${
+                selectedMode === 'chat' 
+                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-950' 
+                  : 'border-gray-200 hover:border-gray-300 dark:border-gray-700 dark:hover:border-gray-600'
+              }`}
+              onClick={() => setSelectedMode('chat')}
+            >
+              <div className="flex items-start space-x-3">
+                <div className={`w-4 h-4 rounded-full border-2 mt-0.5 ${
+                  selectedMode === 'chat' 
+                    ? 'border-blue-500 bg-blue-500' 
+                    : 'border-gray-400'
+                }`} />
+                <div>
+                  <h3 className="font-medium text-gray-900 dark:text-gray-100">Chat Mode</h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                    Context-aware conversations with chat history. More expensive due to conversation context being maintained.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div 
+              className={`p-4 border rounded-lg cursor-pointer transition-colors ${
+                selectedMode === 'normal' 
+                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-950' 
+                  : 'border-gray-200 hover:border-gray-300 dark:border-gray-700 dark:hover:border-gray-600'
+              }`}
+              onClick={() => setSelectedMode('normal')}
+            >
+              <div className="flex items-start space-x-3">
+                <div className={`w-4 h-4 rounded-full border-2 mt-0.5 ${
+                  selectedMode === 'normal' 
+                    ? 'border-blue-500 bg-blue-500' 
+                    : 'border-gray-400'
+                }`} />
+                <div>
+                  <h3 className="font-medium text-gray-900 dark:text-gray-100">Normal Generation Mode</h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                    Individual requests without conversation context. More cost-effective option.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              onClick={() => {
+                if (selectedMode) {
+                  setShowModeSelection(false)
+                  if (selectedMode === 'chat') {
+                    setChatHistorySidebar(true)
+                    // Load chat history from backend
+                    loadChatHistory()
+                  }
+                }
+              }}
+              disabled={!selectedMode}
+            >
+              Continue
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Chat History Sidebar */}
+      {chatHistorySidebar && selectedMode === 'chat' && (
+        <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex">
+          <div className="w-80 bg-white dark:bg-gray-900 h-full shadow-xl flex flex-col">
+            {/* Sidebar Header */}
+            <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Chat History</h2>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setChatHistorySidebar(false)}
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+
+            {/* Chat History List */}
+            <div className="flex-1 overflow-y-auto p-4">
+              {loadingConversations ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="w-6 h-6 animate-spin text-gray-500" />
+                  <span className="ml-2 text-sm text-gray-500">Loading conversations...</span>
+                </div>
+              ) : savedConversations.length === 0 ? (
+                <div className="text-center py-8">
+                  <MessageSquare className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                  <p className="text-sm text-gray-500">No previous conversations found</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {savedConversations.map((conversation) => (
+                    <div
+                      key={conversation.id}
+                      className="p-3 border border-gray-200 dark:border-gray-700 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                      onClick={() => loadConversation(conversation.id)}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1 min-w-0">
+                          <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                            {conversation.title || 'Untitled Conversation'}
+                          </h3>                          <p className="text-xs text-gray-500 mt-1">
+                            {new Date(conversation.timestamp).toLocaleDateString()}
+                          </p>
+                          <p className="text-xs text-gray-400 mt-1 truncate">
+                            {conversation.messageCount} messages
+                          </p>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* New Chat Button */}
+            <div className="p-4 border-t border-gray-200 dark:border-gray-700">              <Button
+                onClick={() => {
+                  // Start a new chat
+                  setChatHistory([])
+                  setCurrentConversationId(null)
+                  setChatHistorySidebar(false)
+                }}
+                className="w-full"
+                variant="outline"
+              >
+                <MessageSquare className="w-4 h-4 mr-2" />
+                Start New Chat
+              </Button>
+            </div>
+          </div>
+
+          {/* Click outside to close */}
+          <div 
+            className="flex-1" 
+            onClick={() => setChatHistorySidebar(false)}
+          />
+        </div>
+      )}
     </div>
   )
 }
