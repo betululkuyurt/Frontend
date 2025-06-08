@@ -1365,15 +1365,20 @@ export default function DashboardPage() {
                   {/* Create New Mini Service Button - Simplified 3D Effect */}
                 <Button
                   onClick={() => router.push("/apps/create")}
-                  className="group relative bg-gray-900 hover:bg-gray-800 text-white font-medium rounded-xl px-5 py-6 transition-all duration-300 hover:scale-105 whitespace-nowrap border-2 border-purple-500/40 hover:border-purple-400 transform-gpu"
+                  className="group relative bg-gray-900 hover:bg-gray-800 text-white font-medium rounded-xl px-5 py-6 transition-all duration-300 hover:scale-105 whitespace-nowrap border-2 border-transparent transform-gpu focus:outline-none"
+                  style={{
+                    background: 'linear-gradient(#18181b, #18181b) padding-box, linear-gradient(90deg, #7f5af0, #2cb5e8, #7f5af0) border-box',
+                    border: '2px solid transparent',
+                    boxShadow: '0 2px 16px 0 rgba(60,140,231,0.08)'
+                  }}
                   onMouseEnter={(e) => {
                     const rect = e.currentTarget.getBoundingClientRect()
                     const x = e.clientX - rect.left - rect.width / 2
                     const y = e.clientY - rect.top - rect.height / 2
                     e.currentTarget.style.transform = `
-                      perspective(1000px) 
-                      rotateX(${y / 20}deg) 
-                      rotateY(${-x / 20}deg) 
+                      perspective(1000px)
+                      rotateX(${y / 20}deg)
+                      rotateY(${-x / 20}deg)
                       scale(1.05)
                     `
                   }}
@@ -1381,16 +1386,19 @@ export default function DashboardPage() {
                     e.currentTarget.style.transform = 'perspective(1000px) rotateX(0deg) rotateY(0deg) scale(1)'
                   }}
                 >
-                  {/* Simple neon glow */}
-                  <div className="absolute inset-0 bg-gradient-to-r from-purple-600 via-pink-600 to-blue-600 rounded-xl opacity-0 group-hover:opacity-20 transition-opacity duration-300 blur-md -z-10"></div>
-                  
+                  {/* Subtle glow */}
+                  <div className="absolute inset-0 rounded-xl pointer-events-none" style={{
+                    background: 'linear-gradient(90deg, #7f5af0, #7f5af0, #2cb5e8)',
+                    opacity: 0.12,
+                    filter: 'blur(8px)'
+                  }}></div>
                   {/* Content */}
                   <div className="relative flex items-center gap-4 z-10">
-                    <div className="bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg p-3 group-hover:from-pink-400 group-hover:to-blue-400 transition-all duration-300">
+                    <div className="bg-gradient-to-r from-[#7f5af0] to-[#2cb5e8] rounded-lg p-3 group-hover:from-[#2cb5e8] group-hover:to-[#7f5af0] transition-all duration-300">
                       <Sparkles className="h-3 w-3 text-white group-hover:rotate-180 transition-transform duration-500" />
                     </div>
-                    <span className="text-lg font-semibold tracking-wide group-hover:text-purple-300 transition-colors duration-300">
-                      Create New Mini Service
+                    <span className="font-semibold tracking-wide transition-all duration-300 bg-gradient-to-r from-transparent to-transparent group-hover:from-[#7f5af0] group-hover:to-[#2cb5e8] group-hover:bg-clip-text group-hover:text-transparent">
+                      Create New Workflow
                     </span>
                   </div>
                 </Button>
