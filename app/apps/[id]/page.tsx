@@ -359,6 +359,37 @@ export default function MiniServicePage({ params }: { params: { id: string } }) 
     }
   };
 
+  // Auto-select first available API key for each agent when keys are loaded
+  useEffect(() => {
+    if (apiKeys.length > 0 && orderedWorkflow.length > 0) {
+      const autoSelectedKeys: Record<number, string> = {};
+      
+      // Get agents that require API keys and don't have one selected
+      orderedWorkflow
+        .filter(item => item.agent.requires_api_key)
+        .forEach((item) => {
+          const agentId = item.agent.id;
+          const agentProvider = item.agent.provider || "";
+          
+          // Only auto-select if no key is currently selected for this agent
+          if (!selectedApiKeys[agentId]) {
+            const availableKeys = getKeysForProvider(agentProvider);
+            if (availableKeys.length > 0) {
+              autoSelectedKeys[agentId] = availableKeys[0].id;
+            }
+          }
+        });
+
+      // Update state only if there are keys to auto-select
+      if (Object.keys(autoSelectedKeys).length > 0) {
+        setSelectedApiKeys(prev => ({
+          ...prev,
+          ...autoSelectedKeys,
+        }));
+      }
+    }
+  }, [apiKeys, orderedWorkflow, selectedApiKeys]);
+
   if (isLoadingService) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-black via-purple-950/20 to-black">

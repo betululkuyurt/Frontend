@@ -995,6 +995,29 @@ export default function ServicePage() {
     return agents
   }, [service?.workflow, agentDetails, doesAgentTypeRequireApiKey, agentTypesLoading])
 
+  // Auto-select first available API key for each agent when keys are loaded
+  useEffect(() => {
+    if (Object.keys(availableApiKeys).length > 0 && service?.workflow?.nodes) {
+      const requiredAgents = getAgentsRequiringApiKey()
+      const autoSelectedKeys: { [agentId: number]: string } = {}
+
+      requiredAgents.forEach((agent) => {
+        // Only auto-select if no key is currently selected for this agent
+        if (!apiKeys[agent.id] && availableApiKeys[agent.type]?.length > 0) {
+          autoSelectedKeys[agent.id] = availableApiKeys[agent.type][0].id
+        }
+      })
+
+      // Update state only if there are keys to auto-select
+      if (Object.keys(autoSelectedKeys).length > 0) {
+        setApiKeys((prev) => ({
+          ...prev,
+          ...autoSelectedKeys,
+        }))
+      }
+    }
+  }, [availableApiKeys, service?.workflow?.nodes, getAgentsRequiringApiKey, apiKeys])
+
   const areAllRequiredApiKeysSelected = useMemo(() => {
     const requiredAgents = getAgentsRequiringApiKey()
     if (requiredAgents.length === 0) return true
