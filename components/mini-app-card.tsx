@@ -272,7 +272,7 @@ export function MiniAppCard({
         onClick={handleClick}
         onMouseEnter={() => setIsHovering(true)}
         onMouseLeave={() => setIsHovering(false)}
-        className="cursor-pointer group relative h-64 transform transition-all duration-200 p-2"
+        className="cursor-pointer group relative h-64 sm:h-72 md:h-64 lg:h-72 transform transition-all duration-200 p-1 sm:p-2"
         style={{ perspective: '1000px' }}
       >
         {/* Lightweight background glow */}
@@ -294,9 +294,9 @@ export function MiniAppCard({
           {/* Front side of card */}
           <div
             className={cn(
-              "h-full bg-gradient-to-br from-gray-900/40 via-gray-800/30 to-gray-900/40 backdrop-blur-xl rounded-xl border border-gray-600/30 flex flex-col transition-all duration-200 relative overflow-hidden absolute inset-2 shadow-2xl",
+              "h-full bg-gradient-to-br from-gray-900/40 via-gray-800/30 to-gray-900/40 backdrop-blur-xl rounded-xl border border-gray-600/30 flex flex-col transition-all duration-200 relative overflow-hidden absolute inset-1 sm:inset-2 shadow-2xl",
               isHovering && "border-purple-500/50 from-gray-900/60 via-gray-800/50 to-gray-900/60",
-              isAddCard ? "p-4 justify-center items-center" : "p-4"
+              isAddCard ? "p-3 sm:p-4 justify-center items-center" : "p-3 sm:p-4"
             )}
             style={{ backfaceVisibility: 'hidden' }}
           >
@@ -324,7 +324,7 @@ export function MiniAppCard({
               // Modern "Create New" card
               <>
                 <div className={cn(
-                  "w-20 h-20 rounded-2xl flex items-center justify-center bg-gradient-to-br shadow-2xl transition-all duration-200 group-hover:scale-105 mb-6 relative overflow-hidden border border-white/10",
+                  "w-16 h-16 sm:w-20 sm:h-20 rounded-2xl flex items-center justify-center bg-gradient-to-br shadow-2xl transition-all duration-200 group-hover:scale-105 mb-4 sm:mb-6 relative overflow-hidden border border-white/10",
                   color
                 )}>
                   <div className="absolute inset-0 bg-white/10 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-200"></div>
@@ -336,14 +336,14 @@ export function MiniAppCard({
                   <div className="absolute top-2 right-2 w-1 h-1 bg-white/60 rounded-full"></div>
                   <div className="absolute bottom-3 left-3 w-1.5 h-1.5 bg-purple-400/80 rounded-full"></div>
                 </div>
-                <div className="text-center space-y-3 relative z-10">
-                  <h3 className="text-white text-xl font-bold tracking-wide bg-gradient-to-r from-white via-purple-100 to-blue-100 bg-clip-text text-transparent">
+                <div className="text-center space-y-2 sm:space-y-3 relative z-10">
+                  <h3 className="text-white text-lg sm:text-xl font-bold tracking-wide bg-gradient-to-r from-white via-purple-100 to-blue-100 bg-clip-text text-transparent">
                     Create New Service
                   </h3>
-                  <p className="text-gray-300 text-sm leading-relaxed max-w-xs mx-auto">
+                  <p className="text-gray-300 text-xs sm:text-sm leading-relaxed max-w-xs mx-auto">
                     Build a custom AI workflow with our intuitive drag-and-drop builder
                   </p>
-                  <div className="inline-flex items-center text-purple-300 text-sm font-medium bg-gradient-to-r from-purple-500/10 via-blue-500/10 to-purple-500/10 backdrop-blur-sm border border-purple-400/20 px-4 py-2 rounded-full hover:border-purple-400/40 transition-all duration-200">
+                  <div className="inline-flex items-center text-purple-300 text-xs sm:text-sm font-medium bg-gradient-to-r from-purple-500/10 via-blue-500/10 to-purple-500/10 backdrop-blur-sm border border-purple-400/20 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full hover:border-purple-400/40 transition-all duration-200">
                     <span className="w-2 h-2 bg-gradient-to-r from-purple-400 to-blue-400 rounded-full mr-2"></span>
                     Click to get started
                   </div>
@@ -353,20 +353,16 @@ export function MiniAppCard({
               // Enhanced regular service card
               <>
                 {/* Modern service icon and title section with glassmorphism */}
-                <div className="flex items-start space-x-3 mb-4 relative z-10">
+                <div className="flex items-start space-x-2 sm:space-x-3 mb-3 sm:mb-4 relative z-10">
                   <div className={cn(
-                    "w-12 h-12 rounded-xl flex items-center justify-center bg-gradient-to-br shadow-xl transition-all duration-200 group-hover:scale-105 relative overflow-hidden flex-shrink-0 border border-white/10",
+                    "w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center bg-gradient-to-br flex-shrink-0",
                     color
                   )}>
-                    <div className="absolute inset-0 bg-white/20 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200"></div>
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent rounded-xl"></div>
-                    <div className="relative z-10 transform transition-transform duration-200 group-hover:scale-105">
-                      {icon}
-                    </div>
+                    {icon}
                   </div>
-                  <div className="flex-1 min-w-0 pr-16" ref={containerRef}>
-                    <div className="flex items-center mb-2">
-                      <h3 className="text-base font-bold text-white tracking-wide flex items-center bg-gradient-to-r from-white via-gray-100 to-gray-200 bg-clip-text text-transparent overflow-hidden">
+                  <div className="flex-1 min-w-0 pr-12 sm:pr-16" ref={containerRef}>
+                    <div className="flex items-center mb-1 sm:mb-2">
+                      <h3 className="text-sm sm:text-base font-bold text-white tracking-wide flex items-center bg-gradient-to-r from-white via-gray-100 to-gray-200 bg-clip-text text-transparent overflow-hidden">
                         <span
                           ref={titleRef}
                           className={cn(
@@ -378,23 +374,23 @@ export function MiniAppCard({
                         </span>
                       </h3>
                     </div>                      {/* Owner username and privacy indicator side by side */}
-                    <div className="mb-2 flex items-center gap-2 flex-wrap">
+                    <div className="mb-1 sm:mb-2 flex items-center gap-1 sm:gap-2 flex-wrap">
                       {/* Owner username with modern styling */}
-                      {owner_username && (
-                        <div className="inline-flex items-center bg-gradient-to-r from-purple-500/10 to-blue-500/10 border border-purple-400/20 rounded-full px-2 py-1">
-                          <div className="w-1.5 h-1.5 bg-purple-400 rounded-full mr-1.5"></div>
-                          <span className="text-[11px] text-gray-400">created by </span>
-                          <span className="text-[11px] font-medium text-purple-300 ml-1">{owner_username}</span>
+                                              {owner_username && (
+                        <div className="inline-flex items-center bg-gradient-to-r from-purple-500/10 to-blue-500/10 border border-purple-400/20 rounded-full px-1.5 sm:px-2 py-0.5 sm:py-1">
+                          <div className="w-1.5 h-1.5 bg-purple-400 rounded-full mr-1 sm:mr-1.5"></div>
+                          <span className="text-[10px] sm:text-[11px] text-gray-400">created by </span>
+                          <span className="text-[10px] sm:text-[11px] font-medium text-purple-300 ml-0.5 sm:ml-1">{owner_username}</span>
                         </div>
                       )}                      {/* Privacy indicator for owner */}
                       {isCurrentUserOwner() && (
-                        <div className={`inline-flex items-center rounded-full px-2 py-1 border ${is_public === true
+                        <div className={`inline-flex items-center rounded-full px-1.5 sm:px-2 py-0.5 sm:py-1 border ${is_public === true
                             ? "bg-gradient-to-r from-green-500/10 to-emerald-500/10 border-green-400/20 text-green-300"
                             : "bg-gradient-to-r from-blue-500/10 to-cyan-500/10 border-blue-400/20 text-blue-300"
                           }`}>
-                          <div className={`w-1.5 h-1.5 rounded-full mr-1.5 ${is_public === true ? "bg-green-400" : "bg-blue-400"
+                          <div className={`w-1.5 h-1.5 rounded-full mr-1 sm:mr-1.5 ${is_public === true ? "bg-green-400" : "bg-blue-400"
                             }`}></div>
-                          <span className="text-[11px] font-medium">
+                          <span className="text-[10px] sm:text-[11px] font-medium">
                             {is_public === true ? "Public" : "Private"}
                           </span>
                         </div>
@@ -402,14 +398,14 @@ export function MiniAppCard({
                     </div>
 
                     {/* Modern service type indicators with glassmorphism */}
-                    <div className="flex items-center space-x-2">
-                      <div className="inline-flex items-center text-[11px] font-medium text-gray-300 bg-gradient-to-r from-emerald-500/10 to-green-500/10 border border-emerald-400/20 px-2 py-1 rounded-full backdrop-blur-sm">
-                        <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full mr-1.5"></span>
+                    <div className="flex items-center space-x-1 sm:space-x-2">
+                      <div className="inline-flex items-center text-[10px] sm:text-[11px] font-medium text-gray-300 bg-gradient-to-r from-emerald-500/10 to-green-500/10 border border-emerald-400/20 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full backdrop-blur-sm">
+                        <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full mr-1 sm:mr-1.5"></span>
                         {usageStats?.input_type ?? "Text"}
                       </div>
-                      <div className="text-gray-500 text-xs">→</div>
-                      <div className="inline-flex items-center text-[11px] font-medium text-gray-300 bg-gradient-to-r from-blue-500/10 to-cyan-500/10 border border-blue-400/20 px-2 py-1 rounded-full backdrop-blur-sm">
-                        <span className="w-1.5 h-1.5 bg-blue-400 rounded-full mr-1.5"></span>
+                      <div className="text-gray-500 text-[10px] sm:text-xs">→</div>
+                      <div className="inline-flex items-center text-[10px] sm:text-[11px] font-medium text-gray-300 bg-gradient-to-r from-blue-500/10 to-cyan-500/10 border border-blue-400/20 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full backdrop-blur-sm">
+                        <span className="w-1.5 h-1.5 bg-blue-400 rounded-full mr-1 sm:mr-1.5"></span>
                         {usageStats?.output_type ?? "Text"}
                       </div>
                     </div>
@@ -418,11 +414,11 @@ export function MiniAppCard({
                     {/* Info button with modern design */}
                     <button
                       onClick={handleInfoClick}
-                      className="p-1.5 rounded-lg bg-gradient-to-r from-gray-800/60 to-gray-900/60 backdrop-blur-sm text-gray-400 hover:text-blue-400 hover:from-blue-500/20 hover:to-blue-600/20 transition-all duration-150 border border-gray-600/30 hover:border-blue-500/50 shadow-lg"
+                      className="p-1 sm:p-1.5 rounded-lg bg-gradient-to-r from-gray-800/60 to-gray-900/60 backdrop-blur-sm text-gray-400 hover:text-blue-400 hover:from-blue-500/20 hover:to-blue-600/20 transition-all duration-150 border border-gray-600/30 hover:border-blue-500/50 shadow-lg touch-manipulation"
                       aria-label="Show description"
                       title="Show description"
                     >
-                      <Info className="h-3 w-3" />
+                      <Info className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                     </button>
 
                     {/* Favorite star button with modern design */}
@@ -432,7 +428,7 @@ export function MiniAppCard({
                         handleFavoriteClick();
                       }}
                       className={cn(
-                        "p-1.5 rounded-lg backdrop-blur-sm transition-all duration-150 border shadow-lg",
+                        "p-1 sm:p-1.5 rounded-lg backdrop-blur-sm transition-all duration-150 border shadow-lg touch-manipulation",
                         isFavorite
                           ? "bg-gradient-to-r from-orange-500/60 to-amber-500/60 text-orange-300 border-orange-400/50 hover:from-orange-400/60 hover:to-amber-400/60"
                           : "bg-gradient-to-r from-gray-800/60 to-gray-900/60 text-gray-400 border-gray-600/30 hover:text-orange-400 hover:from-orange-500/20 hover:to-orange-600/20 hover:border-orange-500/50"
@@ -442,9 +438,9 @@ export function MiniAppCard({
                       disabled={isTogglingFavorite}
                     >
                       {isTogglingFavorite ? (
-                        <Loader2 className="h-3 w-3 animate-spin text-purple-400" />
+                        <Loader2 className="h-3 w-3 sm:h-3.5 sm:w-3.5 animate-spin text-purple-400" />
                       ) : (
-                        <Star className={cn("h-3 w-3", isFavorite && "fill-current")} />
+                        <Star className={cn("h-3 w-3 sm:h-3.5 sm:w-3.5", isFavorite && "fill-current")} />
                       )}
                     </button>
 
@@ -452,53 +448,53 @@ export function MiniAppCard({
                     {isCustom && isCurrentUserOwner() && (
                       <button
                         onClick={handleDeleteClick}
-                        className="p-1.5 rounded-lg bg-gradient-to-r from-gray-800/60 to-gray-900/60 backdrop-blur-sm text-gray-400 hover:text-red-400 hover:from-red-500/20 hover:to-red-600/20 transition-all duration-150 border border-gray-600/30 hover:border-red-500/50 shadow-lg"
+                        className="p-1 sm:p-1.5 rounded-lg bg-gradient-to-r from-gray-800/60 to-gray-900/60 backdrop-blur-sm text-gray-400 hover:text-red-400 hover:from-red-500/20 hover:to-red-600/20 transition-all duration-150 border border-gray-600/30 hover:border-red-500/50 shadow-lg touch-manipulation"
                         aria-label="Delete service"
                         disabled={isDeleting}
                       >
                         {isDeleting ? (
-                          <Loader2 className="h-3 w-3 animate-spin text-purple-400" />
+                          <Loader2 className="h-3 w-3 sm:h-3.5 sm:w-3.5 animate-spin text-purple-400" />
                         ) : (
-                          <Trash2 className="h-3 w-3" />
+                          <Trash2 className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                         )}
                       </button>
                     )}
                   </div>
                 </div>
                 {/* Modern stats badge with gradient background */}
-                <div className="flex justify-between items-center mb-4 relative z-10">
+                <div className="flex justify-between items-center mb-3 sm:mb-4 relative z-10">
                   {/* Runtime badge */}
-                  <div className="inline-flex items-center space-x-2 bg-gradient-to-r from-purple-500/10 via-blue-500/10 to-purple-500/10 backdrop-blur-sm border border-purple-400/20 rounded-full px-3 py-1.5 hover:border-purple-400/40 transition-all duration-150 group/stat">
-                    <div className="w-2 h-2 bg-gradient-to-r from-emerald-400 to-blue-400 rounded-full"></div>
-                    <span className="text-xs font-medium text-gray-300">{usageStats?.run_time !== undefined && !isNaN(usageStats.run_time) ? `${Math.round(usageStats.run_time)} runs` : "No runs"}</span>
+                  <div className="inline-flex items-center space-x-1 sm:space-x-2 bg-gradient-to-r from-purple-500/10 via-blue-500/10 to-purple-500/10 backdrop-blur-sm border border-purple-400/20 rounded-full px-2 sm:px-3 py-1 sm:py-1.5 hover:border-purple-400/40 transition-all duration-150 group/stat">
+                    <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-gradient-to-r from-emerald-400 to-blue-400 rounded-full"></div>
+                    <span className="text-[10px] sm:text-xs font-medium text-gray-300">{usageStats?.run_time !== undefined && !isNaN(usageStats.run_time) ? `${Math.round(usageStats.run_time)} runs` : "No runs"}</span>
                   </div>
 
                   {/* Status indicator */}
-                  <div className="flex items-center space-x-1">
+                  <div className="flex items-center space-x-1 flex-wrap">
                     {/* Favorites badge */}
-                    <div className="inline-flex items-center bg-gradient-to-r from-orange-500/10 to-amber-500/10 border border-orange-400/20 rounded-full px-2 py-1">
-                      <Star className="h-3 w-3 text-orange-400 mr-1" />
-                      <span className="text-orange-300 text-[10px] font-medium">{favoriteCount} favorites</span>
+                    <div className="inline-flex items-center bg-gradient-to-r from-orange-500/10 to-amber-500/10 border border-orange-400/20 rounded-full px-1.5 sm:px-2 py-0.5 sm:py-1">
+                      <Star className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-orange-400 mr-0.5 sm:mr-1" />
+                      <span className="text-orange-300 text-[9px] sm:text-[10px] font-medium">{favoriteCount} favorites</span>
                     </div>
 
                     {is_enhanced === true && (
-                      <div className="inline-flex items-center bg-gradient-to-r from-yellow-500/10 to-orange-500/10 border border-yellow-400/20 rounded-full px-2 py-1">
-                        <span className="text-yellow-400 text-xs">✨</span>
-                        <span className="text-yellow-300 text-[10px] font-medium ml-1">Enhanced</span>
+                      <div className="inline-flex items-center bg-gradient-to-r from-yellow-500/10 to-orange-500/10 border border-yellow-400/20 rounded-full px-1.5 sm:px-2 py-0.5 sm:py-1">
+                        <span className="text-yellow-400 text-[10px] sm:text-xs">✨</span>
+                        <span className="text-yellow-300 text-[9px] sm:text-[10px] font-medium ml-0.5 sm:ml-1">Enhanced</span>
                       </div>
                     )}
                   </div>
                 </div>
                 {/* Enhanced "Run Service" button with modern glassmorphism */}
                 <button
-                  className="absolute bottom-0 left-0 right-0 text-center py-4 bg-gradient-to-r from-purple-600/20 via-blue-600/15 to-purple-600/20 hover:from-purple-500/30 hover:via-blue-500/25 hover:to-purple-500/30 text-white transition-all duration-200 border-t border-purple-400/20 text-sm font-semibold flex items-center justify-center group/button rounded-b-xl backdrop-blur-md hover:backdrop-blur-lg shadow-lg hover:shadow-purple-500/15"
+                  className="absolute bottom-0 left-0 right-0 text-center py-3 sm:py-4 bg-gradient-to-r from-purple-600/20 via-blue-600/15 to-purple-600/20 hover:from-purple-500/30 hover:via-blue-500/25 hover:to-purple-500/30 text-white transition-all duration-200 border-t border-purple-400/20 text-xs sm:text-sm font-semibold flex items-center justify-center group/button rounded-b-xl backdrop-blur-md hover:backdrop-blur-lg shadow-lg hover:shadow-purple-500/15 touch-manipulation"
                 >
-                  <div className="flex items-center space-x-2 relative z-10">
-                    <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center transition-all duration-200 group-hover/button:bg-white/30">
-                      <Play className="h-3 w-3 fill-current" />
+                  <div className="flex items-center space-x-1.5 sm:space-x-2 relative z-10">
+                    <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-white/20 flex items-center justify-center transition-all duration-200 group-hover/button:bg-white/30">
+                      <Play className="h-2.5 w-2.5 sm:h-3 sm:w-3 fill-current" />
                     </div>
                     <span className="tracking-wide">Go to Service</span>
-                    <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover/button:translate-x-1" />
+                    <ArrowRight className="h-3.5 w-3.5 sm:h-4 sm:w-4 transition-transform duration-200 group-hover/button:translate-x-1" />
                   </div>
 
                   {/* Subtle shimmer effect */}
@@ -515,7 +511,7 @@ export function MiniAppCard({
           {!isAddCard && (
             <div
               className={cn(
-                "h-full bg-gradient-to-br from-gray-900/40 via-gray-800/30 to-gray-900/40 backdrop-blur-xl rounded-xl border flex flex-col transition-all duration-200 relative overflow-hidden absolute inset-2 p-4 rotate-y-180 shadow-2xl",
+                "h-full bg-gradient-to-br from-gray-900/40 via-gray-800/30 to-gray-900/40 backdrop-blur-xl rounded-xl border flex flex-col transition-all duration-200 relative overflow-hidden absolute inset-1 sm:inset-2 p-3 sm:p-4 rotate-y-180 shadow-2xl",
                 "border-gray-600/30 group-hover:border-purple-500/50"
               )}
               style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}
@@ -545,26 +541,26 @@ export function MiniAppCard({
               <div className="absolute right-0 top-0 bottom-0 w-px bg-gradient-to-b from-purple-400/30 via-red-400/30 to-green-400/30"></div>
 
               {/* Modern back button with glassmorphism */}
-              <div className="absolute top-3 right-3 z-20">
+              <div className="absolute top-2 right-2 sm:top-3 sm:right-3 z-20">
                 <button
                   onClick={handleInfoClick}
-                  className="p-2 rounded-xl bg-gradient-to-r from-gray-800/60 to-gray-900/60 backdrop-blur-sm text-gray-400 hover:text-blue-400 hover:from-blue-500/20 hover:to-blue-600/20 transition-all duration-150 border border-gray-600/30 hover:border-blue-500/50 shadow-lg"
+                  className="p-1.5 sm:p-2 rounded-xl bg-gradient-to-r from-gray-800/60 to-gray-900/60 backdrop-blur-sm text-gray-400 hover:text-blue-400 hover:from-blue-500/20 hover:to-blue-600/20 transition-all duration-150 border border-gray-600/30 hover:border-blue-500/50 shadow-lg touch-manipulation"
                   aria-label="Go back"
                   title="Go back"
                 >
-                  <RotateCcw className="h-3.5 w-3.5" />
+                  <RotateCcw className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                 </button>
               </div>
 
               {/* Modern description section - always show with fallback */}
-              <div className="flex-1 mb-3 relative z-10">
-                <div className="bg-gradient-to-br from-gray-900/60 via-gray-800/40 to-gray-900/60 backdrop-blur-sm rounded-xl p-4 h-full transition-all duration-200 relative overflow-hidden">
+              <div className="flex-1 mb-2 sm:mb-3 relative z-10">
+                <div className="bg-gradient-to-br from-gray-900/60 via-gray-800/40 to-gray-900/60 backdrop-blur-sm rounded-xl p-3 sm:p-4 h-full transition-all duration-200 relative overflow-hidden">
                   <div className="relative z-10">
-                    <h4 className="text-sm font-semibold text-gray-200 mb-3 flex items-center">
-                      <div className="w-2 h-2 bg-gradient-to-r from-purple-400 to-blue-400 rounded-full mr-2"></div>
+                    <h4 className="text-xs sm:text-sm font-semibold text-gray-200 mb-2 sm:mb-3 flex items-center">
+                      <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-gradient-to-r from-purple-400 to-blue-400 rounded-full mr-1.5 sm:mr-2"></div>
                       Service Description
                     </h4>
-                    <p className={`text-sm leading-relaxed ${description && description.trim() ? 'text-gray-300' : 'text-gray-500 italic'}`}>
+                    <p className={`text-xs sm:text-sm leading-relaxed ${description && description.trim() ? 'text-gray-300' : 'text-gray-500 italic'}`}>
                       {description && description.trim() ? description : 'This service does not have any description.'}
                     </p>
                   </div>
@@ -572,24 +568,24 @@ export function MiniAppCard({
               </div>
 
               {/* Compact stats grid without borders */}
-              <div className="grid grid-cols-2 gap-3 relative z-10 h-16">
+              <div className="grid grid-cols-2 gap-2 sm:gap-3 relative z-10 h-12 sm:h-16">
                 {/* Service Type Card */}
-                <div className="bg-gradient-to-br from-gray-900/60 via-gray-800/40 to-gray-900/60 backdrop-blur-sm rounded-xl p-2 text-center transition-all duration-200 relative overflow-hidden h-full flex flex-col justify-center">
+                <div className="bg-gradient-to-br from-gray-900/60 via-gray-800/40 to-gray-900/60 backdrop-blur-sm rounded-xl p-1.5 sm:p-2 text-center transition-all duration-200 relative overflow-hidden h-full flex flex-col justify-center">
                   <div className="relative z-10">
-                    <span className="block text-emerald-300 text-[10px] font-medium mb-1">Service Type</span>
-                    <div className="flex items-center justify-center space-x-1">
-                      <span className="text-gray-200 text-[10px] font-semibold">{usageStats?.input_type ?? "Text"}</span>
-                      <div className="text-emerald-400 text-[10px]">→</div>
-                      <span className="text-gray-200 text-[10px] font-semibold">{usageStats?.output_type ?? "Text"}</span>
+                    <span className="block text-emerald-300 text-[9px] sm:text-[10px] font-medium mb-0.5 sm:mb-1">Service Type</span>
+                    <div className="flex items-center justify-center space-x-0.5 sm:space-x-1">
+                      <span className="text-gray-200 text-[9px] sm:text-[10px] font-semibold">{usageStats?.input_type ?? "Text"}</span>
+                      <div className="text-emerald-400 text-[9px] sm:text-[10px]">→</div>
+                      <span className="text-gray-200 text-[9px] sm:text-[10px] font-semibold">{usageStats?.output_type ?? "Text"}</span>
                     </div>
                   </div>
                 </div>
 
                 {/* Tokens Usage Card */}
-                <div className="bg-gradient-to-br from-gray-900/60 via-gray-800/40 to-gray-900/60 backdrop-blur-sm rounded-xl p-2 text-center transition-all duration-200 relative overflow-hidden h-full flex flex-col justify-center">
+                <div className="bg-gradient-to-br from-gray-900/60 via-gray-800/40 to-gray-900/60 backdrop-blur-sm rounded-xl p-1.5 sm:p-2 text-center transition-all duration-200 relative overflow-hidden h-full flex flex-col justify-center">
                   <div className="relative z-10">
-                    <span className="block text-blue-300 text-[10px] font-medium mb-1">Avg. API Token Usage</span>
-                    <span className="text-gray-200 text-[10px] font-semibold">
+                    <span className="block text-blue-300 text-[9px] sm:text-[10px] font-medium mb-0.5 sm:mb-1">Avg. API Token Usage</span>
+                    <span className="text-gray-200 text-[9px] sm:text-[10px] font-semibold">
                       {(() => {
                         const hasTokenUsage = usageStats?.average_token_usage?.total_tokens !== undefined &&
                           !isNaN(usageStats.average_token_usage.total_tokens) &&
@@ -602,7 +598,7 @@ export function MiniAppCard({
                           return Math.round(usageStats.average_token_usage.total_tokens).toLocaleString();
                         } else if (hasRuns && !hasTokenUsage) {
                           return (
-                            <span className="text-emerald-300 text-[9px] leading-tight">
+                            <span className="text-emerald-300 text-[8px] sm:text-[9px] leading-tight">
                               No API keys required
                             </span>
                           );

@@ -1,5 +1,6 @@
 import Cookies from "js-cookie"
 import { toast } from "@/components/ui/use-toast"
+import { getServiceColor } from "./service-utils"
 
 export interface DeleteServiceOptions {
   showToast?: boolean;
@@ -248,44 +249,14 @@ export async function getTrendingServices(): Promise<any[]> {
 
     const allServices: FavoriteService[] = await response.json();
     
-    // Helper function to get icon component based on input/output type
-    function getIconComponent(iconName: string) {
-      // Return a simple object that can be serialized
-      return { iconName };
-    }    // Helper function to get color based on service type
-    function getColorForService(inputType: string, outputType: string): string {
-      if (inputType === "text" && outputType === "text") {
-        return "from-purple-600 to-purple-800"
-      } else if (inputType === "text" && outputType === "image") {
-        return "from-pink-600 to-pink-800"
-      } else if (inputType === "text" && outputType === "sound") {
-        return "from-orange-600 to-orange-800"
-      } else if (inputType === "sound" || outputType === "sound") {
-        return "from-blue-600 to-blue-800"
-      } else if (inputType === "image" || outputType === "image") {
-        return "from-green-600 to-green-800"
-      }
-      return "from-indigo-600 to-indigo-800"
-    }
+
     
     // Map the mini-services to the format expected by the dashboard
     const formattedServicesPromises = allServices.map(async (service) => {
-      // Determine icon based on input/output type
-      let iconName = "Wand2"
-      if (service.input_type === "text" && service.output_type === "text") {
-        iconName = "MessageSquare"
-      } else if (service.input_type === "text" && service.output_type === "image") {
-        iconName = "ImageIcon"
-      } else if (service.input_type === "text" && service.output_type === "sound") {
-        iconName = "Headphones"
-      } else if (service.input_type === "sound" || service.output_type === "sound") {
-        iconName = "Headphones"
-      } else if (service.input_type === "image" || service.output_type === "image") {
-        iconName = "ImageIcon"
-      }
-
       // Get color based on service type
-      const color = getColorForService(service.input_type, service.output_type)      // Fetch favorite count and status for this service
+      const color = getServiceColor(service.input_type, service.output_type)
+
+      // Fetch favorite count and status for this service
       const [favoriteCount, isFavorited] = await Promise.all([
         getFavoriteCount(service.id),
         checkIfFavorited(service.id)
@@ -295,7 +266,8 @@ export async function getTrendingServices(): Promise<any[]> {
         id: service.id,
         name: service.name,
         description: service.description,
-        icon: getIconComponent(iconName),
+        input_type: service.input_type,
+        output_type: service.output_type,
         serviceType: "mini-service",
         color,
         isCustom: true,

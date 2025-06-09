@@ -41,6 +41,7 @@ import {
 } from "lucide-react"
 import { toast } from "@/components/ui/use-toast"
 import { deleteMiniService } from "@/lib/services"
+import { getServiceTypeConfig } from "@/lib/service-utils"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
@@ -1948,38 +1949,12 @@ export default function ServicePage() {
 
   const getServiceColor = () => {
     if (!service) return "from-purple-600 to-purple-800"
-
-    if (service.input_type === "text" && service.output_type === "text") {
-      return "from-purple-600 to-purple-800"
-    } else if (service.input_type === "text" && service.output_type === "image") {
-      return "from-pink-600 to-pink-800"
-    } else if (service.input_type === "text" && service.output_type === "sound") {
-      return "from-orange-600 to-orange-800"
-    } else if (service.input_type === "sound" || service.output_type === "sound") {
-      return "from-blue-600 to-blue-800"
-    } else if (service.input_type === "image" || service.output_type === "image") {
-      return "from-green-600 to-green-800"
-    }
-
-    return "from-indigo-600 to-indigo-800"
+    return getServiceTypeConfig(service.input_type, service.output_type).color
   }
 
-  const getServiceIcon = () => {
-    if (!service) return <Wand2 className="h-6 w-6 text-white" />
-
-    if (service.input_type === "text" && service.output_type === "text") {
-      return <MessageSquare className="h-6 w-6 text-white" />
-    } else if (service.input_type === "text" && service.output_type === "image") {
-      return <ImageIcon className="h-6 w-6 text-white" />
-    } else if (service.input_type === "text" && service.output_type === "sound") {
-      return <Headphones className="h-6 w-6 text-white" />
-    } else if (service.input_type === "sound" || service.output_type === "sound") {
-      return <Headphones className="h-6 w-6 text-white" />
-    } else if (service.input_type === "image" || service.output_type === "image") {
-      return <ImageIcon className="h-6 w-6 text-white" />
-    }
-
-    return <Wand2 className="h-6 w-6 text-white" />
+  const getServiceIcon = (className: string = "h-6 w-6 text-white") => {
+    if (!service) return <Wand2 className={className} />
+    return getServiceTypeConfig(service.input_type, service.output_type, className).iconComponent as React.ReactElement
   }
 
   const extractAudioUrl = (result: any): string | null => {
@@ -3116,7 +3091,7 @@ export default function ServicePage() {
                   <div
                     className={`w-8 h-8 bg-gradient-to-r ${getServiceColor()} rounded-lg flex items-center justify-center shadow-lg`}
                   >
-                    {getServiceIcon() && React.cloneElement(getServiceIcon(), { className: "h-4 w-4 text-white" })}
+                    {getServiceIcon("h-4 w-4 text-white")}
                   </div>
                   <div>
                     <h1 className="text-lg font-bold text-white">{service?.name || "Service"}</h1>
@@ -3195,7 +3170,7 @@ export default function ServicePage() {
                       <div
                         className={`w-16 h-16 bg-gradient-to-r ${getServiceColor()} rounded-2xl flex items-center justify-center shadow-2xl shadow-purple-500/20 hover:scale-105 transition-transform duration-300`}
                       >
-                        {getServiceIcon() && React.cloneElement(getServiceIcon(), { className: "h-8 w-8 text-white" })}
+                        {getServiceIcon("h-8 w-8 text-white")}
                       </div>
                       <div className="text-left">
                         <h1 className="text-3xl font-bold text-white mb-2">{service?.name || "Service"}</h1>
@@ -3317,8 +3292,7 @@ export default function ServicePage() {
                         <div
                           className={`w-8 h-8 bg-gradient-to-r ${getServiceColor()} rounded-full flex items-center justify-center flex-shrink-0 mt-1`}
                         >
-                          {getServiceIcon() &&
-                            React.cloneElement(getServiceIcon(), { className: "h-4 w-4 text-white" })}
+                          {getServiceIcon("h-4 w-4 text-white")}
                         </div>
                         <div className="bg-zinc-800/80 backdrop-blur-sm rounded-2xl rounded-tl-sm p-4 max-w-md">
                           <p className="text-gray-200 text-sm">
@@ -3354,8 +3328,7 @@ export default function ServicePage() {
                               <div
                                 className={`w-8 h-8 bg-gradient-to-r ${getServiceColor()} rounded-full flex items-center justify-center flex-shrink-0 mt-1`}
                               >
-                                {getServiceIcon() &&
-                                  React.cloneElement(getServiceIcon(), { className: "h-4 w-4 text-white" })}
+                                {getServiceIcon("h-4 w-4 text-white")}
                               </div>                              <div className="bg-zinc-800/80 backdrop-blur-sm rounded-2xl rounded-tl-sm p-4 max-w-3xl relative group flex-1">
                                 {message.result ? (
                                   <div className="w-full">
@@ -3395,8 +3368,7 @@ export default function ServicePage() {
                           <div
                             className={`w-8 h-8 bg-gradient-to-r ${getServiceColor()} rounded-full flex items-center justify-center flex-shrink-0 mt-1`}
                           >
-                            {getServiceIcon() &&
-                              React.cloneElement(getServiceIcon(), { className: "h-4 w-4 text-white" })}
+                            {getServiceIcon("h-4 w-4 text-white")}
                           </div>
                           <div className="bg-zinc-800/80 backdrop-blur-sm rounded-2xl rounded-tl-sm p-4 max-w-md">
                             <div className="flex items-center space-x-2">
