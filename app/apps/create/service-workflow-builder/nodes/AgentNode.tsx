@@ -27,12 +27,12 @@ function AgentNode({ data, isConnectable, selected }: NodeProps) {
         {/* Output Type (Inside, Right) */}
         <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-purple-300 dark:text-purple-400 font-medium select-none z-20 bg-[#2D3748]/70 dark:bg-gray-800/70 px-1.5 py-0.5 rounded">
           {data.outputType || "output"}
-        </div>{/* Icon (positioned above the line) */}
+        </div>        {/* Icon (positioned above the line) */}
         <div
           className={`
             absolute top-2 left-1/2 -translate-x-1/2
             w-8 h-8 flex items-center justify-center
-            bg-purple-600/20 dark:bg-purple-700/30
+            ${data.color || 'bg-purple-600/20 dark:bg-purple-700/30'}
             border-2 ${selected ? 'border-purple-500' : 'border-purple-700/50 dark:border-purple-800'}
             rounded-lg shadow-inner z-10
           `}

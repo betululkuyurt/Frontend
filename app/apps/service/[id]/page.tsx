@@ -41,7 +41,7 @@ import {
 } from "lucide-react"
 import { toast } from "@/components/ui/use-toast"
 import { deleteMiniService } from "@/lib/services"
-import { getServiceTypeConfig } from "@/lib/service-utils"
+import { getServiceTypeConfig, getServiceColor } from "@/lib/service-utils"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
@@ -1947,10 +1947,7 @@ export default function ServicePage() {
     })
   }
 
-  const getServiceColor = () => {
-    if (!service) return "from-purple-600 to-purple-800"
-    return getServiceTypeConfig(service.input_type, service.output_type).color
-  }
+
 
   const getServiceIcon = (className: string = "h-6 w-6 text-white") => {
     if (!service) return <Wand2 className={className} />
@@ -3089,7 +3086,7 @@ export default function ServicePage() {
               {(chatHistory.length > 0 || checkIfChatModeEligible()) && (
                 <div className="flex items-center space-x-3 animate-in slide-in-from-left duration-500">
                   <div
-                    className={`w-8 h-8 bg-gradient-to-r ${getServiceColor()} rounded-lg flex items-center justify-center shadow-lg`}
+                    className={`w-8 h-8 ${service ? getServiceColor(service.input_type, service.output_type) : 'bg-purple-600'} rounded-lg flex items-center justify-center shadow-lg`}
                   >
                     {getServiceIcon("h-4 w-4 text-white")}
                   </div>
@@ -3168,7 +3165,7 @@ export default function ServicePage() {
                   <div className="text-center mb-8 animate-fade-in-up">
                     <div className="flex items-center justify-center space-x-4 mb-6">
                       <div
-                        className={`w-16 h-16 bg-gradient-to-r ${getServiceColor()} rounded-2xl flex items-center justify-center shadow-2xl shadow-purple-500/20 hover:scale-105 transition-transform duration-300`}
+                        className={`w-16 h-16 ${service ? getServiceColor(service.input_type, service.output_type) : 'bg-purple-600'} rounded-2xl flex items-center justify-center shadow-2xl shadow-purple-500/20 hover:scale-105 transition-transform duration-300`}
                       >
                         {getServiceIcon("h-8 w-8 text-white")}
                       </div>
@@ -3290,7 +3287,7 @@ export default function ServicePage() {
                       {/* Bot welcome message */}
                       <div className="flex items-start space-x-3">
                         <div
-                          className={`w-8 h-8 bg-gradient-to-r ${getServiceColor()} rounded-full flex items-center justify-center flex-shrink-0 mt-1`}
+                          className={`w-8 h-8 ${service ? getServiceColor(service.input_type, service.output_type) : 'bg-purple-600'} rounded-full flex items-center justify-center flex-shrink-0 mt-1`}
                         >
                           {getServiceIcon("h-4 w-4 text-white")}
                         </div>
@@ -3309,7 +3306,7 @@ export default function ServicePage() {
                             /* User message */
                             <div className="flex items-start space-x-3 justify-end">
                               <div
-                                className={`bg-gradient-to-r ${getServiceColor()} rounded-2xl rounded-tr-sm p-4 max-w-md`}
+                                className={`${service ? getServiceColor(service.input_type, service.output_type) : 'bg-purple-600'} rounded-2xl rounded-tr-sm p-4 max-w-md`}
                               >
                                 <p className="text-white text-sm break-words">
                                   {message.file ? `📎 ${message.file.name}` : message.content}
@@ -3326,7 +3323,7 @@ export default function ServicePage() {
                             /* Assistant message */
                             <div className="flex items-start space-x-3">
                               <div
-                                className={`w-8 h-8 bg-gradient-to-r ${getServiceColor()} rounded-full flex items-center justify-center flex-shrink-0 mt-1`}
+                                className={`w-8 h-8 ${service ? getServiceColor(service.input_type, service.output_type) : 'bg-purple-600'} rounded-full flex items-center justify-center flex-shrink-0 mt-1`}
                               >
                                 {getServiceIcon("h-4 w-4 text-white")}
                               </div>                              <div className="bg-zinc-800/80 backdrop-blur-sm rounded-2xl rounded-tl-sm p-4 max-w-3xl relative group flex-1">
@@ -3366,7 +3363,7 @@ export default function ServicePage() {
                       {isLoading && (
                         <div className="flex items-start space-x-3">
                           <div
-                            className={`w-8 h-8 bg-gradient-to-r ${getServiceColor()} rounded-full flex items-center justify-center flex-shrink-0 mt-1`}
+                            className={`w-8 h-8 ${service ? getServiceColor(service.input_type, service.output_type) : 'bg-purple-600'} rounded-full flex items-center justify-center flex-shrink-0 mt-1`}
                           >
                             {getServiceIcon("h-4 w-4 text-white")}
                           </div>

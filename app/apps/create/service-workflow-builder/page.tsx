@@ -3,6 +3,17 @@
 import React, { useRef, useState, useMemo, useEffect } from 'react';
 import { useRouter } from "next/navigation"
 import Cookies from "js-cookie"
+import { 
+  getServiceColor, 
+  getServiceIconName, 
+  getIconComponent,
+  getServicePreviewColor,
+  getServicePreviewIconClass,
+  inputTypes,
+  outputTypes,
+  iconOptions,
+  colorOptions
+} from "@/lib/service-utils"
 import { NavBar } from "@/components/nav-bar"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -127,45 +138,7 @@ interface Language {
 }
 
 // Define input and output types
-const inputTypes = [
-  { value: "text", label: "Text", icon: MessageSquare },
-  { value: "image", label: "Image", icon: ImageIcon },
-  { value: "sound", label: "Sound", icon: Headphones },
-  { value: "video", label: "Video", icon: Video },
-  { value: "document", label: "Document", icon: FileText },
-]
 
-const outputTypes = [
-  { value: "text", label: "Text", icon: MessageSquare },
-  { value: "image", label: "Image", icon: ImageIcon },
-  { value: "sound", label: "Sound", icon: Headphones },
-  { value: "video", label: "Video", icon: Video },
-  { value: "document", label: "Document", icon: FileText },
-
-]
-
-const iconOptions = [
-  { value: "BookOpen", label: "Book", icon: BookOpen },
-  { value: "Video", label: "Video", icon: Video },
-  { value: "Headphones", label: "Headphones", icon: Headphones },
-  { value: "ImageIcon", label: "Image", icon: ImageIcon },
-  { value: "FileText", label: "Document", icon: FileText },
-  { value: "MessageSquare", label: "Chat", icon: MessageSquare },
-  { value: "FileVideo", label: "Video File", icon: FileVideo },
-  { value: "Wand2", label: "Magic Wand", icon: Wand2 },
-]
-
-const colorOptions = [
-  { value: "from-blue-600 to-blue-800", label: "Blue" },
-  { value: "from-purple-600 to-purple-800", label: "Purple" },
-  { value: "from-green-600 to-green-800", label: "Green" },
-  { value: "from-pink-600 to-pink-800", label: "Pink" },
-  { value: "from-orange-600 to-orange-800", label: "Orange" },
-  { value: "from-red-600 to-red-800", label: "Red" },
-  { value: "from-emerald-600 to-teal-800", label: "Teal" },
-  { value: "from-yellow-600 to-amber-800", label: "Amber" },
-  { value: "from-indigo-600 to-violet-800", label: "Indigo" },
-]
 
 // Progress steps for the workflow builder
 const progressSteps = [
@@ -195,7 +168,8 @@ interface AgentType {
 type WorkflowNodeData = {
   inputType?: string;
   outputType?: string;
-  icon: React.ReactElement;
+  icon: React.ReactNode;
+  color?: string;
   label?: string;
   onDelete?: () => void;
 };
@@ -354,8 +328,8 @@ export default function ServiceWorkflowBuilder() {
           description: a.description || "",
           inputType: a.input_type || "text",
           outputType: a.output_type || "text",
-          icon: getIconForType(a.output_type),
-          color: getColorForType(a.input_type),
+          icon: getServicePreviewIconClass(a.input_type || "text", a.output_type || "text"),
+          color: getServicePreviewColor(a.input_type || "text", a.output_type || "text"),
           settings: getSettingsForAgent(a),
           isPublic: a.is_public || false,
           userId: a.owner_id?.toString() || "", // Use owner_id from backend
@@ -524,39 +498,7 @@ export default function ServiceWorkflowBuilder() {
   }
 
   // Helper functions for mapping backend data
-  function getIconForType(outputType: string): React.ComponentType<any> {
-    switch (outputType) {
-      case "text":
-        return MessageSquare
-      case "image":
-        return ImageIcon
-      case "video":
-        return Video
-      case "document":
-        return FileText
-      case "sound":
-        return Headphones
-      default:
-        return MessageSquare
-    }
-  }
 
-  function getColorForType(type: string): string {
-    switch (type) {
-      case "text":
-        return "from-blue-600 to-blue-800"
-      case "image":
-        return "from-pink-600 to-pink-800"
-      case "video":
-        return "from-red-600 to-red-800"
-      case "file":
-        return "from-red-600 to-red-800"
-      case "sound":
-        return "from-green-600 to-green-800"
-      default:
-        return "from-purple-600 to-purple-800"
-    }
-  }
 
   function getSettingsForAgent(agent: any): AgentSetting[] {
     // Extract settings from agent config
@@ -1227,6 +1169,15 @@ export default function ServiceWorkflowBuilder() {
   // Get the output type icon
   const OutputTypeIcon = outputTypes.find((type) => type.value === serviceData.outputType)?.icon || MessageSquare
 
+  // Get dynamic icon and color based on input+output type for service preview
+  // Use default values if outputType is "select" or empty
+  const ServicePreviewIcon = serviceData.outputType === "select" || !serviceData.outputType 
+    ? SelectedIcon 
+    : getServicePreviewIconClass(serviceData.inputType, serviceData.outputType)
+  const servicePreviewColor = serviceData.outputType === "select" || !serviceData.outputType
+    ? serviceData.color
+    : getServicePreviewColor(serviceData.inputType, serviceData.outputType)
+
   const orderedWorkflow = getOrderedWorkflow()
 
   // Calculate progress percentage
@@ -1733,7 +1684,10 @@ export default function ServiceWorkflowBuilder() {
       }
       return node;
     });
-    const Icon = agent.icon || MessageSquare;
+    // Use service-utils to get icon and color based on input/output types
+    const nodeIcon = getIconComponent(getServiceIconName(agent.inputType, agent.outputType), "h-4 w-4 text-white");
+    const nodeColor = getServiceColor(agent.inputType, agent.outputType);
+    
     const newNode = {
       id: newNodeId,
       type: 'agent',
@@ -1741,7 +1695,8 @@ export default function ServiceWorkflowBuilder() {
       data: {
         inputType: agent.inputType,
         outputType: agent.outputType,
-        icon: <Icon className="h-4 w-4 text-white" />, // Render as element
+        icon: nodeIcon, // Use service-utils icon
+        color: nodeColor, // Use service-utils color
         label: agent.name,
         onDelete: () => removeAgentNode(newNodeId)
       }
@@ -1885,20 +1840,28 @@ export default function ServiceWorkflowBuilder() {
     const stepX = 350;
     const nodesArr = [];
     // Input node
+    const inputIcon = getIconComponent(getServiceIconName(serviceData.inputType, serviceData.inputType), "h-4 w-4 text-emerald-300");
+    const inputColor = getServiceColor(serviceData.inputType, serviceData.inputType);
+    
     nodesArr.push({
       id: 'input-node',
       type: 'input',
       position: { x: baseX, y: 250 },
       data: {
         inputType: serviceData.inputType,
-        icon: <MessageSquare className="h-4 w-4 text-purple-300" />
+        icon: inputIcon,
+        color: inputColor
       }
     });
     // Agent nodes (from workflow)
     workflow.forEach((step, idx) => {
       const agent = availableAgents.find(a => a.id === step.agentId);
       if (!agent) return;
-      const Icon = agent.icon || MessageSquare;
+      
+      // Use service-utils to get icon and color based on input/output types
+      const nodeIcon = getIconComponent(getServiceIconName(agent.inputType, agent.outputType), "h-4 w-4 text-white");
+      const nodeColor = getServiceColor(agent.inputType, agent.outputType);
+      
       nodesArr.push({
         id: step.id,
         type: 'agent',
@@ -1906,23 +1869,27 @@ export default function ServiceWorkflowBuilder() {
         data: {
           inputType: agent.inputType,
           outputType: agent.outputType,
-          icon: <Icon className="h-4 w-4 text-white" />, // Render as element
+          icon: nodeIcon, // Use service-utils icon
           label: agent.name,
           description: agent.description,
-          color: agent.color,
+          color: nodeColor, // Use service-utils color
           isLast: idx === workflow.length - 1,
           onDelete: () => removeWorkflowStep(step.id)
         }
       });
     });
     // Output node
+    const outputIcon = getIconComponent(getServiceIconName(serviceData.outputType, serviceData.outputType), "h-4 w-4 text-blue-300");
+    const outputColor = getServiceColor(serviceData.outputType, serviceData.outputType);
+    
     nodesArr.push({
       id: 'output-node',
       type: 'output',
       position: { x: baseX + stepX * (workflow.length + 1), y: 250 },
       data: {
         outputType: serviceData.outputType,
-        icon: <MessageSquare className="h-4 w-4 text-blue-300" />
+        icon: outputIcon,
+        color: outputColor
       }
     });
     setNodes(nodesArr);
@@ -2706,7 +2673,7 @@ export default function ServiceWorkflowBuilder() {
                                                 
                                               <div className="flex items-start space-x-2">
                                                 <div
-                                                  className={`w-7 h-7 rounded-lg bg-gradient-to-br ${agent.color} flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-200`}
+                                                  className={`w-7 h-7 rounded-lg ${agent.color} flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-200`}
                                                 >
                                                   {agent.icon && <agent.icon className="h-4 w-4 text-white" />}
                                                 </div>
@@ -2804,7 +2771,7 @@ export default function ServiceWorkflowBuilder() {
                                               
                                             <div className="flex items-start space-x-2">
                                               <div
-                                                className={`w-7 h-7 rounded-lg bg-gradient-to-br ${agent.color} flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-200`}
+                                                className={`w-7 h-7 rounded-lg ${agent.color} flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-200`}
                                               >
                                                 {agent.icon && <agent.icon className="h-4 w-4 text-white" />}
                                               </div>                                              <div className="flex-1 min-w-0 pr-6">
@@ -3952,9 +3919,9 @@ export default function ServiceWorkflowBuilder() {
                       {/* Service Card Preview */}
                       <div className="bg-black/60 backdrop-blur-md rounded-xl border border-purple-700/40 p-6 shadow-lg">
                         <div
-                          className={`w-12 h-12 rounded-lg flex items-center justify-center mb-4 bg-gradient-to-br ${serviceData.color} shadow-lg`}
+                          className={`w-12 h-12 rounded-lg flex items-center justify-center mb-4 ${servicePreviewColor} shadow-lg`}
                         >
-                          <SelectedIcon className="h-6 w-6 text-white" />
+                          <ServicePreviewIcon className="h-6 w-6 text-white" />
                         </div>
                         <h3 className="text-lg font-semibold text-white mb-2">
                           {serviceData.title || "Service Title"}
@@ -4029,7 +3996,7 @@ export default function ServiceWorkflowBuilder() {
                           </div>
 
                           <Button
-                            className={`bg-gradient-to-r ${serviceData.color} text-white shadow-lg transition-all duration-300 hover:shadow-purple-500/30 hover:scale-105 rounded-lg`}
+                            className={`${servicePreviewColor} text-white shadow-lg transition-all duration-300 hover:shadow-purple-500/30 hover:scale-105 rounded-lg`}
                             disabled
                           >
                             {serviceData.buttonText || "Generate"}
@@ -4122,7 +4089,7 @@ export default function ServiceWorkflowBuilder() {
                         <Button
                           onClick={handleSubmit}
                           disabled={isLoading || !serviceData.title || orderedWorkflow.length === 0}
-                          className={`bg-gradient-to-r ${serviceData.color} text-white rounded-lg px-5 py-2 shadow-lg transition-all duration-300 hover:shadow-purple-500/40 hover:scale-105 flex items-center w-full sm:w-auto`}
+                          className={`${servicePreviewColor} text-white rounded-lg px-5 py-2 shadow-lg transition-all duration-300 hover:shadow-purple-500/40 hover:scale-105 flex items-center w-full sm:w-auto`}
                         >
                           {isLoading ? (
                             <>
@@ -4331,16 +4298,7 @@ export default function ServiceWorkflowBuilder() {
                         {agentDetails.output_type}
                       </Badge>
                     </div>
-                    <div className="md:col-span-2">
-                      <Label className="text-gray-300 text-sm">Description</Label>
-                      <p className="text-white mt-1">{agentDetails.description || "No description available"}</p>
-                    </div>
-                    <div>
-                      <Label className="text-gray-300 text-sm">Visibility</Label>
-                      <Badge variant="outline" className={`mt-1 ${agentDetails.is_public ? 'bg-green-900/20 text-green-300 border-green-500/30' : 'bg-orange-900/20 text-orange-300 border-orange-500/30'}`}>
-                        {agentDetails.is_public ? 'Public' : 'Private'}
-                      </Badge>
-                    </div>
+                  
                     <div>
                       <Label className="text-gray-300 text-sm">Created Date</Label>
                       <p className="text-gray-300 mt-1">{agentDetails.created_at ? new Date(agentDetails.created_at).toLocaleDateString() : "N/A"}</p>

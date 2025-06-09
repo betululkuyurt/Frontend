@@ -30,12 +30,12 @@ function OutputNode({ data, isConnectable }: NodeProps) {
         {/* Output Type (Inside, Right) */}
         <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-blue-300 dark:text-blue-400 font-medium select-none z-20 bg-[#2D3748]/70 dark:bg-gray-800/70 px-1.5 py-0.5 rounded">
           {data.outputType || "Output"}
-        </div>{/* Icon (positioned above the line) */}
+        </div>        {/* Icon (positioned above the line) */}
         <div
           className={`
             absolute top-2 left-1/2 -translate-x-1/2
             w-8 h-8 flex items-center justify-center
-            bg-blue-600/20 dark:bg-blue-700/30
+            ${data.color || 'bg-blue-600/20 dark:bg-blue-700/30'}
             border-2 border-blue-700/50 dark:border-blue-800
             rounded-lg shadow-inner z-10
           `}

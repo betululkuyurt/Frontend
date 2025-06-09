@@ -1298,7 +1298,7 @@ export default function DashboardPage() {
                       {activeFilter === "trending"
                         ? "🔥 Trending Workflows"
                         : activeFilter === "favourites"
-                          ? "❤️ Your Favorites"
+                          ? "⭐ Your Favorites"
                           : activeFilter === "created"
                             ? "🎨 Your Creations"
                             : "🚀 AI Workflows"}
@@ -1396,7 +1396,7 @@ export default function DashboardPage() {
                         className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-600 data-[state=active]:to-violet-600 data-[state=active]:text-white flex items-center gap-2 rounded-xl transition-all duration-300"
                         title="Favorite Workflows"
                       >
-                        <Heart className="h-4 w-4" />
+                        <Star className="h-4 w-4" />
                         <span className="font-medium hidden sm:inline">Favorites</span>
                       </TabsTrigger>
                       <TabsTrigger
@@ -1750,11 +1750,11 @@ export default function DashboardPage() {
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
               <Card className="bg-white/5 backdrop-blur-sm border-orange-900/20 p-12 text-center rounded-2xl">
                 <div className="w-20 h-20 bg-amber-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
-                  <Heart className="h-10 w-10 text-amber-400" />
+                  <Star className="h-10 w-10 text-amber-400" />
                 </div>
                 <h3 className="text-white font-semibold text-xl mb-2">No favorites yet</h3>
                 <p className="text-slate-400 mb-6 max-w-md mx-auto">
-                  Start exploring workflows and click the heart icon to save your favorites for quick access.
+                  Start exploring workflows and click the star icon to save your favorites for quick access.
                 </p>
                 <Button
                   onClick={() => setActiveFilter("all")}

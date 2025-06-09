@@ -1,13 +1,13 @@
-import { getColorForService } from '../utils';
+import { getServiceColor } from '../service-utils';
 
-describe('getColorForService', () => {
+describe('getServiceColor', () => {
   it('returns correct color for text to text', () => {
-    expect(getColorForService('text', 'text')).toBe('from-purple-600 to-purple-800');
+    expect(getServiceColor('text', 'text')).toBe('bg-purple-600');
   });
   it('returns correct color for text to image', () => {
-    expect(getColorForService('text', 'image')).toBe('from-pink-600 to-pink-800');
+    expect(getServiceColor('text', 'image')).toBe('bg-pink-600');
   });
   it('returns default color for unknown types', () => {
-    expect(getColorForService('foo', 'bar')).toBe('from-indigo-600 to-indigo-800');
+    expect(getServiceColor('foo', 'bar')).toBe('bg-indigo-600');
   });
 });

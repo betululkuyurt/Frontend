@@ -26,12 +26,12 @@ function InputNode({ data, isConnectable }: NodeProps) {
         {/* Output Type (Inside, Right) */}
         <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-emerald-300 dark:text-emerald-400 font-medium select-none z-20 bg-[#2D3748]/70 dark:bg-gray-800/70 px-1.5 py-0.5 rounded">
           {data.inputType || "Input"}
-        </div>{/* Icon (positioned above the line) */}
+        </div>        {/* Icon (positioned above the line) */}
         <div
           className={`
             absolute top-2 left-1/2 -translate-x-1/2
             w-8 h-8 flex items-center justify-center
-            bg-emerald-600/20 dark:bg-emerald-700/30
+            ${data.color || 'bg-emerald-600/20 dark:bg-emerald-700/30'}
             border-2 border-emerald-700/50 dark:border-emerald-800
             rounded-lg shadow-inner z-10
           `}
