@@ -106,7 +106,7 @@ interface Service {
     run_time: number
     input_type: string
     output_type: string
-    total_runs?: number
+    
   }
   is_enhanced?: boolean
   created_at?: string
@@ -572,7 +572,7 @@ export default function DashboardPage() {
                 run_time: service.run_time,
                 input_type: service.input_type,
                 output_type: service.output_type,
-                total_runs: Math.floor(Math.random() * 100) + 1,
+               
               },
               is_enhanced: service.is_enhanced,
               created_at: service.created_at,
@@ -698,7 +698,7 @@ export default function DashboardPage() {
                 run_time: service.run_time,
                 input_type: service.input_type,
                 output_type: service.output_type,
-                total_runs: Math.floor(Math.random() * 100) + 1,
+                
               },
               is_enhanced: service.is_enhanced,
               created_at: service.created_at,
@@ -1074,8 +1074,8 @@ export default function DashboardPage() {
           comparison = tokensA - tokensB
           break
         case "runs":
-          const runsA = a.usageStats?.total_runs || 0
-          const runsB = b.usageStats?.total_runs || 0
+          const runsA = a.usageStats?.run_time || 0
+          const runsB = b.usageStats?.run_time || 0
           comparison = runsA - runsB
           break
         case "type":
@@ -1137,7 +1137,7 @@ export default function DashboardPage() {
                 <TableCell className="py-4">
                   <div className="flex items-center space-x-3">
                     <div
-                      className={`w-12 h-12 rounded-xl bg-gradient-to-r ${service.color} flex items-center justify-center text-white shadow-lg`}
+                      className={`w-12 h-12 rounded-xl ${service.color.replace('from-', 'bg-').replace(/\s+to-.*$/, '')} flex items-center justify-center text-white shadow-lg`}
                     >
                       {service.icon}
                     </div>
@@ -1180,10 +1180,10 @@ export default function DashboardPage() {
                 </TableCell>
                 <TableCell className="text-slate-200">
                   <span className="text-sm font-mono">
-                    {service.usageStats?.total_runs !== undefined &&
-                    !isNaN(service.usageStats.total_runs) &&
-                    service.usageStats.total_runs > 0
-                      ? service.usageStats.total_runs.toLocaleString()
+                    {service.usageStats?.run_time !== undefined &&
+                    !isNaN(service.usageStats.run_time) &&
+                    service.usageStats.run_time > 0
+                      ? service.usageStats.run_time.toLocaleString()
                       : "—"}
                   </span>
                 </TableCell>

@@ -278,7 +278,6 @@ export async function getTrendingServices(): Promise<any[]> {
           run_time: service.run_time,
           input_type: service.input_type,
           output_type: service.output_type,
-          total_runs: Math.floor(Math.random() * 100) + 1
         },
         is_enhanced: service.is_enhanced,
         created_at: service.created_at,
