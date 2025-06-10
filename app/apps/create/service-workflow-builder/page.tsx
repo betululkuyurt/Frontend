@@ -1175,7 +1175,7 @@ export default function ServiceWorkflowBuilder() {
     ? SelectedIcon 
     : getServicePreviewIconClass(serviceData.inputType, serviceData.outputType)
   const servicePreviewColor = serviceData.outputType === "select" || !serviceData.outputType
-    ? serviceData.color
+    ? `bg-gradient-to-r ${serviceData.color}` // Fix: Add proper gradient direction prefix
     : getServicePreviewColor(serviceData.inputType, serviceData.outputType)
 
   const orderedWorkflow = getOrderedWorkflow()
