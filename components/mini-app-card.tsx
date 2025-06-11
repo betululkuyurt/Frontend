@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { ArrowRight, Trash2, Loader2, Info, Play, RotateCcw, Star } from "lucide-react"
 import { useState, useEffect, useRef } from "react"
-import { deleteMiniService, toggleFavorite, getFavoriteCount, checkIfFavorited } from "@/lib/services"
+import { deleteMiniService, toggleFavorite } from "@/lib/services"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -48,6 +48,8 @@ interface MiniAppCardProps {
   requiresApiKey?: boolean
   owner_username?: string
   is_public?: boolean
+  favorite_count?: number
+  is_favorited?: boolean
 }
 
 export function MiniAppCard({
@@ -65,11 +67,13 @@ export function MiniAppCard({
   requiresApiKey,
   owner_username,
   is_public,
+  favorite_count = 0,
+  is_favorited = false,
 }: Readonly<MiniAppCardProps>) {
   const router = useRouter()
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
-  const [isTogglingFavorite, setIsTogglingFavorite] = useState(false)
+  const [isTogglingFavorite, setIsTogglingFavorite] = useState(false)  
   const [isHovering, setIsHovering] = useState(false)
   const [isFlipped, setIsFlipped] = useState(false)
   const [titleNeedsAnimation, setTitleNeedsAnimation] = useState(false)
@@ -78,8 +82,10 @@ export function MiniAppCard({
   const containerRef = useRef<HTMLDivElement>(null)
   const backTitleRef = useRef<HTMLSpanElement>(null)
   const backContainerRef = useRef<HTMLDivElement>(null)
-  const [isFavorite, setIsFavorite] = useState(false)
-  const [favoriteCount, setFavoriteCount] = useState(0)  // Check if current user is the owner of the service
+  const [isFavorite, setIsFavorite] = useState(is_favorited)
+  const [favoriteCount, setFavoriteCount] = useState(favorite_count)
+  
+  // Check if current user is the owner of the service
   const isCurrentUserOwner = (): boolean => {
     if (!owner_username) {
       return true // If no owner specified, allow delete (backward compatibility)
@@ -204,23 +210,14 @@ export function MiniAppCard({
     setIsTogglingFavorite(true);
 
     try {
-      const result = await toggleFavorite(id);
-
-      if (result.success) {
+      const result = await toggleFavorite(id);      if (result.success) {
         setIsFavorite(result.isFavorited);
 
-        // Refresh favorite count from server to ensure accuracy
-        try {
-          const updatedCount = await getFavoriteCount(id);
-          setFavoriteCount(updatedCount);
-        } catch (error) {
-          console.error("Error refreshing favorite count:", error);
-          // Fallback to local update if server refresh fails
-          if (result.isFavorited) {
-            setFavoriteCount(favoriteCount + 1);
-          } else {
-            setFavoriteCount(Math.max(0, favoriteCount - 1));
-          }
+        // Update favorite count locally
+        if (result.isFavorited) {
+          setFavoriteCount(favoriteCount + 1);
+        } else {
+          setFavoriteCount(Math.max(0, favoriteCount - 1));
         }
 
         toast({
@@ -242,29 +239,13 @@ export function MiniAppCard({
       });
     } finally {
       setIsTogglingFavorite(false);
-    }
-  };
+    }  };
 
-  // Load favorite status and count
+  // Sync component state with props when they change
   useEffect(() => {
-    if (id) {
-      const loadFavoriteStatus = async () => {
-        try {
-
-          const isFavorited = await checkIfFavorited(id);
-
-          setIsFavorite(isFavorited);
-
-          const count = await getFavoriteCount(id);
-
-          setFavoriteCount(count);
-        } catch (error) {
-
-        }
-      };
-      loadFavoriteStatus();
-    }
-  }, [id]);
+    setIsFavorite(is_favorited);
+    setFavoriteCount(favorite_count);
+  }, [is_favorited, favorite_count]);
 
   return (
     <>
