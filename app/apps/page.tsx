@@ -47,11 +47,7 @@ import { toast } from "@/components/ui/use-toast"
 import { decodeJWT, getAccessToken } from "@/lib/auth"
 import {
   deleteMiniService,
-  getFavoriteServices,
-  getFavoriteCount,
   toggleFavorite,
-  checkIfFavorited,
-  getTrendingServices,
   type FavoriteService,
 } from "@/lib/services"
 import { getServiceTypeConfig } from "@/lib/service-utils"
@@ -113,9 +109,7 @@ interface Service {
   requiresApiKey?: boolean
   is_favorited?: boolean
   favorite_count?: number
-}
-
-// Define the mini-service type from API
+}  // Define the mini-service type from API
 interface MiniService {
   id: number
   name: string
@@ -130,6 +124,8 @@ interface MiniService {
   is_enhanced: boolean
   created_at: string
   is_public: boolean
+  favorite_count: number
+  is_favorited: boolean
 }
 
 // Define the process type from API
@@ -541,20 +537,11 @@ export default function DashboardPage() {
 
           if (!response.ok) {
             throw new Error(`Failed to fetch mini-services: ${response.status} ${response.statusText}`)
-          }
-
-          const data: MiniService[] = await response.json()
+          }          const data: MiniService[] = await response.json()
           console.log("Fetched mini-services:", data)
 
-          const userCreatedServices = data
-
-          const formattedServicesPromises = userCreatedServices.map(async (service) => {
+          const userCreatedServices = data;const formattedServicesPromises = userCreatedServices.map(async (service) => {
             const { iconComponent, color } = getServiceTypeConfig(service.input_type, service.output_type)
-
-            const [favoriteCount, isFavorited] = await Promise.all([
-              getFavoriteCount(service.id),
-              checkIfFavorited(service.id),
-            ])
 
             return {
               id: service.id,
@@ -572,11 +559,11 @@ export default function DashboardPage() {
                 run_time: service.run_time,
                 input_type: service.input_type,
                 output_type: service.output_type,
-               
               },
               is_enhanced: service.is_enhanced,
               created_at: service.created_at,
-              favorite_count: favoriteCount,
+              favorite_count: service.favorite_count,
+              is_favorited: service.is_favorited,
               is_public: service.is_public,
             }
           })
@@ -585,13 +572,11 @@ export default function DashboardPage() {
 
           setMiniServices(formattedServices)
 
+          // Set favorite states based on the is_favorited field from API
           const favoriteStates: Record<number, boolean> = {}
-          await Promise.all(
-            userCreatedServices.map(async (service, index) => {
-              const isFavorited = await checkIfFavorited(service.id)
-              favoriteStates[service.id] = isFavorited
-            }),
-          )
+          userCreatedServices.forEach((service) => {
+            favoriteStates[service.id] = service.is_favorited
+          })
           setServiceFavoriteStates(favoriteStates)
         } catch (error) {
           console.error("Error fetching mini-services:", error)
@@ -665,7 +650,6 @@ export default function DashboardPage() {
       return () => clearInterval(interval)
     }
   }, [isAuthenticated, user_id, getUserId, refreshTrigger])
-
   // Fetch user's favorite services
   useEffect(() => {
     if (isAuthenticated && activeFilter === "favourites") {
@@ -673,17 +657,43 @@ export default function DashboardPage() {
         try {
           setFavoritesLoading(true)
 
-          const favoriteData = await getFavoriteServices(0, 100)
+          const token = localStorage.getItem("token") || localStorage.getItem("accessToken")
+          const cookieToken = Cookies.get("accessToken")
+          const authToken = token || cookieToken
 
-          const formattedFavoritesPromises = favoriteData.map(async (service: FavoriteService) => {
+          if (!authToken) {
+            throw new Error("No authentication token found")
+          }
+
+          const currentUserId = user_id || getUserId()
+
+          if (!currentUserId) {
+            throw new Error("User ID is required")
+          }
+
+          console.log("Fetching favorites for user ID:", currentUserId)
+
+          const response = await fetch(`http://127.0.0.1:8000/api/v1/mini-services?current_user_id=${currentUserId}`, {
+            headers: {
+              Authorization: `Bearer ${authToken}`,
+              "Content-Type": "application/json",
+            },
+          })
+
+          if (!response.ok) {
+            throw new Error(`Failed to fetch mini-services for favorites: ${response.status} ${response.statusText}`)
+          }
+
+          const data: MiniService[] = await response.json()
+          console.log("Fetched mini-services for favorites:", data)
+
+          // Filter only favorited services
+          const favoriteServices = data.filter((service) => service.is_favorited)
+
+          const formattedFavorites = favoriteServices.map((service) => {
             const { iconComponent, color } = getServiceTypeConfig(service.input_type, service.output_type)
 
-            const [favoriteCount, isFavorited] = await Promise.all([
-              getFavoriteCount(service.id),
-              checkIfFavorited(service.id),
-            ])
-
-            const formattedService = {
+            return {
               id: service.id,
               name: service.name,
               description: service.description,
@@ -698,22 +708,17 @@ export default function DashboardPage() {
                 run_time: service.run_time,
                 input_type: service.input_type,
                 output_type: service.output_type,
-                
               },
               is_enhanced: service.is_enhanced,
               created_at: service.created_at,
-              favorite_count: favoriteCount,
+              favorite_count: service.favorite_count,
+              is_favorited: service.is_favorited,
               is_public: service.is_public,
             }
-
-            console.log("Formatted favorite service:", formattedService)
-            return formattedService
           })
 
-          const formattedFavorites = await Promise.all(formattedFavoritesPromises)
-
           const favoriteStates: Record<number, boolean> = {}
-          formattedFavorites.forEach((service) => {
+          favoriteServices.forEach((service) => {
             favoriteStates[service.id] = true
           })
           setServiceFavoriteStates(favoriteStates)
@@ -732,37 +737,84 @@ export default function DashboardPage() {
       setFavoriteServices([])
       setFavoritesLoading(false)
     }
-  }, [isAuthenticated, activeFilter, refreshTrigger])
-
+  }, [isAuthenticated, activeFilter, refreshTrigger, user_id, getUserId])
   // Fetch trending services when trending filter is active
   useEffect(() => {
     if (isAuthenticated && activeFilter === "trending") {
       const fetchTrendingServices = async () => {
         try {
           setTrendingLoading(true)
-          const trendingData = await getTrendingServices()
-          console.log("Trending services fetched:", trendingData)
 
-          const formattedTrendingServices = trendingData.map((service) => {
-            const { iconComponent } = getServiceTypeConfig(
-              service.input_type || "text", 
-              service.output_type || "text"
-            )
+          const token = localStorage.getItem("token") || localStorage.getItem("accessToken")
+          const cookieToken = Cookies.get("accessToken")
+          const authToken = token || cookieToken
+
+          if (!authToken) {
+            throw new Error("No authentication token found")
+          }
+
+          const currentUserId = user_id || getUserId()
+
+          if (!currentUserId) {
+            throw new Error("User ID is required")
+          }
+
+          console.log("Fetching trending services for user ID:", currentUserId)
+
+          const response = await fetch(`http://127.0.0.1:8000/api/v1/mini-services?current_user_id=${currentUserId}`, {
+            headers: {
+              Authorization: `Bearer ${authToken}`,
+              "Content-Type": "application/json",
+            },
+          })
+
+          if (!response.ok) {
+            throw new Error(`Failed to fetch mini-services for trending: ${response.status} ${response.statusText}`)
+          }
+
+          const data: MiniService[] = await response.json()
+          console.log("Fetched mini-services for trending:", data)
+
+          // Filter and sort by favorite count (trending = most favorited)
+          const trendingServices = data
+            .filter((service) => service.favorite_count > 0) // Only include services with at least 1 favorite
+            .sort((a, b) => b.favorite_count - a.favorite_count) // Sort by favorite count (descending)
+
+          const formattedTrendingServices = trendingServices.map((service) => {
+            const { iconComponent, color } = getServiceTypeConfig(service.input_type, service.output_type)
+
             return {
-              ...service,
+              id: service.id,
+              name: service.name,
+              description: service.description,
               icon: iconComponent,
+              serviceType: "mini-service",
+              color,
+              isCustom: true,
+              owner_id: service.owner_id,
+              owner_username: service.owner_username,
+              onDelete: handleMiniServiceDelete,
+              usageStats: {
+                average_token_usage: service.average_token_usage,
+                run_time: service.run_time,
+                input_type: service.input_type,
+                output_type: service.output_type,
+              },
+              is_enhanced: service.is_enhanced,
+              created_at: service.created_at,
+              favorite_count: service.favorite_count,
+              is_favorited: service.is_favorited,
+              is_public: service.is_public,
             }
           })
 
           setTrendingServices(formattedTrendingServices)
 
+          // Set favorite states based on the is_favorited field from API
           const favoriteStates: Record<number, boolean> = {}
-          await Promise.all(
-            formattedTrendingServices.map(async (service) => {
-              const isFavorited = await checkIfFavorited(service.id)
-              favoriteStates[service.id] = isFavorited
-            }),
-          )
+          trendingServices.forEach((service) => {
+            favoriteStates[service.id] = service.is_favorited
+          })
           setServiceFavoriteStates(favoriteStates)
         } catch (error) {
           console.error("Error fetching trending services:", error)
@@ -777,7 +829,7 @@ export default function DashboardPage() {
       setTrendingServices([])
       setTrendingLoading(false)
     }
-  }, [isAuthenticated, activeFilter, refreshTrigger])
+  }, [isAuthenticated, activeFilter, refreshTrigger, user_id, getUserId])
 
 
 
@@ -1705,8 +1757,7 @@ export default function DashboardPage() {
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.3 }}
-                          >
-                            <MiniAppCard
+                          >                            <MiniAppCard
                               title={service.name}
                               description={service.description}
                               icon={service.icon}
@@ -1720,6 +1771,8 @@ export default function DashboardPage() {
                               requiresApiKey={service.requiresApiKey}
                               owner_username={service.owner_username}
                               is_public={service.is_public}
+                              favorite_count={service.favorite_count}
+                              is_favorited={service.is_favorited}
                             />
                           </motion.div>
                         ))}

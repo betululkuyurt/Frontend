@@ -22,17 +22,9 @@ export interface FavoriteService {
   created_at: string;
   average_token_usage: any;
   run_time: number;
-  favorite_count?: number; // Add favorite count field for trending
+  favorite_count: number; // Updated to be required since backend now provides it
+  is_favorited: boolean; // Updated to be required since backend now provides it
   is_public: boolean;
-}
-
-export interface FavoriteCountResponse {
-  mini_service_id: number;
-  favorite_count: number;
-}
-
-export interface FavoriteCheckResponse {
-  is_favorited: boolean;
 }
 
 // Helper function to get auth headers
@@ -130,187 +122,33 @@ export async function removeFromFavorites(miniServiceId: number): Promise<boolea
 }
 
 /**
- * Get user's favorite mini services
- * GET /api/v1/favorites/?skip=0&limit=100
+ * Toggle favorite status for a mini service
+ * This function now works with the updated backend that provides is_favorited status
  */
-export async function getFavoriteServices(skip: number = 0, limit: number = 100): Promise<FavoriteService[]> {
+export async function toggleFavorite(miniServiceId: number): Promise<{ isFavorited: boolean; success: boolean }> {
   try {
     const currentUserId = getCurrentUserId();
     
-    const response = await fetch(`http://127.0.0.1:8000/api/v1/favorites/?skip=${skip}&limit=${limit}&current_user_id=${currentUserId}`, {
-      method: 'GET',
-      headers: getAuthHeaders(),
-      credentials: 'include',
-    });
-    
-    if (response.ok) {
-      const data = await response.json();
-      console.log('Favorite services fetched successfully');
-      return data;
-    }
-    
-    console.error('Failed to fetch favorite services:', response.status);
-    return [];
-  } catch (error) {
-    console.error('Error fetching favorite services:', error);
-    return [];
-  }
-}
-
-/**
- * Get favorite count for a service (how many users favorited it)
- * GET /api/v1/favorites/count/{mini_service_id}
- */
-export async function getFavoriteCount(miniServiceId: number): Promise<number> {
-  try {
-    
-    
-    const response = await fetch(`http://127.0.0.1:8000/api/v1/favorites/count/${miniServiceId}`, {
-      method: 'GET',
-      headers: getAuthHeaders(),
-      credentials: 'include',
-    });
-    
-   
-    
-    if (response.ok) {
-      const data: FavoriteCountResponse = await response.json();
-      
-      return data.favorite_count;
-    }
-    
-    // Handle 404 - service not found, return 0 instead of failing
-    if (response.status === 404) {
-      console.warn(`Service ${miniServiceId} not found for favorite count, returning 0`);
-      return 0;
-    }
-    
-    console.error('Failed to fetch favorite count:', response.status);
-    return 0;
-  } catch (error) {
-    console.error('Error fetching favorite count:', error);
-    return 0;
-  }
-}
-
-/**
- * Check if current user has favorited a service
- * GET /api/v1/favorites/check/{mini_service_id}
- */
-export async function checkIfFavorited(miniServiceId: number): Promise<boolean> {
-  try {
-    const currentUserId = getCurrentUserId();
-    
-    
-    const response = await fetch(`http://127.0.0.1:8000/api/v1/favorites/check/${miniServiceId}?current_user_id=${currentUserId}`, {
-      method: 'GET',
-      headers: getAuthHeaders(),
-      credentials: 'include',
-    });
-    
-    if (response.ok) {
-      const data: FavoriteCheckResponse = await response.json();
-    
-      return data.is_favorited;
-    }
-    
-    // Handle 404 - service not found, return false instead of failing
-    if (response.status === 404) {
-      console.warn(`Service ${miniServiceId} not found for favorite check, returning false`);
-      return false;
-    }
-    
-    console.error('Failed to check favorite status:', response.status);
-    return false;
-  } catch (error) {
-    console.error('Error checking favorite status:', error);
-    return false;
-  }
-}
-
-/**
- * Get trending services ordered by favorite count (most favorites to least)
- * Uses the /api/v1/favorites/count/{mini_service_id} endpoint for each service
- */
-export async function getTrendingServices(): Promise<any[]> {
-  try {
-    const currentUserId = getCurrentUserId();
-    
-    // First, get all available mini-services
+    // First, we need to check current status by fetching the service
     const response = await fetch(`http://127.0.0.1:8000/api/v1/mini-services?current_user_id=${currentUserId}`, {
       headers: getAuthHeaders(),
       credentials: 'include',
     });
 
     if (!response.ok) {
-      console.error('Failed to fetch mini-services for trending:', response.status);
-      return [];
+      console.error('Failed to fetch mini-services for toggle favorite:', response.status);
+      return { isFavorited: false, success: false };
     }
 
-    const allServices: FavoriteService[] = await response.json();
+    const services = await response.json();
+    const service = services.find((s: any) => s.id === miniServiceId);
     
+    if (!service) {
+      console.error(`Service ${miniServiceId} not found`);
+      return { isFavorited: false, success: false };
+    }
 
-    
-    // Map the mini-services to the format expected by the dashboard
-    const formattedServicesPromises = allServices.map(async (service) => {
-      // Get color based on service type
-      const color = getServiceColor(service.input_type, service.output_type)
-
-      // Fetch favorite count and status for this service
-      const [favoriteCount, isFavorited] = await Promise.all([
-        getFavoriteCount(service.id),
-        checkIfFavorited(service.id)
-      ])
-
-      return {
-        id: service.id,
-        name: service.name,
-        description: service.description,
-        input_type: service.input_type,
-        output_type: service.output_type,
-        serviceType: "mini-service",
-        color,
-        isCustom: true,
-        owner_id: service.owner_id,
-        owner_username: service.owner_username,
-        usageStats: {
-          average_token_usage: service.average_token_usage,
-          run_time: service.run_time,
-          input_type: service.input_type,
-          output_type: service.output_type,
-        },
-        is_enhanced: service.is_enhanced,
-        created_at: service.created_at,
-        favorite_count: favoriteCount,
-        is_favorited: isFavorited,
-        is_public: service.is_public
-      }
-    });
-
-    // Wait for all services to be formatted
-    const formattedServices = await Promise.all(formattedServicesPromises);
-
-    // Sort by favorite count (descending - most favorites first) and filter to only include services with favorites
-    const trendingServices = formattedServices
-      .filter(service => service.favorite_count > 0) // Only include services with at least 1 favorite
-      .sort((a, b) => b.favorite_count - a.favorite_count);
-
-    console.log('Trending services fetched and sorted by favorite count:', trendingServices);
-    return trendingServices;
-  } catch (error) {
-    console.error('Error fetching trending services:', error);
-    return [];
-  }
-}
-
-/**
- * Toggle favorite status for a mini service
- * This combines check, add, and remove operations
- */
-export async function toggleFavorite(miniServiceId: number): Promise<{ isFavorited: boolean; success: boolean }> {
-  try {
-    // First check current status
-    const currentlyFavorited = await checkIfFavorited(miniServiceId);
+    const currentlyFavorited = service.is_favorited;
     
     let success: boolean;
     if (currentlyFavorited) {
