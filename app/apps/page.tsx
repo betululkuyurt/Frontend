@@ -1643,7 +1643,7 @@ export default function DashboardPage() {
                         onClick={() => setViewMode("card")}
                         className={
                           viewMode === "card"
-                            ? "bg-gradient-to-r from-orange-600 to-amber-600 text-white hover:from-orange-700 hover:to-amber-700 rounded-lg"
+                            ? "bg-gradient-to-r from-purple-600 to-violet-600 text-white hover:from-purple-700 hover:to-violet-700 rounded-lg"
                             : "text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg"
                         }
                         title="Card view"
@@ -1656,7 +1656,7 @@ export default function DashboardPage() {
                         onClick={() => setViewMode("table")}
                         className={
                           viewMode === "table"
-                            ? "bg-gradient-to-r from-orange-600 to-amber-600 text-white hover:from-orange-700 hover:to-amber-700 rounded-lg"
+                            ? "bg-gradient-to-r from-purple-600 to-violet-600 text-white hover:from-purple-700 hover:to-violet-700 rounded-lg"
                             : "text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg"
                         }
                         title="Table view"
@@ -1941,13 +1941,7 @@ export default function DashboardPage() {
                   Start using AI workflows to see your activity history here. Your interactions and creations will be
                   tracked.
                 </p>
-                <Button
-                  onClick={() => router.push("/apps/create")}
-                  className="bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white rounded-xl"
-                >
-                  <Plus className="h-5 w-5 mr-2" />
-                  Get Started
-                </Button>
+               
               </Card>
             )}
           </motion.section>
