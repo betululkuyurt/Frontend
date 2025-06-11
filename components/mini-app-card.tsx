@@ -324,8 +324,8 @@ export function MiniAppCard({
               // Modern "Create New" card
               <>
                 <div className={cn(
-                  "w-16 h-16 sm:w-20 sm:h-20 rounded-2xl flex items-center justify-center bg-gradient-to-br shadow-2xl transition-all duration-200 group-hover:scale-105 mb-4 sm:mb-6 relative overflow-hidden border border-white/10",
-                  color
+                  "w-16 h-16 sm:w-20 sm:h-20 rounded-2xl flex items-center justify-center shadow-2xl transition-all duration-200 group-hover:scale-105 mb-4 sm:mb-6 relative overflow-hidden border border-white/10 text-white",
+                  color.replace('from-', 'bg-').replace(/\s+to-.*$/, '')
                 )}>
                   <div className="absolute inset-0 bg-white/10 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-200"></div>
                   <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent rounded-2xl"></div>
@@ -355,8 +355,8 @@ export function MiniAppCard({
                 {/* Modern service icon and title section with glassmorphism */}
                 <div className="flex items-start space-x-2 sm:space-x-3 mb-3 sm:mb-4 relative z-10">
                   <div className={cn(
-                    "w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center bg-gradient-to-br flex-shrink-0",
-                    color
+                    "w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0 text-white shadow-lg transition-all duration-200 group-hover:scale-105",
+                    color.replace('from-', 'bg-').replace(/\s+to-.*$/, '')
                   )}>
                     {icon}
                   </div>

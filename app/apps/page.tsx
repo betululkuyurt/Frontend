@@ -1270,7 +1270,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-slate-900 via-purple-900/20 to-slate-900">
+    <div className="relative min-h-screen overflow-hidden bg-gradient-to-b from-black via-purple-950/20 to-black">
       {/* Static gradient background */}
       <div className="absolute inset-0 -z-10 opacity-30 bg-gradient-to-br from-purple-600/30 via-violet-500/20 to-indigo-600/30" />
 
@@ -1296,12 +1296,12 @@ export default function DashboardPage() {
                       className="text-4xl font-bold bg-gradient-to-r from-purple-400 via-amber-400 to-purple-400 bg-clip-text text-transparent"
                     >
                       {activeFilter === "trending"
-                        ? "🔥 Trending Workflows"
+                        ? "Trending Workflows"
                         : activeFilter === "favourites"
-                          ? "⭐ Your Favorites"
+                          ? "Your Favorites"
                           : activeFilter === "created"
-                            ? "🎨 Your Creations"
-                            : "🚀 AI Workflows"}
+                            ? "Your Creations"
+                            : "AI Workflows"}
                     </motion.h1>
                     
                     {/* Service Count Badge - Now on same line */}
