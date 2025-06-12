@@ -1616,14 +1616,16 @@ export default function ServicePage() {
       )
 
       if (!response.ok) {
-        let errorDetail = "Unknown error"
+        let errorData = null
         try {
-          const errorData = await response.json()
-          errorDetail = errorData?.detail || JSON.stringify(errorData)
+          errorData = await response.json()
         } catch (parseError) {
-          errorDetail = response.statusText
+          errorData = { detail: response.statusText }
         }
-        throw new Error(`Server error: ${response.status} ${errorDetail}`)
+        
+        // For RAG services, the context is document analysis
+        const userFriendlyError = parseApiError(errorData, "document analysis")
+        throw new Error(userFriendlyError)
       }
 
       const data = await response.json()
@@ -1654,14 +1656,15 @@ export default function ServicePage() {
       )
 
       if (!uploadResponse.ok) {
-        let errorDetail = "Unknown error"
+        let errorData = null
         try {
-          const errorData = await uploadResponse.json()
-          errorDetail = errorData?.detail || JSON.stringify(errorData)
+          errorData = await uploadResponse.json()
         } catch (parseError) {
-          errorDetail = uploadResponse.statusText
+          errorData = { detail: uploadResponse.statusText }
         }
-        throw new Error(`Upload failed: ${uploadResponse.status} ${errorDetail}`)
+        
+        const userFriendlyError = parseApiError(errorData, "file upload")
+        throw new Error(userFriendlyError)
       }
 
       const uploadData = await uploadResponse.json()
@@ -1699,14 +1702,25 @@ export default function ServicePage() {
       )
 
       if (!processResponse.ok) {
-        let errorDetail = "Unknown error"
+        let errorData = null
         try {
-          const errorData = await processResponse.json()
-          errorDetail = errorData?.detail || JSON.stringify(errorData)
+          errorData = await processResponse.json()
         } catch (parseError) {
-          errorDetail = processResponse.statusText
+          errorData = { detail: processResponse.statusText }
         }
-        throw new Error(`Processing failed: ${processResponse.status} ${errorDetail}`)
+        
+        // Determine context based on agent type
+        let context = "file processing"
+        if (primaryAgent.type.includes("image") || primaryAgent.type.includes("dalle")) {
+          context = "image generation"
+        } else if (primaryAgent.type.includes("audio") || primaryAgent.type.includes("tts")) {
+          context = "audio generation"
+        } else if (primaryAgent.type.includes("text")) {
+          context = "text generation"
+        }
+        
+        const userFriendlyError = parseApiError(errorData, context)
+        throw new Error(userFriendlyError)
       }
 
       const processData = await processResponse.json()
@@ -1763,17 +1777,47 @@ export default function ServicePage() {
     })
 
     if (!response.ok) {
-      let errorDetail = "Unknown error"
+      let errorData = null
       try {
-        const errorData = await response.json()
-        errorDetail = errorData?.detail || JSON.stringify(errorData)
+        errorData = await response.json()
       } catch (parseError) {
-        errorDetail = response.statusText
+        errorData = { detail: response.statusText }
       }
-      throw new Error(`Server error: ${response.status} ${errorDetail}`)
+      
+      // Determine context based on agent type
+      let context = "service execution"
+      if (primaryAgent.type.includes("image") || primaryAgent.type.includes("dalle")) {
+        context = "image generation"
+      } else if (primaryAgent.type.includes("audio") || primaryAgent.type.includes("tts")) {
+        context = "audio generation"
+      } else if (primaryAgent.type.includes("text")) {
+        context = "text generation"
+      } else if (primaryAgent.type.includes("transcrib")) {
+        context = "audio transcription"
+      }
+      
+      const userFriendlyError = parseApiError(errorData, context)
+      throw new Error(userFriendlyError)
     }
 
     const data = await response.json()
+    
+    // Check for errors in the response body even if HTTP status is 200
+    if (data && data.error) {
+      // Determine context based on agent type
+      let context = "file processing"
+      if (primaryAgent.type.includes("image") || primaryAgent.type.includes("dalle")) {
+        context = "image generation"
+      } else if (primaryAgent.type.includes("audio") || primaryAgent.type.includes("tts")) {
+        context = "audio generation"
+      } else if (primaryAgent.type.includes("text")) {
+        context = "text generation"
+      }
+      
+      const userFriendlyError = parseApiError(data.error, context)
+      throw new Error(userFriendlyError)
+    }
+    
     return data
   }
   const performRegularServiceSubmit = async (inputText: string, file: File | null, conversation?: any[]) => {
@@ -1834,11 +1878,45 @@ export default function ServicePage() {
     )
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => null)
-      throw new Error(errorData?.detail || `Server error: ${response.status} ${response.statusText}`)
+      let errorData = null
+      try {
+        errorData = await response.json()
+      } catch (parseError) {
+        errorData = { detail: response.statusText }
+      }
+      
+      // Determine context based on service type for better error messages
+      let context = "service execution"
+      if (service?.output_type === "image") {
+        context = "image generation"
+      } else if (service?.output_type === "sound") {
+        context = "audio generation"
+      } else if (service?.output_type === "text") {
+        context = "text generation"
+      }
+      
+      const userFriendlyError = parseApiError(errorData, context)
+      throw new Error(userFriendlyError)
     }
 
     const data = await response.json()
+    
+    // Check for errors in the response body even if HTTP status is 200
+    if (data && data.error) {
+      // Determine context based on service type for better error messages
+      let context = "service execution"
+      if (service?.output_type === "image") {
+        context = "image generation"
+      } else if (service?.output_type === "sound") {
+        context = "audio generation"
+      } else if (service?.output_type === "text") {
+        context = "text generation"
+      }
+      
+      const userFriendlyError = parseApiError(data.error, context)
+      throw new Error(userFriendlyError)
+    }
+    
     return data
   }
 
@@ -1872,14 +1950,15 @@ export default function ServicePage() {
     )
 
     if (!uploadResponse.ok) {
-      let errorDetail = "Unknown error"
+      let errorData = null
       try {
-        const errorData = await uploadResponse.json()
-        errorDetail = errorData?.detail || JSON.stringify(errorData)
+        errorData = await uploadResponse.json()
       } catch (parseError) {
-        errorDetail = uploadResponse.statusText
+        errorData = { detail: uploadResponse.statusText }
       }
-      throw new Error(`Upload failed: ${uploadResponse.status} ${errorDetail}`)
+      
+      const userFriendlyError = parseApiError(errorData, "document upload")
+      throw new Error(userFriendlyError)
     }
 
     const uploadData = await uploadResponse.json()
@@ -1921,17 +2000,25 @@ export default function ServicePage() {
     )
 
     if (!processResponse.ok) {
-      let errorDetail = "Unknown error"
+      let errorData = null
       try {
-        const errorData = await processResponse.json()
-        errorDetail = errorData?.detail || JSON.stringify(errorData)
+        errorData = await processResponse.json()
       } catch (parseError) {
-        errorDetail = processResponse.statusText
+        errorData = { detail: processResponse.statusText }
       }
-      throw new Error(`Processing failed: ${processResponse.status} ${errorDetail}`)
+      
+      const userFriendlyError = parseApiError(errorData, "document processing")
+      throw new Error(userFriendlyError)
     }
 
     const processData = await processResponse.json()
+    
+    // Check for errors in the response body even if HTTP status is 200
+    if (processData && processData.error) {
+      const userFriendlyError = parseApiError(processData.error, "document processing")
+      throw new Error(userFriendlyError)
+    }
+    
     return processData
   }
 
@@ -2657,6 +2744,61 @@ export default function ServicePage() {
     }
 
     const textContent = getTextContent(result)
+    
+    // Check for errors BEFORE starting typing animation
+    const errorCheck = detectOutputError(textContent)
+    if (errorCheck.isError) {
+      // Skip typing animation and show error immediately
+      onComplete() // Call onComplete immediately to prevent typing state
+      
+      let context = "operation"
+      if (result.source_documents || result.sources || result.answer || result.rag_prompt) {
+        context = "document analysis"
+      } else if (service?.output_type === "image") {
+        context = "image generation"
+      } else if (service?.output_type === "sound") {
+        context = "audio generation"
+      } else if (service?.output_type === "text") {
+        context = "text generation"
+      }
+      
+      const friendlyErrorMessage = parseApiError({ type: errorCheck.errorType, message: errorCheck.originalError }, context)
+      
+      return (
+        <div className="w-full">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-medium text-white">
+              {context.charAt(0).toUpperCase() + context.slice(1)} Error
+            </h3>
+            <TokenUsageInfoButton result={result} messageId={messageId} />
+          </div>
+          <div className="bg-red-900/20 border border-red-700/30 rounded-lg p-6">
+            <div className="flex items-start space-x-3">
+              <div className="w-8 h-8 bg-red-600/20 rounded-full flex items-center justify-center flex-shrink-0">
+                <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <h4 className="text-red-200 font-medium text-sm mb-2">
+                  {context.charAt(0).toUpperCase() + context.slice(1)} Failed
+                </h4>
+                <p className="text-red-300/90 text-sm leading-relaxed mb-4">
+                  {friendlyErrorMessage}
+                </p>
+                
+                <div className="mt-4 flex items-center space-x-2 text-xs text-red-300/70">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span>Please check your API key configuration in the settings panel</span>
+                </div>
+              </div>
+            </div> 
+          </div>
+        </div>
+      )
+    }
 
     return (
       <div className="w-full">
@@ -2691,6 +2833,36 @@ export default function ServicePage() {
     if (!result) return null
 
     if (result.source_documents || result.sources || result.answer || result.rag_prompt) {
+      // Check for errors in RAG document analysis
+      const ragOutput = result.answer || result.response || result.output || ""
+      const ragErrorCheck = detectOutputError(ragOutput)
+      
+      if (ragErrorCheck.isError) {
+        const friendlyErrorMessage = parseApiError({ type: ragErrorCheck.errorType, message: ragErrorCheck.originalError }, "document analysis")
+        
+        return (
+          <div className="w-full">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-medium text-white">Document Analysis Error</h3>
+              <TokenUsageInfoButton result={result} messageId={messageId} />
+            </div>
+            <div className="bg-red-900/20 border border-red-700/30 rounded-lg p-6">
+              <div className="flex items-start space-x-3">
+                <div className="w-8 h-8 bg-red-600/20 rounded-full flex items-center justify-center flex-shrink-0">
+                  <FileText className="w-5 h-5 text-red-400" />
+                </div>
+                <div className="flex-1">
+                  <h4 className="text-red-200 font-medium text-sm mb-2">Document Analysis Failed</h4>
+                                      <p className="text-red-300/90 text-sm leading-relaxed mb-4">
+                      {friendlyErrorMessage}
+                    </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      }
+      
       return (
         <div className="w-full">
           <div className="flex items-center justify-between mb-4">
@@ -2725,6 +2897,35 @@ export default function ServicePage() {
     switch (service?.output_type) {
       case "text":
         const textOutput = result.final_output || result.output || result.results?.[0]?.output
+        
+        // Check for errors in text generation output
+        const textErrorCheck = detectOutputError(textOutput)
+        if (textErrorCheck.isError) {
+          const friendlyErrorMessage = parseApiError({ type: textErrorCheck.errorType, message: textErrorCheck.originalError }, "text generation")
+          
+          return (
+            <div className="w-full">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-medium text-white">Text Generation Error</h3>
+                <TokenUsageInfoButton result={result} messageId={messageId} />
+              </div>
+              <div className="bg-red-900/20 border border-red-700/30 rounded-lg p-6">
+                <div className="flex items-start space-x-3">
+                  <div className="w-8 h-8 bg-red-600/20 rounded-full flex items-center justify-center flex-shrink-0">
+                    <FileText className="w-5 h-5 text-red-400" />
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="text-red-200 font-medium text-sm mb-2">Text Generation Failed</h4>
+                    <p className="text-red-300/90 text-sm leading-relaxed mb-4">
+                      {friendlyErrorMessage}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )
+        }
+        
         return (
           <div className="w-full">
             <div className="flex items-center justify-between mb-4">
@@ -2755,6 +2956,40 @@ export default function ServicePage() {
 
       case "sound":
         const audioUrl = extractAudioUrl(result)
+        
+        // Check for errors in audio generation output
+        let audioOutputToCheck = result.final_output || result.output
+        if (result.results && result.results[0] && result.results[0].output) {
+          audioOutputToCheck = result.results[0].output
+        }
+        
+        const audioErrorCheck = detectOutputError(audioOutputToCheck)
+        if (audioErrorCheck.isError) {
+          const friendlyErrorMessage = parseApiError({ type: audioErrorCheck.errorType, message: audioErrorCheck.originalError }, "audio generation")
+          
+          return (
+            <div className="w-full">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-medium text-white">Audio Generation Error</h3>
+                <TokenUsageInfoButton result={result} messageId={messageId} />
+              </div>
+              <div className="bg-red-900/20 border border-red-700/30 rounded-lg p-6">
+                <div className="flex items-start space-x-3">
+                  <div className="w-8 h-8 bg-red-600/20 rounded-full flex items-center justify-center flex-shrink-0">
+                    <Headphones className="w-5 h-5 text-red-400" />
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="text-red-200 font-medium text-sm mb-2">Audio Generation Failed</h4>
+                    <p className="text-red-300/90 text-sm leading-relaxed mb-4">
+                      {friendlyErrorMessage}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )
+        }
+        
         return (
           <div className="w-full">
             <div className="flex items-center justify-between mb-4">
@@ -2821,6 +3056,51 @@ export default function ServicePage() {
 
       case "image":
         const imageUrl = result.image_url || result.final_output
+        
+        // Check if the result contains error in output (for cases where API returns error as string)
+        let outputToCheck = imageUrl
+        if (result.results && result.results[0] && result.results[0].output) {
+          outputToCheck = result.results[0].output
+        } else if (result.output) {
+          outputToCheck = result.output
+        }
+        
+        const errorCheck = detectOutputError(outputToCheck)
+        if (errorCheck.isError) {
+          // Convert the detected error to user-friendly message
+          const friendlyErrorMessage = parseApiError({ type: errorCheck.errorType, message: errorCheck.originalError }, "image generation")
+          
+          return (
+            <div className="w-full">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-medium text-white">Image Generation Error</h3>
+                <TokenUsageInfoButton result={result} messageId={messageId} />
+              </div>
+              <div className="bg-red-900/20 border border-red-700/30 rounded-lg p-6">
+                <div className="flex items-start space-x-3">
+                  <div className="w-8 h-8 bg-red-600/20 rounded-full flex items-center justify-center flex-shrink-0">
+                    <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="text-red-200 font-medium text-sm mb-2">Image Generation Failed</h4>
+                                         <p className="text-red-300/90 text-sm leading-relaxed mb-4">
+                       {friendlyErrorMessage}
+                     </p>
+                    <div className="mt-4 flex items-center space-x-2 text-xs text-red-300/70">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <span>Please check your API key configuration in the settings panel</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )
+        }
+        
         return (
           <div className="w-full">
             <div className="flex items-center justify-between mb-4">
@@ -2994,6 +3274,197 @@ export default function ServicePage() {
       fetchUserData()
     }
   }, [isAuthenticated])
+
+  // Helper function to detect errors in output strings
+  const detectOutputError = (output: string): { isError: boolean; errorType?: string; originalError?: string } => {
+    if (!output || typeof output !== 'string') {
+      return { isError: false }
+    }
+
+    const outputLower = output.toLowerCase()
+    
+    // Detect various error patterns in output strings
+    const errorPatterns = [
+      'error with openai',
+      'error with gemini', 
+      'error with anthropic',
+      'error code:',
+      'api error',
+      'authentication failed',
+      'invalid api key',
+      'quota exceeded',
+      'rate limit',
+      'image_generation_user_error',
+      'image_generation_error',
+      'generation_error',
+      'api_key_error',
+      'unauthorized',
+      'forbidden',
+      'bad request',
+      'payment required'
+    ]
+
+    const hasError = errorPatterns.some(pattern => outputLower.includes(pattern))
+    
+    if (hasError) {
+      // Try to extract error type from the output
+      let errorType = "api_error"
+      
+      if (outputLower.includes('image_generation_user_error') || outputLower.includes('image_generation_error')) {
+        errorType = "image_generation_error"
+      } else if (outputLower.includes('quota exceeded')) {
+        errorType = "quota_exceeded"
+      } else if (outputLower.includes('rate limit')) {
+        errorType = "rate_limit"
+      } else if (outputLower.includes('invalid api key') || outputLower.includes('authentication failed')) {
+        errorType = "invalid_api_key"
+      } else if (outputLower.includes('unauthorized') || outputLower.includes('forbidden')) {
+        errorType = "unauthorized"
+      }
+      
+      return { 
+        isError: true, 
+        errorType, 
+        originalError: output 
+      }
+    }
+
+    return { isError: false }
+  }
+
+  // Enhanced error parsing to provide user-friendly API key error messages
+  const parseApiError = (error: any, context: string = "operation"): string => {
+    let errorMessage = ""
+    
+         // Try to extract error details from various response formats
+     if (typeof error === 'string') {
+       errorMessage = error
+     } else if (error?.detail) {
+       errorMessage = typeof error.detail === 'string' ? error.detail : JSON.stringify(error.detail)
+     } else if (error?.message) {
+       errorMessage = error.message
+     } else if (error?.error) {
+       errorMessage = typeof error.error === 'string' ? error.error : JSON.stringify(error.error)
+     } else if (error?.type) {
+       // Handle error type field (e.g., 'image_generation_user_error')
+       errorMessage = error.type
+       if (error.message && error.message !== null) {
+         errorMessage += `: ${error.message}`
+       }
+     } else {
+       errorMessage = JSON.stringify(error)
+     }
+
+    // Normalize error message to lowercase for pattern matching
+    const normalizedError = errorMessage.toLowerCase()
+
+         // Detect various API key related errors
+     const apiKeyErrorPatterns = [
+       'api key',
+       'invalid key',
+       'authentication failed',
+       'unauthorized',
+       'access denied',
+       'invalid token',
+       'invalid credentials',
+       'quota exceeded',
+       'billing',
+       'payment required',
+       'subscription',
+       'credit',
+       'openai',
+       'gemini',
+       'anthropic',
+       'forbidden',
+       'key not found',
+       'invalid api',
+       'api_key',
+       'auth',
+       'permission denied',
+       'rate limit',
+       'usage limit',
+       'insufficient',
+       'expired',
+       'revoked',
+       'disabled',
+       'suspended',
+       'dall-e',
+       'dalle',
+       'gpt-',
+       'model access',
+       'not authorized',
+       'image_generation_user_error',
+       'image_generation_error',
+       'generation_error',
+       'user_error',
+       'api_error',
+       'service_error'
+     ]
+
+    const isApiKeyError = apiKeyErrorPatterns.some(pattern => 
+      normalizedError.includes(pattern)
+    )
+
+    if (isApiKeyError) {
+             // Determine the specific type of API key issue
+       if (normalizedError.includes('quota exceeded') || normalizedError.includes('usage limit') || normalizedError.includes('billing')) {
+         return "⚠️ API Key Quota Exceeded: Your API key has reached its usage limit. Please check your billing and upgrade your plan if necessary."
+       } 
+       else if (normalizedError.includes('rate limit')) {
+         return "🚦 Rate Limit Exceeded: You're making requests too quickly. Please wait a moment and try again, or upgrade your API plan for higher limits."
+       }
+       else if (normalizedError.includes('payment required') || normalizedError.includes('subscription') || normalizedError.includes('insufficient')) {
+         return "💳 Payment Required: Your API subscription needs to be renewed or you have insufficient credits. Please update your billing information."
+       }
+       else if (normalizedError.includes('expired') || normalizedError.includes('revoked') || normalizedError.includes('disabled') || normalizedError.includes('suspended')) {
+         return "🔑 API Key Expired: Your API key has expired or been revoked. Please generate a new API key and update your configuration."
+       }
+       else if (normalizedError.includes('image_generation_user_error') || normalizedError.includes('image_generation_error')) {
+         return "🖼️ Image Generation Error: There was an issue with your image generation request. This is typically caused by an invalid or expired API key. Please check your OpenAI API key configuration in the settings panel."
+       }
+       else if (normalizedError.includes('generation_error') || normalizedError.includes('user_error')) {
+         if (context.includes('image')) {
+           return "🖼️ Image Generation Error: There was an issue generating your image. Please check your API key and try again."
+         } else if (context.includes('audio')) {
+           return "🎵 Audio Generation Error: There was an issue generating your audio. Please check your API key and try again."
+         } else {
+           return "⚡ Generation Error: There was an issue with content generation. Please check your API key and try again."
+         }
+       }
+       else if (normalizedError.includes('model access') || normalizedError.includes('permission denied') || normalizedError.includes('not authorized')) {
+         if (context.includes('image')) {
+           return "🖼️ Image Generation Access Denied: Your API key doesn't have access to image generation models like DALL-E. Please upgrade your OpenAI plan or check your model permissions."
+         } else {
+           return "🔑 Model Access Denied: Your API key doesn't have access to the requested model. Please check your subscription plan and model permissions."
+         }
+       }
+       else if (normalizedError.includes('invalid') || normalizedError.includes('unauthorized') || normalizedError.includes('access denied') || normalizedError.includes('forbidden')) {
+         if (normalizedError.includes('openai') || normalizedError.includes('dall-e') || normalizedError.includes('dalle') || normalizedError.includes('gpt-')) {
+           return "🔑 Invalid OpenAI API Key: The OpenAI API key you provided is invalid or has expired. Please check your API key in the settings panel."
+         } else if (normalizedError.includes('gemini') || normalizedError.includes('google')) {
+           return "🔑 Invalid Gemini API Key: The Google Gemini API key you provided is invalid or has expired. Please check your API key in the settings panel."
+         } else {
+           return "🔑 Invalid API Key: The API key you provided is invalid or has expired. Please verify your API key configuration in the settings panel."
+         }
+       }
+       else if (normalizedError.includes('authentication failed') || normalizedError.includes('auth')) {
+         return "🔑 API Authentication Failed: Unable to authenticate with the AI service. Please verify your API key is correct and has the necessary permissions."
+       }
+       else {
+         return "🔑 API Key Issue: There's a problem with your API key configuration. Please check your API keys in the settings panel and ensure they are valid and properly configured."
+       }
+    }
+
+    // For image generation specific errors
+    if (context.includes('image') || context.includes('generation')) {
+      if (normalizedError.includes('failed to load') || normalizedError.includes('image') || normalizedError.includes('generation')) {
+        return `🖼️ Image Generation Failed: ${errorMessage}. This might be due to an API key issue or service limitation.`
+      }
+    }
+
+    // Return original error message with context if no specific pattern matches
+    return `${context.charAt(0).toUpperCase() + context.slice(1)} failed: ${errorMessage}`
+  }
 
   const createAbortController = (timeoutMs = 300000) => {
     const controller = new AbortController()
