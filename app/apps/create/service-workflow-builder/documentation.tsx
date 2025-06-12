@@ -379,7 +379,7 @@ export default function ServiceWorkflowDocumentation() {
                         <div className="bg-black/40 rounded-lg p-4 border border-indigo-900/30">
                           <h4 className="text-lg font-medium text-white mb-2">Gemini Text-to-Image Building Block</h4>
                           <ul className="space-y-1 text-gray-300">
-                            <li><span className="text-indigo-300 font-medium">Type:</span> gemini_text2image</li>
+                            <li><span className="text-indigo-300 font-medium">Type:</span> dalle</li>
                             <li><span className="text-indigo-300 font-medium">Input:</span> Text prompt</li>
                             <li><span className="text-indigo-300 font-medium">Output:</span> Image</li>
                             <li><span className="text-indigo-300 font-medium">API Key Required:</span> Yes (Gemini API key)</li>

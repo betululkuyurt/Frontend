@@ -227,7 +227,7 @@ export default function ServiceWorkflowBuilder() {
   const agentTypeCategories = {
     "All": [],
     "LLM": ["gemini", "openai", "claude", "custom_endpoint_llm"],
-    "Image Generation": ["gemini_text2image", "midjourney", "dalle"],
+    "Image Generation": ["dalle", "midjourney", "dalle"],
     "Media": ["edge_tts", "bark_tts", "whisper", "transcribe"],
     "Document": ["rag", "pdf_reader", "document_analyzer", "file_output"],
     "Translate": ["google_translate"],
@@ -1246,8 +1246,8 @@ export default function ServiceWorkflowBuilder() {
       if (agentTypeFilter === "All") return agents
       
       const agentTypeMapping: { [key: string]: string[] } = {
-        "Gemini": ["gemini", "gemini_text2image"],
-        "ChatGPT": ["openai", "gpt_vision", "openai_assistant"],
+        "Gemini": ["gemini"],
+        "ChatGPT": ["openai", "gpt_vision", "openai_assistant", "dalle"],
         "Claude": ["claude"],
         "TTS": ["edge_tts", "bark_tts"],
         "Media": ["whisper", "transcribe"],
@@ -1917,7 +1917,7 @@ export default function ServiceWorkflowBuilder() {
       'claude': 'Claude (Anthropic)',
       
       // Specialized agents
-      'gemini_text2image': 'Imagen (Google Text-to-Image)',
+  
       'gpt_vision': 'GPT Vision (OpenAI)',
       'midjourney': 'Midjourney Image Generation',
       'dalle': 'DALL-E Image Generation',
@@ -3093,7 +3093,7 @@ export default function ServiceWorkflowBuilder() {
                           </div>
                         </div>
                       </div>{/* System Instruction - only for specific agent types */}
-                      {(newAgentData.agentType === "gemini" || newAgentData.agentType==="claude" || newAgentData.agentType === "openai" || newAgentData.agentType === "gemini_text2image") && (
+                      {(newAgentData.agentType === "gemini" || newAgentData.agentType==="claude" || newAgentData.agentType === "openai" || newAgentData.agentType === "dalle") && (
                         <div className="space-y-2">
                           <div className="flex items-center space-x-2">
                           <Label htmlFor="systemInstruction" className="text-white font-medium">System Instruction</Label>

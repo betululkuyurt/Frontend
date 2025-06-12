@@ -128,7 +128,7 @@ You can choose from various agent types:
 ### 4. Image Generation Agent
 
 #### Gemini Text-to-Image Agent
-- **Type**: `gemini_text2image`
+- **Type**: `dalle`
 - **Input**: Text prompt
 - **Output**: Image
 - **API Key Required**: Yes (Gemini API key)

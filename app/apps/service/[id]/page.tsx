@@ -966,8 +966,8 @@ export default function ServicePage() {
         let providerType = agentType
         if (agentType.includes("rag") || agentType === "file_output") {
           providerType = "gemini"
-        } else if (agentType.includes("gemini_text2image") || agentType === "gemini_text2image") {
-          providerType = "gemini"
+        } else if (agentType.includes("dalle") || agentType === "dalle") {
+          providerType = "openai"
         }
 
         agents.push({
@@ -980,8 +980,8 @@ export default function ServicePage() {
         let providerType = node.agent_type.toLowerCase()
         if (providerType.includes("rag")) {
           providerType = "gemini"
-        } else if (providerType.includes("gemini_text2image") || providerType === "gemini_text2image") {
-          providerType = "gemini"
+        } else if (providerType.includes("dalle") || providerType === "dalle") {
+          providerType = "openai"
         }
 
         agents.push({
@@ -2273,7 +2273,7 @@ export default function ServicePage() {
                             return <LucideVolume2 className="w-4 h-4" />
                           } else if (type.includes("transcribe")) {
                             return <LucideMic className="w-4 h-4" />
-                          } else if (type.includes("text2image") || type.includes("gemini_text2image")) {
+                          } else if (type.includes("text2image") || type.includes("dalle")) {
                             return <LucideImage className="w-4 h-4" />
                           } else if (type.includes("internet_research")) {
                             return <LucideSearch className="w-4 h-4" />
