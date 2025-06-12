@@ -111,6 +111,7 @@ interface Agent {
   apiKeyId?: string;
   type?: string; // Add type field for agent type (Gemini, ChatGPT, etc.)
   favorites?: number; // For favoriting functionality
+  isFavorited?: boolean; // For favoriting status
   trendingScore?: number; // For trending sorting
   createdAt?: string; // For recently added sorting
 }
@@ -265,11 +266,10 @@ export default function ServiceWorkflowBuilder() {
   const [agentSortBy, setAgentSortBy] = useState<"mostFavorited" | "trending" | "recentlyAdded">("recentlyAdded")
     // **[NEW STATE]** - Add state for agent ownership filter
   const [agentOwnershipFilter, setAgentOwnershipFilter] = useState<"All Agents" | "My Agents" | "My Favorites">("All Agents")
-  
-  // **[NEW STATE]** - Add state for favorited agents
-  const [favoritedAgents, setFavoritedAgents] = useState<Set<string>>(new Set())
-  const [isLoadingFavorites, setIsLoadingFavorites] = useState(false)
-  const [agentFavoriteCounts, setAgentFavoriteCounts] = useState<Record<string, number>>({})
+    // **[REMOVED STATE]** - These are now coming from the list agents endpoint
+  // const [favoritedAgents, setFavoritedAgents] = useState<Set<string>>(new Set())
+  // const [isLoadingFavorites, setIsLoadingFavorites] = useState(false)
+  // const [agentFavoriteCounts, setAgentFavoriteCounts] = useState<Record<string, number>>({})
 
   // Within the ServiceWorkflowBuilder component
   const [translateLanguages, setTranslateLanguages] = useState<Language[]>([]);
@@ -297,12 +297,10 @@ export default function ServiceWorkflowBuilder() {
     };
     fetchAgentTypes();
   }, []);
-
-  // Fetch available agents and API keys on component mount
+  // **[UPDATED]** - Remove fetchUserFavorites call since favorites come from list agents endpoint
   useEffect(() => {
     fetchAgents()
     fetchApiKeys()
-    fetchUserFavorites() // Add this line to load favorites on mount
   }, [])
 
   // Fetch available agents from the backend
@@ -319,9 +317,7 @@ export default function ServiceWorkflowBuilder() {
         })
 
         if (!response.ok) throw new Error("Failed to fetch agents")
-        const agentsRaw = await response.json()
-
-        // Transform backend data to match our frontend interface
+        const agentsRaw = await response.json()        // Transform backend data to match our frontend interface
         const agents: Agent[] = agentsRaw.map((a: any) => ({
           id: a.id.toString(),
           name: a.name,
@@ -336,16 +332,19 @@ export default function ServiceWorkflowBuilder() {
           apiKey: a.api_key,
           apiKeyId: a.api_key_id,
           type: a.agent_type,
-          favorites: 0, // Will be updated by fetchFavoriteCounts
+          favorites: a.favorite_count || 0, // Get favorite count directly from API
+          isFavorited: a.is_favorited || false, // Get is_favorited directly from API
           createdAt: a.created_at || a.date_created || new Date().toISOString(), // Add created date
         }))
 
-        console.log("Mapped agents:", agents);
+        console.log("Mapped agents with favorites:", agents.map(a => ({
+          id: a.id,
+          name: a.name,
+          favorites: a.favorites,
+          isFavorited: a.isFavorited
+        })));
 
         setAvailableAgents(agents)
-        
-        // Fetch favorite counts for all agents
-        await fetchFavoriteCountsForAgents(agents.map(a => a.id))
       } catch (error) {
         console.error("Error fetching agents:", error)
         // If API fails, use localStorage as fallback
@@ -363,92 +362,8 @@ export default function ServiceWorkflowBuilder() {
       setIsLoading(false)
     }
   }
-
-  // **[UPDATED FUNCTION]** - Fetch favorite counts for multiple agents with proper ID handling
-  const fetchFavoriteCountsForAgents = async (agentIds: string[]): Promise<void> => {
-    try {
-      const counts: Record<string, number> = {}
-      
-      // Fetch counts sequentially to avoid race conditions
-      for (const agentId of agentIds) {
-        try {
-          console.log(`Fetching count for agent ID: ${agentId}`); // Debug log
-          const response = await fetch(`http://127.0.0.1:8000/api/v1/agents/${agentId}/favorite/count`, {
-            headers: {
-              Authorization: `Bearer ${Cookies.get("access_token")}`,
-            }
-          });
-
-          if (response.ok) {
-            const data = await response.json();
-            counts[agentId] = data.favorite_count || 0;
-            console.log(`Agent ${agentId} count: ${counts[agentId]}`); // Debug log
-          } else {
-            console.warn(`Failed to fetch count for agent ${agentId}:`, response.status);
-            counts[agentId] = 0;
-          }
-        } catch (error) {
-          console.error(`Error fetching count for agent ${agentId}:`, error);
-          counts[agentId] = 0;
-        }
-      }
-
-      console.log('All counts fetched:', counts); // Debug log
-      setAgentFavoriteCounts(prev => ({ ...prev, ...counts }));
-      
-      // Update availableAgents with the new counts
-      setAvailableAgents(prev => prev.map(agent => ({
-        ...agent,
-        favorites: counts[agent.id] !== undefined ? counts[agent.id] : agent.favorites || 0
-      })));
-      
-    } catch (error) {
-      console.error("Error fetching favorite counts:", error);
-    }
-  };
-
-  // **[UPDATED FUNCTION]** - Update single agent favorite count with debug logging
-  const updateAgentFavoriteCount = async (agentId: string): Promise<void> => {
-    try {
-      console.log(`🔄 Fetching real favorite count for agent ${agentId}...`);
-      
-      const response = await fetch(`http://127.0.0.1:8000/api/v1/agents/${agentId}/favorite/count`, {
-        headers: {
-          Authorization: `Bearer ${Cookies.get("access_token")}`,
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const realCount = data.favorite_count || 0;
-        
-        console.log(`✅ Real count for agent ${agentId}: ${realCount}`);
-        
-        // Update the counts state for ONLY this agent
-        setAgentFavoriteCounts(prev => {
-          const updated = {
-            ...prev,
-            [agentId]: realCount
-          };
-          console.log(`📊 Updated single agent count in state:`, updated);
-          return updated;
-        });
-        
-        // Update ONLY this agent in availableAgents
-        setAvailableAgents(prev => prev.map(agent => {
-          if (agent.id === agentId) {
-            console.log(`🎯 Updating agent ${agent.id} (${agent.name}) with real count: ${agent.favorites} → ${realCount}`);
-            return { ...agent, favorites: realCount };
-          }
-          return agent; // Leave other agents unchanged
-        }));
-      } else {
-        console.warn(`⚠️ Failed to fetch real count for agent ${agentId}: ${response.status}`);
-      }
-    } catch (error) {
-      console.error(`❌ Error updating favorite count for agent ${agentId}:`, error);
-    }
-  };
+  // **[REMOVED]** - Remove fetchFavoriteCountsForAgents function since counts come from list endpoint
+  // **[REMOVED]** - Remove updateAgentFavoriteCount function since counts come from list endpoint
 
   // Fetch saved API keys
   async function fetchApiKeys() {
@@ -1214,26 +1129,26 @@ export default function ServiceWorkflowBuilder() {
   }, [])
 
   // API key selection is now handled at the agent level
-
   // Add handleChange function back for other service properties
   const handleChange = (field: string, value: string | boolean) => {
     setServiceData((prev) => ({
       ...prev,
       [field]: value,
     }));
-  };  const getFilteredAgents = (): { allAgents: Agent[] } => {
-    const compatibleAgents = getCompatibleAgents()
-    const currentUserId = Cookies.get("user_id")
+  };
 
-    // Apply ownership filter first
+  const getFilteredAgents = (): { allAgents: Agent[] } => {
+    const compatibleAgents = getCompatibleAgents()
+    const currentUserId = Cookies.get("user_id")    // Apply ownership filter first
     let filteredAgents: Agent[] = []
+    
     switch (agentOwnershipFilter) {
       case "My Agents":
         filteredAgents = compatibleAgents.filter(agent => agent.userId === currentUserId)
         break
       case "My Favorites":
-        // **[UPDATED]** - Filter by actual favorited agents
-        filteredAgents = compatibleAgents.filter(agent => favoritedAgents.has(agent.id))
+        // **[UPDATED]** - Filter by isFavorited property from API instead of local state
+        filteredAgents = compatibleAgents.filter(agent => agent.isFavorited === true)
         break
       case "All Agents":
       default:
@@ -1987,49 +1902,38 @@ export default function ServiceWorkflowBuilder() {
     }
     return filtered;
   };
-
-  // **[UPDATED FUNCTION]** - Handle favoriting/unfavoriting agents with proper debugging and ID handling
+  // **[UPDATED FUNCTION]** - Handle favoriting/unfavoriting agents using data from API
   const toggleFavorite = async (agentId: string, event: React.MouseEvent) => {
     event.stopPropagation() // Prevent triggering the card click
     
     console.log(`🔄 Toggling favorite for agent ID: ${agentId}`); // Debug log
     
-    const isFavorited = favoritedAgents.has(agentId);
-    const currentCount = agentFavoriteCounts[agentId] || 0;
+    // Find the current agent to get its state
+    const currentAgent = availableAgents.find(a => a.id === agentId);
+    if (!currentAgent) {
+      console.error(`❌ Agent ${agentId} not found in availableAgents`);
+      return;
+    }
+
+    const isFavorited = currentAgent.isFavorited;
+    const currentCount = currentAgent.favorites || 0;
     
     console.log(`📊 Agent ${agentId} - isFavorited: ${isFavorited}, currentCount: ${currentCount}`); // Debug log
     
-    // Optimistically update favorite status
-    setFavoritedAgents(prev => {
-      const newFavorites = new Set(prev)
-      if (isFavorited) {
-        newFavorites.delete(agentId)
-      } else {
-        newFavorites.add(agentId)
-      }
-      console.log(`⭐ Updated favorites set for agent ${agentId}:`, Array.from(newFavorites));
-      return newFavorites
-    })
-
-    // Optimistically update count for ONLY this specific agent
+    // Optimistically update the agent in availableAgents
     const optimisticCount = isFavorited ? Math.max(0, currentCount - 1) : currentCount + 1;
     
     console.log(`🔢 Agent ${agentId} - optimistic count: ${currentCount} → ${optimisticCount}`);
     
-    setAgentFavoriteCounts(prev => {
-      const updated = {
-        ...prev,
-        [agentId]: optimisticCount
-      };
-      console.log(`📝 Updated agentFavoriteCounts:`, updated);
-      return updated;
-    });
-    
     // Update ONLY this specific agent in availableAgents array
     setAvailableAgents(prev => prev.map(agent => {
       if (agent.id === agentId) {
-        console.log(`🎯 Updating agent ${agent.id} (${agent.name}) favorites: ${agent.favorites} → ${optimisticCount}`);
-        return { ...agent, favorites: optimisticCount };
+        console.log(`🎯 Updating agent ${agent.id} (${agent.name}) favorites: ${agent.favorites} → ${optimisticCount}, isFavorited: ${agent.isFavorited} → ${!isFavorited}`);
+        return { 
+          ...agent, 
+          favorites: optimisticCount,
+          isFavorited: !isFavorited
+        };
       }
       // Leave ALL other agents completely unchanged
       return agent;
@@ -2054,34 +1958,13 @@ export default function ServiceWorkflowBuilder() {
     if (!success) {
       console.log(`🔄 API call failed for agent ${agentId}, reverting all changes...`);
       
-      // Revert favorite status
-      setFavoritedAgents(prev => {
-        const newFavorites = new Set(prev)
-        if (isFavorited) {
-          newFavorites.add(agentId) // Revert removal
-        } else {
-          newFavorites.delete(agentId) // Revert addition
-        }
-        console.log(`🔙 Reverted favorites set:`, Array.from(newFavorites));
-        return newFavorites
-      })
-      
-      // Revert count for ONLY this agent
-      setAgentFavoriteCounts(prev => {
-        const reverted = {
-          ...prev,
-          [agentId]: currentCount
-        };
-        console.log(`🔙 Reverted agentFavoriteCounts:`, reverted);
-        return reverted;
-      });
-      
       // Revert ONLY this agent in availableAgents
       setAvailableAgents(prev => prev.map(agent => 
         agent.id === agentId 
           ? { 
               ...agent, 
-              favorites: currentCount 
+              favorites: currentCount,
+              isFavorited: isFavorited
             }
           : agent // Leave other agents unchanged
       ));
@@ -2094,10 +1977,10 @@ export default function ServiceWorkflowBuilder() {
         description: `Agent ${isFavorited ? "removed from" : "added to"} your favorites`,
       });
 
-      // Fetch real count from backend after a delay to ensure accuracy
+      // Re-fetch agents to get the real count from backend after a delay
       setTimeout(async () => {
-        console.log(`🔄 Fetching real count for agent ${agentId} from backend...`);
-        await updateAgentFavoriteCount(agentId);
+        console.log(`🔄 Re-fetching agents to get real count for agent ${agentId} from backend...`);
+        await fetchAgents();
       }, 1000); // Increased delay to 1 second
     }
   };
@@ -2179,50 +2062,8 @@ export default function ServiceWorkflowBuilder() {
       return false;
     }
   };
-
-  const fetchUserFavorites = async (): Promise<void> => {
-    try {
-      setIsLoadingFavorites(true);
-      const response = await fetch(`http://127.0.0.1:8000/api/v1/agents/favorites?current_user_id=${userId}`, {
-        headers: {
-          Authorization: `Bearer ${Cookies.get("access_token")}`,
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch favorites");
-      }
-
-      const favorites: any[] = await response.json();
-      const favoriteIds = new Set<string>(favorites.map((agent: any) => String(agent.id)));
-      setFavoritedAgents(favoriteIds);
-    } catch (error) {
-      console.error("Error fetching favorites:", error);
-      // Don't show error toast for this as it's not critical
-    } finally {
-      setIsLoadingFavorites(false);
-    }
-  };
-
-  const getFavoriteCount = async (agentId: string): Promise<number> => {
-    try {
-      const response = await fetch(`http://127.0.0.1:8000/api/v1/agents/${agentId}/favorite/count`, {
-        headers: {
-          Authorization: `Bearer ${Cookies.get("access_token")}`,
-        }
-      });
-
-      if (!response.ok) {
-        return 0;
-      }
-
-      const data = await response.json();
-      return data.favorite_count || 0;
-    } catch (error) {
-      console.error("Error fetching favorite count:", error);
-      return 0;
-    }
-  };
+  // **[REMOVED FUNCTIONS]** - Remove favorite-related functions since data comes from list endpoint
+  // fetchUserFavorites, getFavoriteCount - no longer needed
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-black via-purple-950/20 to-black">
@@ -2645,27 +2486,26 @@ export default function ServiceWorkflowBuilder() {
                                           {getFilteredAgents().allAgents.map((agent) => (
                                             <div
                                               key={agent.id}
-                                              className="bg-white/3 backdrop-blur-xl rounded-lg border border-white/10 p-3 cursor-pointer hover:border-white/20 hover:bg-white/8 transition-all duration-200 hover:scale-[1.02] group relative"
-                                              onClick={() => addAgentToWorkflow(agent.id)}
+                                              className="bg-white/3 backdrop-blur-xl rounded-lg border border-white/10 p-3 cursor-pointer hover:border-white/20 hover:bg-white/8 transition-all duration-200 hover:scale-[1.02] group relative"                                              onClick={() => addAgentToWorkflow(agent.id)}
                                             >
                                               {/* Info and Favorite Buttons - Compact */}
                                               <div className="absolute top-2 right-2 flex items-center gap-1 z-10">
                                                 <span className="text-xs text-yellow-300/80 font-medium">
-                                                  {agentFavoriteCounts[agent.id] || agent.favorites || 0}
+                                                  {agent.favorites || 0}
                                                 </span>
                                                 
                                                 <button
                                                   onClick={(e) => toggleFavorite(agent.id, e)}
                                                   className={`w-6 h-6 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110 ${
-                                                    favoritedAgents.has(agent.id)
+                                                    agent.isFavorited
                                                       ? 'bg-yellow-400/20 text-yellow-400/90 hover:bg-yellow-400/30'
                                                       : 'bg-white/10 text-yellow-400/60 hover:bg-yellow-400/10 hover:text-yellow-400/80'
                                                   }`}
-                                                  title={favoritedAgents.has(agent.id) ? "Remove from favorites" : "Add to favorites"}
+                                                  title={agent.isFavorited ? "Remove from favorites" : "Add to favorites"}
                                                 >
                                                   <Star 
                                                     className={`h-3 w-3 transition-all duration-200 ${
-                                                      favoritedAgents.has(agent.id) ? 'fill-yellow-400/90' : 'stroke-2'
+                                                      agent.isFavorited ? 'fill-yellow-400/90' : 'stroke-2'
                                                     }`}
                                                   />
                                                 </button>
@@ -2715,23 +2555,17 @@ export default function ServiceWorkflowBuilder() {
                                         <div className="w-12 h-12 bg-yellow-400/10 rounded-full flex items-center justify-center mx-auto mb-3">
                                           <Star className="h-6 w-6 text-yellow-400/60" />
                                         </div>
-                                        <h3 className="text-white/90 font-medium text-sm mb-1">No Favorites Yet</h3>
-                                        <p className="text-gray-300/60 text-xs mb-3">
-                                          {isLoadingFavorites 
-                                            ? "Loading your favorite agents..."
-                                            : "You haven't favorited any agents yet. Click the star icon on any agent to add it to your favorites."
-                                          }
+                                        <h3 className="text-white/90 font-medium text-sm mb-1">No Favorites Yet</h3>                                        <p className="text-gray-300/60 text-xs mb-3">
+                                          You haven't favorited any agents yet. Click the star icon on any agent to add it to your favorites.
                                         </p>
-                                        {!isLoadingFavorites && (
-                                          <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => setAgentOwnershipFilter("All Agents")}
-                                            className="bg-white/5 border-white/20 text-white/80 hover:bg-white/8 text-xs h-7"
-                                          >
-                                            Browse All Agents
-                                          </Button>
-                                        )}
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => setAgentOwnershipFilter("All Agents")}
+                                          className="bg-white/5 border-white/20 text-white/80 hover:bg-white/8 text-xs h-7"
+                                        >
+                                          Browse All Agents
+                                        </Button>
                                       </div>
                                     )
                                   ) : getFilteredAgents().allAgents.length > 0 ? (
@@ -2745,25 +2579,24 @@ export default function ServiceWorkflowBuilder() {
                                         {getFilteredAgents().allAgents.map((agent) => (                                          <div
                                             key={agent.id}
                                             className="bg-white/3 backdrop-blur-xl rounded-lg border border-white/10 p-3 cursor-pointer hover:border-white/20 hover:bg-white/8 transition-all duration-200 hover:scale-[1.02] group relative"
-                                            onClick={() => addAgentToWorkflow(agent.id)}
-                                          >                                            {/* Info and Favorite Buttons - Compact */}
+                                            onClick={() => addAgentToWorkflow(agent.id)}                                          >                                            {/* Info and Favorite Buttons - Compact */}
                                             <div className="absolute top-2 right-2 flex items-center gap-1 z-10">
                                               <span className="text-xs text-yellow-300/80 font-medium">
-                                                {agentFavoriteCounts[agent.id] || agent.favorites || 0}
+                                                {agent.favorites || 0}
                                               </span>
                                               
                                               <button
                                                 onClick={(e) => toggleFavorite(agent.id, e)}
                                                 className={`w-6 h-6 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110 ${
-                                                  favoritedAgents.has(agent.id)
+                                                  agent.isFavorited
                                                     ? 'bg-yellow-400/20 text-yellow-400/90 hover:bg-yellow-400/30'
                                                     : 'bg-white/10 text-yellow-400/60 hover:bg-yellow-400/10 hover:text-yellow-400/80'
                                                 }`}
-                                                title={favoritedAgents.has(agent.id) ? "Remove from favorites" : "Add to favorites"}
+                                                title={agent.isFavorited ? "Remove from favorites" : "Add to favorites"}
                                               >
                                                 <Star 
                                                   className={`h-3 w-3 transition-all duration-200 ${
-                                                    favoritedAgents.has(agent.id) ? 'fill-yellow-400/90' : 'stroke-2'
+                                                    agent.isFavorited ? 'fill-yellow-400/90' : 'stroke-2'
                                                   }`}
                                                 />
                                               </button>
