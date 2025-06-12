@@ -119,6 +119,68 @@
     }
   </style>
   <!-- End View Group Items -->
+
+  <!-- Preloader Styles -->
+  <style>
+    .preloader {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #000;
+      z-index: 9999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .preloader-text {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 10000;
+      text-align: center;
+    }
+
+    .preloader-title {
+      font-size: 5rem;
+      font-weight: 800;
+      color: #ffffff;
+      margin: 0;
+      letter-spacing: 0.05em;
+      opacity: 0;
+      transform: translateY(20px);
+      animation: fade-in 1.5s ease-out forwards;
+    }
+
+    /* Fade-in keyframes only */
+    @keyframes fade-in {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @media screen and (max-width: 768px) {
+      .preloader-title {
+        font-size: 3.5rem;
+      }
+    }
+
+    @media screen and (max-width: 480px) {
+      .preloader-title {
+        font-size: 2.5rem;
+        letter-spacing: 0.05em;
+      }
+    }
+  </style>
+  <!-- End Preloader Styles -->
   <!-- About SC -->
   <style>
     .about-pg-word {
@@ -345,8 +407,10 @@
 
 
       <div data-stop-scroll="" class="preloader">
-
         <div data-particles="" class="particles-block"></div>
+        <div class="preloader-text">
+          <h1 class="preloader-title">MyGen AI SUITE</h1>
+        </div>
       </div>
       <section id="home" class="hero-sc">
         <div class="container hero-s">
@@ -1567,6 +1631,7 @@ window.addEventListener("DOMContentLoaded", () => {
                             end: 0
                         }
                     }
+
                 });
 
                 tl.fromTo(el, {
