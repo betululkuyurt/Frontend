@@ -213,13 +213,17 @@ export default function ServiceWorkflowBuilder() {
     inputType: "select",
     outputType: "select"
   });
-
   // **[NEW STATE]** - Add TTS voices and test functionality
   const [ttsVoices, setTtsVoices] = useState<Array<{code: string, name: string, gender: string, locale: string}>>([]);
   const [isLoadingTtsVoices, setIsLoadingTtsVoices] = useState(false);
   const [testText, setTestText] = useState("Hello, this is a test of the text-to-speech configuration.");
   const [isTestingTts, setIsTestingTts] = useState(false);
   const [testAudioUrl, setTestAudioUrl] = useState<string | null>(null);
+  
+  // **[KOKORO TTS STATE]** - Add Kokoro TTS specific voices and configuration
+  const [kokoroVoices, setKokoroVoices] = useState<Array<{code: string, name: string}>>([]);
+  const [kokoroLanguages, setKokoroLanguages] = useState<Array<{code: string, name: string}>>([]);
+  const [isLoadingKokoroVoices, setIsLoadingKokoroVoices] = useState(false);
 
   // **[NEW STATE]** - Filter tabs and agent type selection grid auto-close
   const [activeFilterTab, setActiveFilterTab] = useState("All");
@@ -229,7 +233,7 @@ export default function ServiceWorkflowBuilder() {
     "All": [],
     "LLM": ["gemini", "openai", "claude", "custom_endpoint_llm"],
     "Image Generation": ["dalle", "midjourney", "dalle"],
-    "Media": ["edge_tts", "bark_tts", "whisper", "transcribe"],
+    "Media": ["edge_tts", "bark_tts", "kokoro_tts", "whisper", "transcribe"],
     "Document": ["rag", "pdf_reader", "document_analyzer", "file_output"],
     "Translate": ["google_translate"],
     "TTS": ["edge_tts", "bark_tts"],
@@ -1164,7 +1168,7 @@ export default function ServiceWorkflowBuilder() {
         "Gemini": ["gemini"],
         "ChatGPT": ["openai", "gpt_vision", "openai_assistant", "dalle"],
         "Claude": ["claude"],
-        "TTS": ["edge_tts", "bark_tts"],
+        "TTS": ["edge_tts", "bark_tts", "kokoro_tts"],
         "Media": ["whisper", "transcribe"],
         "Document": ["rag", "pdf_reader", "document_analyzer"],
         "Translation": ["google_translate"],
@@ -1286,7 +1290,6 @@ export default function ServiceWorkflowBuilder() {
       setIsLoadingLanguages(false);
     }
   };
-
   // **[NEW FUNCTION]** - Fetch available TTS voices from backend only
   const fetchTtsVoices = async () => {
     try {
@@ -1334,6 +1337,55 @@ export default function ServiceWorkflowBuilder() {
       });
     } finally {
       setIsLoadingTtsVoices(false);
+    }
+  };
+
+  // **[NEW FUNCTION]** - Fetch available Kokoro TTS voices and languages
+  const fetchKokoroVoicesAndLanguages = async () => {
+    try {
+      setIsLoadingKokoroVoices(true);
+      
+      // Set predefined Kokoro voices and languages based on the agent configuration
+      const kokoroVoicesList = [
+        { code: "af_sarah", name: "Sarah (Female)" },
+        { code: "af_nicole", name: "Nicole (Female)" },
+        { code: "af_sky", name: "Sky (Female)" },
+        { code: "am_adam", name: "Adam (Male)" },
+        { code: "am_michael", name: "Michael (Male)" },
+        { code: "bf_emma", name: "Emma (Female)" },
+        { code: "bf_isabella", name: "Isabella (Female)" },
+        { code: "bm_george", name: "George (Male)" },
+        { code: "bm_lewis", name: "Lewis (Male)" }
+      ];
+      
+      const kokoroLanguagesList = [
+        { code: "en-us", name: "English (US)" },
+        { code: "en-gb", name: "English (UK)" },
+        { code: "es", name: "Spanish" },
+        { code: "fr", name: "French" },
+        { code: "de", name: "German" },
+        { code: "it", name: "Italian" },
+        { code: "pt", name: "Portuguese" },
+        { code: "ja", name: "Japanese" },
+        { code: "ko", name: "Korean" },
+        { code: "zh", name: "Chinese" }
+      ];
+      
+      setKokoroVoices(kokoroVoicesList);
+      setKokoroLanguages(kokoroLanguagesList);
+      
+    } catch (err) {
+      console.error("Error setting up Kokoro voices:", err);
+      setKokoroVoices([]);
+      setKokoroLanguages([]);
+      
+      toast({
+        variant: "destructive",
+        title: "Kokoro TTS Setup Failed",
+        description: "Could not initialize Kokoro TTS voice options.",
+      });
+    } finally {
+      setIsLoadingKokoroVoices(false);
     }
   };
 
@@ -1495,11 +1547,17 @@ export default function ServiceWorkflowBuilder() {
       fetchTranslateLanguages();
     }
   }, [newAgentData.agentType]);
-
   // **[NEW USEEFFECT]** - Fetch TTS voices when agent type is set to edge_tts
   useEffect(() => {
     if (newAgentData.agentType === "edge_tts") {
       fetchTtsVoices();
+    }
+  }, [newAgentData.agentType]);
+
+  // **[NEW USEEFFECT]** - Fetch Kokoro TTS voices when agent type is set to kokoro_tts
+  useEffect(() => {
+    if (newAgentData.agentType === "kokoro_tts") {
+      fetchKokoroVoicesAndLanguages();
     }
   }, [newAgentData.agentType]);
 
@@ -1836,10 +1894,10 @@ export default function ServiceWorkflowBuilder() {
       'gpt_vision': 'GPT Vision (OpenAI)',
       'midjourney': 'Midjourney Image Generation',
       'dalle': 'DALL-E Image Generation',
-      
-      // TTS and Audio
+        // TTS and Audio
       'edge_tts': 'EdgeTTS - Multilingual TTS',
       'bark_tts': 'BarkTTS - English (Suno)',
+      'kokoro_tts': 'Kokoro TTS (High Quality)',
       'whisper': 'Whisper (OpenAI)',
       'transcribe': 'Audio Transcription',
       
@@ -3457,9 +3515,195 @@ export default function ServiceWorkflowBuilder() {
                                 )}
                               </div>
                             </div>
+                          </div>                        </div>
+                      )}                     
+
+                        {/* Kokoro TTS Agent Configuration */}
+                      {newAgentData.agentType === "kokoro_tts" && (
+                        <div className="bg-black/40 p-4 rounded-lg border border-purple-900/30">
+                          <h4 className="text-sm font-medium text-purple-200 mb-4 flex items-center">
+                            <Volume2 className="h-4 w-4 mr-2" />
+                            Kokoro TTS Configuration
+                          </h4>
+                          
+                          {/* Voice Selection */}
+                          <div className="space-y-4">
+                            <div className="space-y-2">
+                              <Label htmlFor="kokoroVoice" className="text-white font-medium">Voice</Label>
+                              <Select
+                                value={newAgentData.config.voice || ""}
+                                onValueChange={(value) =>
+                                  setNewAgentData({
+                                    ...newAgentData,
+                                    config: { ...newAgentData.config, voice: value }
+                                  })
+                                }
+                              >
+                                <SelectTrigger className="bg-black/50 border-purple-900/40 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all">
+                                  <SelectValue placeholder="Select voice" />
+                                </SelectTrigger>
+                                <SelectContent className="max-h-[200px] overflow-y-auto">
+                                  <div className="bg-black/90 border-purple-900/40 text-white">
+                                    {isLoadingKokoroVoices ? (
+                                      <div className="p-2 text-center text-sm text-gray-400">Loading voices...</div>
+                                    ) : kokoroVoices.length > 0 ? (
+                                      kokoroVoices.map((voice) => (
+                                        <SelectItem key={voice.code} value={voice.code} className="hover:bg-purple-900/20">
+                                          {voice.name}
+                                        </SelectItem>
+                                      ))
+                                    ) : (
+                                      <div className="p-2 text-center text-sm text-gray-400">
+                                        <div className="mb-2">No voices available</div>
+                                        <Button
+                                          onClick={fetchKokoroVoicesAndLanguages}
+                                          size="sm"
+                                          variant="outline"
+                                          className="text-xs border-purple-700/40 text-purple-300 hover:bg-purple-900/20"
+                                        >
+                                          Retry Loading Voices
+                                        </Button>
+                                      </div>
+                                    )}
+                                  </div>
+                                </SelectContent>
+                              </Select>
+                              
+                              {/* Show warning if no voices loaded */}
+                              {!isLoadingKokoroVoices && kokoroVoices.length === 0 && (
+                                <div className="bg-yellow-900/20 border border-yellow-800/30 rounded-md p-2">
+                                  <p className="text-yellow-300 text-xs">
+                                    ⚠️ Could not load Kokoro TTS voices. Please ensure the Kokoro TTS service is configured.
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Language Selection */}
+                            <div className="space-y-2">
+                              <Label htmlFor="kokoroLanguage" className="text-white font-medium">Language</Label>
+                              <Select
+                                value={newAgentData.config.language || ""}
+                                onValueChange={(value) =>
+                                  setNewAgentData({
+                                    ...newAgentData,
+                                    config: { ...newAgentData.config, language: value }
+                                  })
+                                }
+                              >
+                                <SelectTrigger className="bg-black/50 border-purple-900/40 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all">
+                                  <SelectValue placeholder="Select language" />
+                                </SelectTrigger>
+                                <SelectContent className="max-h-[200px] overflow-y-auto">
+                                  <div className="bg-black/90 border-purple-900/40 text-white">
+                                    {isLoadingKokoroVoices ? (
+                                      <div className="p-2 text-center text-sm text-gray-400">Loading languages...</div>
+                                    ) : kokoroLanguages.length > 0 ? (
+                                      kokoroLanguages.map((language) => (
+                                        <SelectItem key={language.code} value={language.code} className="hover:bg-purple-900/20">
+                                          {language.name}
+                                        </SelectItem>
+                                      ))
+                                    ) : (
+                                      <div className="p-2 text-center text-sm text-gray-400">No languages available</div>
+                                    )}
+                                  </div>
+                                </SelectContent>
+                              </Select>
+                            </div>                            {/* Speed Slider */}
+                            <div className="space-y-3">
+                              <div className="flex items-center justify-between">
+                                <Label className="text-white font-medium">Speed</Label>
+                                <span className="text-purple-300 text-sm font-mono">
+                                  {newAgentData.config.speed || "1.0"}
+                                </span>
+                              </div>
+                              <Slider
+                                value={[parseFloat(newAgentData.config.speed || "1.0")]}
+                                onValueChange={(value) =>
+                                  setNewAgentData({
+                                    ...newAgentData,
+                                    config: { 
+                                      ...newAgentData.config, 
+                                      speed: value[0].toFixed(1)
+                                    }
+                                  })
+                                }
+                                max={2.0}
+                                min={0.5}
+                                step={0.1}
+                                className="w-full"
+                              />
+                              <div className="flex justify-between text-xs text-gray-400">
+                                <span>Slow (0.5x)</span>
+                                <span>Normal (1.0x)</span>
+                                <span>Fast (2.0x)</span>
+                              </div>
+                            </div>
+
+                            {/* Podcast Mode Switch */}
+                            <div className="space-y-2">
+                              <Label className="text-white font-medium">Podcast Mode</Label>
+                              <div className="flex items-center space-x-2">
+                                <Switch
+                                  checked={newAgentData.config.podcast_mode || false}
+                                  onCheckedChange={(value) =>
+                                    setNewAgentData({
+                                      ...newAgentData,
+                                      config: { ...newAgentData.config, podcast_mode: value }
+                                    })
+                                  }
+                                />
+                                <span className={`text-sm ${newAgentData.config.podcast_mode ? 'text-green-300' : 'text-gray-400'}`}>
+                                  {newAgentData.config.podcast_mode ? 'Enabled' : 'Disabled'}
+                                </span>
+                              </div>
+                              
+                              {/* Podcast Mode Information */}
+                              {newAgentData.config.podcast_mode && (
+                                <div className="bg-amber-950/30 border border-amber-800/30 rounded-lg p-3 mt-3">
+                                  <h6 className="text-xs font-semibold text-amber-200 mb-2">Podcast Mode Input Format</h6>
+                                  <p className="text-xs text-amber-300/80 mb-2">
+                                    When podcast mode is enabled, this agent will require a specific input JSON type in podcast mode.
+                                  </p>
+                                  <div className="bg-black/40 rounded p-2 border border-amber-900/30">
+                                    <p className="text-xs text-amber-200 mb-1 font-mono">Example JSON:</p>
+                                    <pre className="text-xs text-amber-100/90 overflow-x-auto whitespace-pre-wrap">
+{`{
+  "sentences": [
+    {
+      "voice": "af_sarah",
+      "text": "Hello and welcome to AI Insights! I'm Sarah, and today we're exploring the incredible world of artificial intelligence."
+    },
+    {
+      "voice": "am_michael", 
+      "text": "Thanks Sarah! I'm Michael, and I'm excited to dive into this topic. AI seems to be everywhere these days."
+    },
+    {
+      "voice": "af_sarah",
+      "text": "Absolutely! From our smartphones to self-driving cars, AI is quietly revolutionizing how we live and work."
+    },
+    {
+      "voice": "am_michael",
+      "text": "It's fascinating how machine learning algorithms can find patterns in massive amounts of data that humans might never spot."
+    }
+  ]
+}`}
+                                    </pre>
+                                  </div>
+                                </div>
+                              )}
+                            </div>{/* Kokoro TTS Info */}
+                            <div className="bg-blue-950/30 border border-blue-800/30 rounded-lg p-3">
+                              <h5 className="text-xs font-semibold text-blue-200 mb-2">Kokoro TTS Information</h5>
+                              <p className="text-xs text-blue-300/80 leading-relaxed">
+                                Kokoro TTS is a high-quality text-to-speech model that provides natural-sounding voices.
+                                Configure the voice, language, speed, and model paths for optimal performance.
+                              </p>
+                            </div>
                           </div>
                         </div>
-                      )}                     
+                      )}
 
                         {/* RAG Agent Configuration */}
                       {newAgentData.agentType === "rag" && (
