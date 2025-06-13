@@ -837,18 +837,24 @@ export default function DashboardPage() {
   const getActivityIcon = (serviceType: string, activityType?: number) => {
     if (activityType !== undefined) {
       switch (activityType) {
-        case 0:
-          return <Plus className="h-4 w-4" />
-        case 1:
+        case 0: // create mini service
+          return <SquarePlus className="h-4 w-4" />
+        case 1: // create agent
           return <Bot className="h-4 w-4" />
-        case 2:
+        case 2: // enhance system prompt of agent
           return <Sparkles className="h-4 w-4" />
-        case 3:
+        case 3: // remove agent
+          return <BotOff className="h-4 w-4" />
+        case 4: // delete mini service
           return <Trash2 className="h-4 w-4" />
-        case 4:
-          return <Trash2 className="h-4 w-4" />
-        case 5:
-          return <Check className="h-4 w-4" />
+        case 5: // run mini service
+          return <Zap className="h-4 w-4" />
+        case 6: // file upload
+          return <FileText className="h-4 w-4" />
+        case 7: // delete chat conversation
+          return <Eraser className="h-4 w-4" />
+        case 8: // create chat conversation
+          return <MessageSquare className="h-4 w-4" />
         default:
           return <Activity className="h-4 w-4" />
       }
@@ -974,17 +980,23 @@ export default function DashboardPage() {
     if (process.type !== undefined) {
       switch (process.type) {
         case 0:
-          return "Service Created"
+          return "Mini Service Created"
         case 1:
           return "Agent Created"
         case 2:
-          return "Agent Enhanced"
+          return "Agent System Prompt Enhanced"
         case 3:
-          return "Agent Deleted"
+          return "Agent Removed"
         case 4:
-          return "Service Deleted"
+          return "Mini Service Deleted"
         case 5:
-          return "Service Ran Successfully"
+          return "Mini Service Executed"
+        case 6:
+          return "File Uploaded"
+        case 7:
+          return "Chat Conversation Deleted"
+        case 8:
+          return "Chat Conversation Created"
         default:
           return "Process Completed"
       }
