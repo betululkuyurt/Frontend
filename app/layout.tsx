@@ -8,7 +8,10 @@ const inter = Inter({ subsets: ["latin"] })
 export const metadata: Metadata = {
   title: "DeepFlux",
   description: "Generative AI Services Super App",
-    generator: 'v0.dev'
+    generator: 'v0.dev',
+  icons: {
+    icon: '/logo.png',
+  },
 }
 
 export default function RootLayout({
