@@ -257,6 +257,11 @@ export default function ServiceWorkflowBuilder() {
 
   // **[NEW STATE]** - Add state for RGB border animation during prompt enhancement
   const [isEnhancingPrompt, setIsEnhancingPrompt] = useState<boolean>(false);
+  
+  // **[GEMINI ADVANCED SETTINGS STATE]** - Add advanced settings toggle and validation
+  const [showGeminiAdvancedSettings, setShowGeminiAdvancedSettings] = useState<boolean>(false);
+  const [jsonSchemaError, setJsonSchemaError] = useState<string | null>(null);
+  const [enumValues, setEnumValues] = useState<string>("");
 
   const { toast } = useToast()
 
@@ -892,6 +897,28 @@ export default function ServiceWorkflowBuilder() {
           return data;
         } else {
           // **[STANDARD JSON REQUEST]** - All other non-RAG agents use standard JSON
+          
+          // **[GEMINI CONFIG TRANSFORMATION]** - Transform config for Gemini agents
+          if (newAgentData.agentType === "gemini" && config.model) {
+            // Transform 'model' to 'model_name' for backend compatibility
+            config = {
+              ...config,
+              model_name: config.model
+            };
+            delete config.model;
+          }
+          
+          // **[DEBUG LOGGING]** - Log the exact config being sent for Gemini agents
+          if (newAgentData.agentType === "gemini") {
+            console.log("GEMINI CONFIG DEBUG:", {
+              original_config: newAgentData.config,
+              transformed_config: config,
+              response_mime_type: config.response_mime_type,
+              response_schema: config.response_schema,
+              response_schema_type: typeof config.response_schema
+            });
+          }
+          
           const agentData = {
             name: newAgentData.name,
             description: newAgentData.description,
@@ -921,13 +948,44 @@ export default function ServiceWorkflowBuilder() {
         });
 
         if (!response.ok) {
-          const errorData = await response.json();
+          let errorData;
+          try {
+            errorData = await response.json();
+          } catch (e) {
+            const errorText = await response.text();
+            console.error("API Error Response (non-JSON):", {
+              status: response.status,
+              statusText: response.statusText,
+              error: errorText
+            });
+            throw new Error(`Failed to create agent: ${errorText}`);
+          }
+          
           console.error("API Error Response:", {
             status: response.status,
             statusText: response.statusText,
-            error: errorData
+            error: errorData,
+            url: response.url
           });
-          throw new Error(`Failed to create agent: ${JSON.stringify(errorData)}`);
+          
+          // Show more detailed error in toast
+          let errorMessage = "Unknown error occurred";
+          if (errorData.detail) {
+            errorMessage = typeof errorData.detail === 'string' ? errorData.detail : JSON.stringify(errorData.detail);
+          } else if (errorData.message) {
+            errorMessage = errorData.message;
+          } else {
+            errorMessage = JSON.stringify(errorData);
+          }
+          
+          toast({
+            variant: "destructive",
+            title: "Agent Creation Failed",
+            description: errorMessage,
+            duration: 5000
+          });
+          
+          throw new Error(`Failed to create agent: ${errorMessage}`);
         }
 
         const data = await response.json();
@@ -2063,6 +2121,11 @@ export default function ServiceWorkflowBuilder() {
     setActiveFilterTab("All");
     setIsAgentTypeGridOpen(true); // Always show grid when opening dialog
     setSearchQuery(""); // Clear search
+    
+    // **[RESET GEMINI ADVANCED SETTINGS]** - Reset advanced settings state
+    setShowGeminiAdvancedSettings(false);
+    setJsonSchemaError(null);
+    setEnumValues("");
   };
 
   // **[NEW FUNCTIONS]** - Favorites API functions
@@ -2120,6 +2183,108 @@ export default function ServiceWorkflowBuilder() {
       return false;
     }
   };
+
+  // **[GEMINI ADVANCED SETTINGS HELPERS]** - Validation and helper functions
+  const validateJsonSchema = (jsonString: string): boolean => {
+    if (!jsonString.trim()) {
+      setJsonSchemaError(null);
+      return true;
+    }
+
+    try {
+      const parsed = JSON.parse(jsonString);
+      if (typeof parsed !== 'object' || parsed === null) {
+        setJsonSchemaError("Schema must be a valid JSON object");
+        return false;
+      }
+      setJsonSchemaError(null);
+      return true;
+    } catch (error) {
+      setJsonSchemaError("Invalid JSON format");
+      return false;
+    }
+  };
+
+  const handleAdvancedConfigChange = (key: string, value: any) => {
+    setNewAgentData({
+      ...newAgentData,
+      config: { 
+        ...newAgentData.config, 
+        [key]: value 
+      }
+    });
+  };
+
+  const resetGeminiAdvancedSettings = () => {
+    const { model, ...otherConfig } = newAgentData.config;
+    setNewAgentData({
+      ...newAgentData,
+      config: { model, ...Object.fromEntries(Object.entries(otherConfig).filter(([key]) => 
+        !['temperature', 'top_p', 'top_k', 'max_output_tokens', 'response_mime_type', 'response_schema'].includes(key)
+      )) }
+    });
+    setJsonSchemaError(null);
+    setEnumValues("");
+    setShowGeminiAdvancedSettings(false);
+  };
+
+  // **[ENUM HELPERS]** - Enum validation and conversion functions
+  const validateEnumValues = (enumString: string): string | null => {
+    if (!enumString.trim()) {
+      return null; // Empty is OK
+    }
+
+    const values = enumString.split(',').map(v => v.trim()).filter(v => v.length > 0);
+    
+    if (values.length === 0) {
+      return "Please enter at least one enum value";
+    }
+
+    if (values.length !== new Set(values).size) {
+      return "Duplicate enum values are not allowed";
+    }
+
+    return null;
+  };
+
+  const convertEnumToSchema = (enumString: string): object | null => {
+    if (!enumString.trim()) return null;
+    
+    const values = enumString.split(',').map(v => v.trim()).filter(v => v.length > 0);
+    
+    if (values.length === 0) return null;
+    
+    return {
+      type: "string",
+      enum: values
+    };
+  };
+
+  const handleEnumValuesChange = (value: string) => {
+    setEnumValues(value);
+    
+    const error = validateEnumValues(value);
+    if (error) {
+      setJsonSchemaError(error);
+      return;
+    }
+    
+    setJsonSchemaError(null);
+    
+    // Convert to schema and update config
+    const schema = convertEnumToSchema(value);
+    if (schema) {
+      handleAdvancedConfigChange('response_schema', schema);
+    } else {
+      // Remove schema if empty
+      const { response_schema, ...configWithoutSchema } = newAgentData.config;
+      setNewAgentData({
+        ...newAgentData,
+        config: configWithoutSchema
+      });
+    }
+  };
+
   // **[REMOVED FUNCTIONS]** - Remove favorite-related functions since data comes from list endpoint
   // fetchUserFavorites, getFavoriteCount - no longer needed
 
@@ -3172,36 +3337,282 @@ export default function ServiceWorkflowBuilder() {
 
                       {/* Agent type specific fields */}
                       {newAgentData.agentType === "gemini" && (
-                        <div className="space-y-2 bg-black/40 p-4 rounded-lg border border-purple-900/30">
-                        <Label htmlFor="model" className="text-white font-medium">Model</Label>
-                        <Select
-                          value={newAgentData.config.model || ""}
-                          onValueChange={(value) =>
-                          setNewAgentData({
-                            ...newAgentData,
-                            config: { ...newAgentData.config, model: value }
-                          })
-                          }
-                        >
-                          <SelectTrigger className="bg-black/50 border-purple-900/40 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all">
-                          <SelectValue placeholder="Select model" />
-                          </SelectTrigger>
-                          <SelectContent className="max-h-[200px] overflow-y-auto">
-                          <div className="bg-black/90 border-purple-900/40 text-white">
-                            <SelectItem value="gemini-2.5-pro-preview-05-06" className="hover:bg-purple-900/20">Gemini 2.5 Pro Preview</SelectItem>
-                            <SelectItem value="gemini-2.5-flash-preview-05-20" className="hover:bg-purple-900/20">Gemini 2.5 Flash Preview 05-20</SelectItem>
-                            <SelectItem value="gemini-2.0-flash" className="hover:bg-purple-900/20">Gemini 2.0 Flash</SelectItem>
-                            <SelectItem value="gemini-2.0-flash-lite" className="hover:bg-purple-900/20">Gemini 2.0 Flash-Lite</SelectItem>
-                            <SelectItem value="gemini-1.5-pro" className="hover:bg-purple-900/20">Gemini 1.5 Pro</SelectItem>
-                            <SelectItem value="gemini-1.5-flash-8b" className="hover:bg-purple-900/20">Gemini 1.5 Flash-8B</SelectItem>
-                            <SelectItem value="gemini-1.5-flash" className="hover:bg-purple-900/20">Gemini 1.5 Flash</SelectItem>
-                            <SelectItem value="gemini-1.0-pro-latest" className="hover:bg-purple-900/20">Gemini 1.0 Pro (Latest)</SelectItem>
-                            <SelectItem value="gemini-pro" className="hover:bg-purple-900/20">Gemini Pro</SelectItem>
-                            <SelectItem value="gemini-embedding-exp" className="hover:bg-purple-900/20">Gemini Embedding</SelectItem>
-                        
+                        <div className="space-y-4 bg-black/40 p-4 rounded-lg border border-purple-900/30">
+                          <div className="space-y-2">
+                            <Label htmlFor="model" className="text-white font-medium">Model</Label>
+                            <Select
+                              value={newAgentData.config.model || ""}
+                              onValueChange={(value) =>
+                                setNewAgentData({
+                                  ...newAgentData,
+                                  config: { ...newAgentData.config, model: value }
+                                })
+                              }
+                            >
+                              <SelectTrigger className="bg-black/50 border-purple-900/40 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all">
+                                <SelectValue placeholder="Select model" />
+                              </SelectTrigger>
+                              <SelectContent className="max-h-[200px] overflow-y-auto">
+                                <div className="bg-black/90 border-purple-900/40 text-white">
+                                  <SelectItem value="gemini-2.5-pro-preview-05-06" className="hover:bg-purple-900/20">Gemini 2.5 Pro Preview</SelectItem>
+                                  <SelectItem value="gemini-2.5-flash-preview-05-20" className="hover:bg-purple-900/20">Gemini 2.5 Flash Preview 05-20</SelectItem>
+                                  <SelectItem value="gemini-2.0-flash" className="hover:bg-purple-900/20">Gemini 2.0 Flash</SelectItem>
+                                  <SelectItem value="gemini-2.0-flash-lite" className="hover:bg-purple-900/20">Gemini 2.0 Flash-Lite</SelectItem>
+                                  <SelectItem value="gemini-1.5-pro" className="hover:bg-purple-900/20">Gemini 1.5 Pro</SelectItem>
+                                  <SelectItem value="gemini-1.5-flash-8b" className="hover:bg-purple-900/20">Gemini 1.5 Flash-8B</SelectItem>
+                                  <SelectItem value="gemini-1.5-flash" className="hover:bg-purple-900/20">Gemini 1.5 Flash</SelectItem>
+                                  <SelectItem value="gemini-1.0-pro-latest" className="hover:bg-purple-900/20">Gemini 1.0 Pro (Latest)</SelectItem>
+                                  <SelectItem value="gemini-pro" className="hover:bg-purple-900/20">Gemini Pro</SelectItem>
+                                  <SelectItem value="gemini-embedding-exp" className="hover:bg-purple-900/20">Gemini Embedding</SelectItem>
+                                </div>
+                              </SelectContent>
+                            </Select>
                           </div>
-                          </SelectContent>
-                        </Select>
+
+                          {/* Advanced Settings Toggle */}
+                          <div className="border-t border-purple-900/30 pt-3">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              onClick={() => setShowGeminiAdvancedSettings(!showGeminiAdvancedSettings)}
+                              className="flex items-center text-purple-300 hover:text-purple-200 hover:bg-purple-900/20 p-2 h-auto"
+                            >
+                              <Settings className="h-4 w-4 mr-2" />
+                              {showGeminiAdvancedSettings ? 'Hide Advanced Settings' : 'Show Advanced Settings'}
+                              <ChevronDown className={`h-4 w-4 ml-2 transition-transform ${showGeminiAdvancedSettings ? 'rotate-180' : ''}`} />
+                            </Button>
+                          </div>
+
+                          {/* Advanced Settings Panel */}
+                          {showGeminiAdvancedSettings && (
+                            <div className="space-y-4 bg-black/30 p-4 rounded-lg border border-purple-800/30">
+                              <div className="flex items-center justify-between">
+                                <h5 className="text-sm font-medium text-purple-200">Advanced Configuration</h5>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={resetGeminiAdvancedSettings}
+                                  className="text-xs text-gray-400 hover:text-purple-300 hover:bg-purple-900/20 h-6 px-2"
+                                >
+                                  Reset to Defaults
+                                </Button>
+                              </div>
+
+                              {/* Temperature Slider */}
+                              <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <Label className="text-white font-medium text-sm">Temperature</Label>
+                                  <span className="text-purple-300 text-sm font-mono">
+                                    {newAgentData.config.temperature ?? 0.7}
+                                  </span>
+                                </div>
+                                <Slider
+                                  value={[newAgentData.config.temperature ?? 0.7]}
+                                  onValueChange={(value) => handleAdvancedConfigChange('temperature', value[0])}
+                                  max={2.0}
+                                  min={0.0}
+                                  step={0.1}
+                                  className="w-full"
+                                />
+                                <div className="flex justify-between text-xs text-gray-400">
+                                  <span>Focused (0.0)</span>
+                                  <span>Default (0.7)</span>
+                                  <span>Creative (2.0)</span>
+                                </div>
+                                <p className="text-xs text-gray-400">Controls randomness in responses</p>
+                              </div>
+
+                              {/* Top P Slider */}
+                              <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <Label className="text-white font-medium text-sm">Top P</Label>
+                                  <span className="text-purple-300 text-sm font-mono">
+                                    {newAgentData.config.top_p ?? 0.8}
+                                  </span>
+                                </div>
+                                <Slider
+                                  value={[newAgentData.config.top_p ?? 0.8]}
+                                  onValueChange={(value) => handleAdvancedConfigChange('top_p', value[0])}
+                                  max={1.0}
+                                  min={0.0}
+                                  step={0.1}
+                                  className="w-full"
+                                />
+                                <div className="flex justify-between text-xs text-gray-400">
+                                  <span>Narrow (0.0)</span>
+                                  <span>Default (0.8)</span>
+                                  <span>Diverse (1.0)</span>
+                                </div>
+                                <p className="text-xs text-gray-400">Controls diversity via nucleus sampling</p>
+                              </div>
+
+                              {/* Top K Slider */}
+                              <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <Label className="text-white font-medium text-sm">Top K</Label>
+                                  <span className="text-purple-300 text-sm font-mono">
+                                    {newAgentData.config.top_k ?? 40}
+                                  </span>
+                                </div>
+                                <Slider
+                                  value={[newAgentData.config.top_k ?? 40]}
+                                  onValueChange={(value) => handleAdvancedConfigChange('top_k', value[0])}
+                                  max={40}
+                                  min={1}
+                                  step={1}
+                                  className="w-full"
+                                />
+                                <div className="flex justify-between text-xs text-gray-400">
+                                  <span>Focused (1)</span>
+                                  <span>Default (40)</span>
+                                  <span>Diverse (40)</span>
+                                </div>
+                                <p className="text-xs text-gray-400">Controls diversity via top-k sampling</p>
+                              </div>
+
+                              {/* Max Output Tokens */}
+                              <div className="space-y-2">
+                                <Label className="text-white font-medium text-sm">Max Output Tokens</Label>
+                                <Input
+                                  type="number"
+                                  value={newAgentData.config.max_output_tokens ?? 8192}
+                                  onChange={(e) => handleAdvancedConfigChange('max_output_tokens', parseInt(e.target.value) || 8192)}
+                                  min={1}
+                                  max={32768}
+                                  className="bg-black/50 border-purple-900/40 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all"
+                                  placeholder="8192"
+                                />
+                                <p className="text-xs text-gray-400">Maximum tokens in response (default: 8192)</p>
+                              </div>
+
+                              {/* Response Format */}
+                              <div className="space-y-2">
+                                <Label className="text-white font-medium text-sm">Response Format</Label>
+                                <Select
+                                  value={newAgentData.config.response_mime_type ?? "text/plain"}
+                                  onValueChange={(value) => {
+                                    // Update response_mime_type
+                                    let newConfig = { ...newAgentData.config, response_mime_type: value };
+                                    
+                                    // Handle schema cleanup based on format
+                                    if (value === 'application/json') {
+                                      // Keep JSON schema, clear enum values
+                                      setEnumValues("");
+                                    } else if (value === 'text/x.enum') {
+                                      // Keep enum values, but don't auto-clear schema (handled by enum input)
+                                      // Schema will be managed by enum input handler
+                                    } else {
+                                      // text/plain - clear both
+                                      if ('response_schema' in newConfig) {
+                                        const { response_schema, ...configWithoutSchema } = newConfig;
+                                        newConfig = configWithoutSchema;
+                                      }
+                                      setEnumValues("");
+                                      setJsonSchemaError(null);
+                                    }
+                                    
+                                    // Clear JSON schema error when switching away from JSON
+                                    if (value !== 'application/json') {
+                                      setJsonSchemaError(null);
+                                    }
+                                    
+                                    // Update the entire config at once
+                                    setNewAgentData({
+                                      ...newAgentData,
+                                      config: newConfig
+                                    });
+                                  }}
+                                >
+                                  <SelectTrigger className="bg-black/50 border-purple-900/40 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent className="bg-black/90 border-purple-900/40 text-white">
+                                    <SelectItem value="text/plain" className="hover:bg-purple-900/20">
+                                      Standard Text Output
+                                    </SelectItem>
+                                    <SelectItem value="application/json" className="hover:bg-purple-900/20">
+                                      JSON Response Format
+                                    </SelectItem>
+                                    <SelectItem value="text/x.enum" className="hover:bg-purple-900/20">
+                                      ENUM as String Response
+                                    </SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                <p className="text-xs text-gray-400">Response format type (default: text/plain)</p>
+                              </div>
+
+                              {/* Response Schema (only shown when JSON format is selected) */}
+                              {newAgentData.config.response_mime_type === 'application/json' && (
+                                <div className="space-y-2">
+                                  <Label className="text-white font-medium text-sm">Response Schema (JSON)</Label>
+                                  <Textarea
+                                    value={newAgentData.config.response_schema ? JSON.stringify(newAgentData.config.response_schema, null, 2) : ''}
+                                    onChange={(e) => {
+                                      const isValid = validateJsonSchema(e.target.value);
+                                      if (isValid && e.target.value.trim()) {
+                                        try {
+                                          const parsed = JSON.parse(e.target.value);
+                                          handleAdvancedConfigChange('response_schema', parsed);
+                                        } catch {
+                                          // Invalid JSON, but validation handles error display
+                                        }
+                                      } else if (!e.target.value.trim()) {
+                                        // Remove schema if empty
+                                        const { response_schema, ...configWithoutSchema } = newAgentData.config;
+                                        setNewAgentData({
+                                          ...newAgentData,
+                                          config: configWithoutSchema
+                                        });
+                                      }
+                                    }}
+                                    placeholder='{\n  "type": "object",\n  "properties": {\n    "name": {"type": "string"},\n    "age": {"type": "integer"}\n  }\n}'
+                                    className={`bg-black/50 border-purple-900/40 text-white font-mono text-sm min-h-[120px] focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all ${jsonSchemaError ? 'border-red-500' : ''}`}
+                                  />
+                                  {jsonSchemaError && (
+                                    <p className="text-xs text-red-400">{jsonSchemaError}</p>
+                                  )}
+                                  <p className="text-xs text-gray-400">
+                                    Optional JSON schema for structured responses. Must be valid JSON object.
+                                  </p>
+                                </div>
+                              )}
+
+                              {/* Enum Values (only shown when text/x.enum format is selected) */}
+                              {newAgentData.config.response_mime_type === 'text/x.enum' && (
+                                <div className="space-y-2">
+                                  <Label className="text-white font-medium text-sm">Enum Values</Label>
+                                  <Input
+                                    value={enumValues}
+                                    onChange={(e) => handleEnumValuesChange(e.target.value)}
+                                    placeholder="option1, option2, option3"
+                                    className={`bg-black/50 border-purple-900/40 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all ${jsonSchemaError ? 'border-red-500' : ''}`}
+                                  />
+                                  {jsonSchemaError && (
+                                    <p className="text-xs text-red-400">{jsonSchemaError}</p>
+                                  )}
+                                  <p className="text-xs text-gray-400">
+                                    Enter possible enum values separated by commas. Example: yes, no, maybe
+                                  </p>
+                                  {enumValues && !jsonSchemaError && (
+                                    <div className="mt-2 p-2 bg-purple-900/20 rounded border border-purple-800/30">
+                                      <p className="text-xs text-purple-300 mb-1">Preview:</p>
+                                      <div className="flex flex-wrap gap-1">
+                                        {enumValues.split(',').map((value, index) => {
+                                          const trimmed = value.trim();
+                                          return trimmed ? (
+                                            <Badge key={index} variant="outline" className="text-xs text-purple-200 border-purple-600">
+                                              {trimmed}
+                                            </Badge>
+                                          ) : null;
+                                        })}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
                       )}             
                        {newAgentData.agentType === "claude" && (
