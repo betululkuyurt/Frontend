@@ -105,9 +105,9 @@ export default function LoginPage() {
         <CardHeader className="space-y-6 text-center pb-8">
           <div className="flex items-center justify-center mb-6">
             <div className="relative">
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-600 to-indigo-600 flex items-center justify-center shadow-lg">
-                <div className="w-4 h-4 rounded-full bg-white animate-pulse" />
-              </div>
+                <div className="w-20 h-20 rounded-2xl  flex items-center justify-center shadow-sm p-2 cursor-pointer" onClick={() => router.push("/")}>
+                <img src="../logo.png" alt="Logo" className="w-full h-full object-contain" />
+                </div>
               <div className="absolute inset-0 bg-gradient-to-br from-purple-600 to-indigo-600 rounded-2xl blur-md opacity-50 -z-10" />
             </div>
           </div>

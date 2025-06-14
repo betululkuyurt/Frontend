@@ -71,10 +71,13 @@ export function NavBar({ hideOnRoutes = [] }: NavBarProps) {
           <div className="flex items-center justify-between h-12">
             <div className="flex items-center gap-4 md:gap-12">
               <Link href="/" className="flex items-center group">
-                <div className="w-8 h-8 rounded-2xl bg-gradient-to-br from-purple-500 via-purple-600 to-blue-600 flex items-center justify-center shadow-lg shadow-purple-500/30 transition-all duration-300 group-hover:scale-105 group-hover:shadow-purple-500/50">
-                  <div className="w-2.5 h-2.5 rounded-full bg-white" />
+                <div className="relative">
+                <div className="w-10 h-10 rounded-2xl  flex items-center justify-center shadow-sm cursor-pointer" onClick={() => router.push("/")}>
+                    <img src="../logo.png" alt="Logo" className="w-full h-full object-contain" />
+                    </div>
+                  <div className="absolute inset-0 bg-gradient-to-br from-purple-600 to-indigo-600 rounded-2xl blur-md opacity-50 -z-10" />
                 </div>
-                <span className="ml-3 text-white font-semibold text-sm bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent">MyGen-AI Suite</span>
+                <span className="ml-3 text-white font-semibold text-sm bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent">DeepFlux</span>
               </Link>
 
               {/* Menü sadece giriş yapılınca */}

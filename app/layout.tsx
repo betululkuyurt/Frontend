@@ -6,8 +6,8 @@ import "./globals.css"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "AI Super App",
-  description: "Local Generative AI Services Super App",
+  title: "DeepFlux",
+  description: "Generative AI Services Super App",
     generator: 'v0.dev'
 }
 

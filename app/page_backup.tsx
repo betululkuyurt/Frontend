@@ -73,7 +73,7 @@ export default function Home() {
               <div className="h-8 w-8 bg-purple-600 rounded-md flex items-center justify-center">
                 <Cpu className="h-4 w-4 text-white" />
               </div>
-              <span className="text-lg font-bold text-white">MyGen-AI Suite</span>
+              <span className="text-lg font-bold text-white">Fluxmind</span>
             </div>            <div className="hidden md:flex items-center space-x-8">
               <a href="#features" className="text-sm text-gray-300 hover:text-purple-400 transition-colors">Features</a>
               <a href="#why-us" className="text-sm text-gray-300 hover:text-purple-400 transition-colors">Why Choose Us</a>
@@ -313,13 +313,13 @@ export default function Home() {
           {/* Features Comparison Table (Placeholder) */}
           <section className="py-12 bg-black/20 backdrop-blur-sm" id="why-us">
             <div className="container mx-auto px-6">
-              <h2 className="text-xl md:text-2xl font-bold text-center mb-8 text-gray-200">Why MyGen-AI Suite?</h2>
+              <h2 className="text-xl md:text-2xl font-bold text-center mb-8 text-gray-200">Why Fluxmind?</h2>
               <div className="overflow-x-auto max-w-3xl mx-auto rounded-lg border border-gray-800/50 shadow-xl">
                 <table className="w-full min-w-max text-left text-sm">
                   <thead>
                     <tr className="border-b border-gray-700 bg-gray-900/50">
                       <th className="p-3 text-purple-400 font-medium">Feature</th>
-                      <th className="p-3 text-purple-400 font-medium">MyGen-AI Suite</th>
+                      <th className="p-3 text-purple-400 font-medium">Fluxmind</th>
                       <th className="p-3 text-gray-500 font-medium">Isolated AI Tools</th>
                     </tr>
                   </thead>
@@ -388,7 +388,7 @@ export default function Home() {
             <div className="container mx-auto px-6 text-center">
              
               <p className="text-lg text-purple-200 mb-6 max-w-xl mx-auto">
-                Join MyGen-AI Suite today and start building anything you can imagine.
+                Join Fluxmind today and start building anything you can imagine.
                 Your imagination is the only boundary.
               </p>              <Link href="/auth/register">
                 <Button size="lg" variant="outline" className="border-purple-300 text-purple-300 hover:bg-purple-300 hover:text-black text-md px-6 py-3 rounded-md">

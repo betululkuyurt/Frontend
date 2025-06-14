@@ -1,8 +1,8 @@
 import { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'MyGen-AI Suite - HTML Landing',
-  description: 'MyGen-AI Suite explores the intersection of consciousness, AI, and digital innovation.',
+  title: 'Fluxmind - HTML Landing',
+  description: 'Fluxmind explores the intersection of consciousness, AI, and digital innovation.',
 }
 
 export default function HtmlLandingPage() {
@@ -11,7 +11,7 @@ export default function HtmlLandingPage() {
       <iframe 
         src="/landing.html" 
         className="w-full h-full border-0"
-        title="MyGen-AI Suite Landing Page"
+        title="Fluxmind Landing Page"
       />
     </div>
   )
