@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useRef, useState, useMemo, useEffect } from 'react';
+import React, { useRef, useState, useMemo, useEffect, useCallback } from 'react';
 import { useRouter } from "next/navigation"
 import Cookies from "js-cookie"
 import { 
@@ -47,6 +47,8 @@ import {
   Volume2,
   Star,
   Info,
+  Copy,
+  Check,
 } from "lucide-react"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
@@ -262,6 +264,21 @@ export default function ServiceWorkflowBuilder() {
   const [showGeminiAdvancedSettings, setShowGeminiAdvancedSettings] = useState<boolean>(false);
   const [jsonSchemaError, setJsonSchemaError] = useState<string | null>(null);
   const [enumValues, setEnumValues] = useState<string>("");
+  const [jsonSchemaText, setJsonSchemaText] = useState<string>(""); // Raw text for editing
+  const [isCopied, setIsCopied] = useState<boolean>(false); // Copy state for checkmark
+  
+  // Default schemas based on backend implementation
+  const defaultJsonSchema = {
+    type: "object",
+    properties: {
+      response: { type: "string" }
+    }
+  };
+  
+  const defaultEnumSchema = {
+    type: "string",
+    enum: ["option1", "option2", "option3"]
+  };
 
   const { toast } = useToast()
 
@@ -906,6 +923,18 @@ export default function ServiceWorkflowBuilder() {
               model_name: config.model
             };
             delete config.model;
+            
+            // Ensure proper response_schema for response_mime_type
+            if (config.response_mime_type === "application/json" && !config.response_schema) {
+              config.response_schema = defaultJsonSchema;
+            } else if (config.response_mime_type === "text/x.enum" && !config.response_schema) {
+              config.response_schema = defaultEnumSchema;
+            }
+            
+            // Clean response_schema for Gemini API compatibility
+            if (config.response_schema) {
+              config.response_schema = cleanGeminiSchema(config.response_schema);
+            }
           }
           
           // **[DEBUG LOGGING]** - Log the exact config being sent for Gemini agents
@@ -915,7 +944,8 @@ export default function ServiceWorkflowBuilder() {
               transformed_config: config,
               response_mime_type: config.response_mime_type,
               response_schema: config.response_schema,
-              response_schema_type: typeof config.response_schema
+              response_schema_type: typeof config.response_schema,
+              config_keys: Object.keys(config)
             });
           }
           
@@ -2184,6 +2214,63 @@ export default function ServiceWorkflowBuilder() {
     }
   };
 
+  // Function to clean response_schema for Gemini API compatibility
+  // Removes unsupported format fields from STRING type properties
+  // Gemini API only supports 'enum' and 'date-time' formats for strings
+  // Unsupported formats like 'email', 'uri', 'uuid', etc. are automatically removed
+  const cleanGeminiSchema = (schema: any): any => {
+    if (!schema || typeof schema !== 'object') {
+      return schema;
+    }
+
+    // Clone the schema to avoid mutating the original
+    const cleaned = JSON.parse(JSON.stringify(schema));
+    let hasChanges = false;
+
+    // Recursively clean the schema
+    const cleanObject = (obj: any): any => {
+      if (Array.isArray(obj)) {
+        return obj.map(cleanObject);
+      }
+      
+      if (obj && typeof obj === 'object') {
+        const result: any = {};
+        
+        for (const [key, value] of Object.entries(obj)) {
+          if (key === 'format' && typeof value === 'string') {
+            // Only keep supported formats for Gemini API
+            const supportedFormats = ['enum', 'date-time'];
+            if (supportedFormats.includes(value)) {
+              result[key] = value;
+            } else {
+              // Log when removing unsupported format
+              console.log(`Removed unsupported format "${value}" from Gemini schema`);
+              hasChanges = true;
+            }
+            // Skip unsupported formats like 'email', 'uri', 'uuid', etc.
+          } else {
+            result[key] = cleanObject(value);
+          }
+        }
+        
+        return result;
+      }
+      
+      return obj;
+    };
+
+    const result = cleanObject(cleaned);
+    
+    if (hasChanges) {
+      console.log('Schema cleaned for Gemini API compatibility:', {
+        original: schema,
+        cleaned: result
+      });
+    }
+    
+    return result;
+  };
+
   // **[GEMINI ADVANCED SETTINGS HELPERS]** - Validation and helper functions
   const validateJsonSchema = (jsonString: string): boolean => {
     if (!jsonString.trim()) {
@@ -2203,6 +2290,50 @@ export default function ServiceWorkflowBuilder() {
       setJsonSchemaError("Invalid JSON format");
       return false;
     }
+  };
+
+  // Debounced validation for better UX
+  const validateJsonSchemaDebounced = useMemo(() => {
+    let timeoutId: NodeJS.Timeout;
+    return (jsonString: string) => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        validateJsonSchema(jsonString);
+      }, 500); // 500ms delay
+    };
+  }, []);
+
+  const handleJsonSchemaChange = (value: string) => {
+    setJsonSchemaText(value);
+    
+    // Clear error immediately if empty
+    if (!value.trim()) {
+      setJsonSchemaError(null);
+      return;
+    }
+
+    // Try to parse and update config immediately if valid
+    try {
+      const parsed = JSON.parse(value);
+      if (typeof parsed === 'object' && parsed !== null) {
+        // Clean schema for Gemini API if this is a Gemini agent
+        const cleanedSchema = newAgentData.agentType === "gemini" ? cleanGeminiSchema(parsed) : parsed;
+        handleAdvancedConfigChange('response_schema', cleanedSchema);
+        setJsonSchemaError(null);
+      }
+    } catch {
+      // Don't show error immediately, use debounced validation
+      validateJsonSchemaDebounced(value);
+    }
+  };
+
+  const setSchemaTemplate = (schema: object) => {
+    // Clean schema for Gemini API if this is a Gemini agent
+    const cleanedSchema = newAgentData.agentType === "gemini" ? cleanGeminiSchema(schema) : schema;
+    const formattedSchema = JSON.stringify(cleanedSchema, null, 2);
+    setJsonSchemaText(formattedSchema);
+    handleAdvancedConfigChange('response_schema', cleanedSchema);
+    setJsonSchemaError(null);
   };
 
   const handleAdvancedConfigChange = (key: string, value: any) => {
@@ -3493,15 +3624,42 @@ export default function ServiceWorkflowBuilder() {
                                   value={newAgentData.config.response_mime_type ?? "text/plain"}
                                   onValueChange={(value) => {
                                     // Update response_mime_type
-                                    let newConfig = { ...newAgentData.config, response_mime_type: value };
+                                    let newConfig: Record<string, any> = { ...newAgentData.config, response_mime_type: value };
                                     
-                                    // Handle schema cleanup based on format
+                                    // Handle schema setup based on format
                                     if (value === 'application/json') {
-                                      // Keep JSON schema, clear enum values
+                                      // Auto-set default JSON schema if no schema exists
+                                      if (!newConfig.response_schema) {
+                                        newConfig.response_schema = defaultJsonSchema;
+                                      }
+                                      // Clean schema for Gemini API if this is a Gemini agent
+                                      if (newAgentData.agentType === "gemini" && newConfig.response_schema) {
+                                        newConfig.response_schema = cleanGeminiSchema(newConfig.response_schema);
+                                      }
+                                      // Clear enum values
                                       setEnumValues("");
                                     } else if (value === 'text/x.enum') {
-                                      // Keep enum values, but don't auto-clear schema (handled by enum input)
-                                      // Schema will be managed by enum input handler
+                                      // Auto-set default enum schema or convert existing enum values
+                                      if (enumValues) {
+                                        // Use existing enum values if available
+                                        const values = enumValues.split(',')
+                                          .map(v => v.trim())
+                                          .filter(v => v.length > 0);
+                                        
+                                        if (values.length > 0) {
+                                          newConfig.response_schema = {
+                                            type: "string",
+                                            enum: values
+                                          };
+                                        } else {
+                                          newConfig.response_schema = defaultEnumSchema;
+                                          setEnumValues(defaultEnumSchema.enum.join(", "));
+                                        }
+                                      } else {
+                                        // Set default enum values
+                                        newConfig.response_schema = defaultEnumSchema;
+                                        setEnumValues(defaultEnumSchema.enum.join(", "));
+                                      }
                                     } else {
                                       // text/plain - clear both
                                       if ('response_schema' in newConfig) {
@@ -3544,37 +3702,227 @@ export default function ServiceWorkflowBuilder() {
 
                               {/* Response Schema (only shown when JSON format is selected) */}
                               {newAgentData.config.response_mime_type === 'application/json' && (
-                                <div className="space-y-2">
-                                  <Label className="text-white font-medium text-sm">Response Schema (JSON)</Label>
-                                  <Textarea
-                                    value={newAgentData.config.response_schema ? JSON.stringify(newAgentData.config.response_schema, null, 2) : ''}
-                                    onChange={(e) => {
-                                      const isValid = validateJsonSchema(e.target.value);
-                                      if (isValid && e.target.value.trim()) {
+                                <div className="space-y-4 relative">
+                                  {/* Copy icon in top right corner */}
+                                  <div className="absolute top-0 right-0 z-10">
+                                    <button
+                                      onClick={async () => {
                                         try {
-                                          const parsed = JSON.parse(e.target.value);
-                                          handleAdvancedConfigChange('response_schema', parsed);
-                                        } catch {
-                                          // Invalid JSON, but validation handles error display
+                                          const formatted = JSON.stringify(newAgentData.config.response_schema || defaultJsonSchema, null, 2);
+                                          await navigator.clipboard.writeText(formatted);
+                                          setIsCopied(true);
+                                          toast({ title: "Schema copied to clipboard!", variant: "default" });
+                                          
+                                          // Reset checkmark after 2 seconds
+                                          setTimeout(() => {
+                                            setIsCopied(false);
+                                          }, 2000);
+                                        } catch (error) {
+                                          toast({ title: "Copy failed", variant: "destructive" });
                                         }
-                                      } else if (!e.target.value.trim()) {
-                                        // Remove schema if empty
-                                        const { response_schema, ...configWithoutSchema } = newAgentData.config;
-                                        setNewAgentData({
-                                          ...newAgentData,
-                                          config: configWithoutSchema
-                                        });
-                                      }
-                                    }}
-                                    placeholder='{\n  "type": "object",\n  "properties": {\n    "name": {"type": "string"},\n    "age": {"type": "integer"}\n  }\n}'
-                                    className={`bg-black/50 border-purple-900/40 text-white font-mono text-sm min-h-[120px] focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all ${jsonSchemaError ? 'border-red-500' : ''}`}
+                                      }}
+                                      className={`p-2 rounded-md transition-all duration-300 ${
+                                        isCopied 
+                                          ? 'text-green-400 bg-green-900/20' 
+                                          : 'text-purple-400 hover:text-purple-300 hover:bg-purple-900/20'
+                                      }`}
+                                      title={isCopied ? "Copied!" : "Copy schema to clipboard"}
+                                    >
+                                      {isCopied ? (
+                                        <Check className="h-4 w-4" />
+                                      ) : (
+                                        <Copy className="h-4 w-4" />
+                                      )}
+                                    </button>
+                                  </div>
+
+                                  <div className="flex items-center justify-between pr-12">
+                                    <Label className="text-white font-medium text-sm">Response Schema (JSON)</Label>
+                                    <Button 
+                                      size="sm" 
+                                      variant="outline"
+                                      onClick={() => {
+                                        setSchemaTemplate({});
+                                      }}
+                                      className="text-xs border-purple-700/40 text-purple-300 hover:bg-purple-900/30"
+                                    >
+                                      Reset
+                                    </Button>
+                                  </div>
+                                  
+                                  <Textarea
+                                    value={jsonSchemaText || (newAgentData.config.response_schema ? JSON.stringify(newAgentData.config.response_schema, null, 2) : JSON.stringify(defaultJsonSchema, null, 2))}
+                                    onChange={(e) => handleJsonSchemaChange(e.target.value)}
+                                    placeholder="Write JSON schema... Example: { &quot;type&quot;: &quot;object&quot;, &quot;properties&quot;: { &quot;name&quot;: { &quot;type&quot;: &quot;string&quot; } } }"
+                                    className={`bg-black/50 border-purple-900/40 text-white font-mono text-sm min-h-[200px] focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all resize-y ${jsonSchemaError ? 'border-red-500' : ''}`}
                                   />
                                   {jsonSchemaError && (
-                                    <p className="text-xs text-red-400">{jsonSchemaError}</p>
+                                    <div className="flex items-center space-x-2">
+                                      <AlertCircle className="h-4 w-4 text-red-400" />
+                                      <p className="text-xs text-red-400">{jsonSchemaError}</p>
+                                    </div>
                                   )}
-                                  <p className="text-xs text-gray-400">
-                                    Optional JSON schema for structured responses. Must be valid JSON object.
-                                  </p>
+                                  
+                                  <div className="space-y-3">
+                                    <div className="flex items-center space-x-2">
+                                      <Info className="h-4 w-4 text-purple-400" />
+                                      <p className="text-xs text-gray-400">
+                                        Create structured responses with JSON schema. Must be a valid JSON object.
+                                      </p>
+                                    </div>
+                                    
+                                    <div className="bg-black/30 border border-purple-900/40 rounded-lg p-4">
+                                      <p className="text-sm text-purple-300 mb-3 font-medium">Ready-to-use Schema Templates:</p>
+                                      
+                                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                                        {/* Basic object schema example */}
+                                        <div onClick={() => setSchemaTemplate({
+                                          type: "object",
+                                          properties: {
+                                            name: { type: "string" },
+                                            age: { type: "integer"},
+                                            email: { type: "string" }
+                                          }
+                                        })} 
+                                        className="cursor-pointer text-xs text-white bg-purple-900/20 p-3 rounded-lg border border-purple-800/40 hover:bg-purple-800/30 transition-all hover:scale-[1.02]">
+                                          <p className="font-medium mb-2 text-purple-200">👤 Person Information</p>
+                                          <pre className="text-purple-100 text-xs overflow-x-auto">{`{
+  "type": "object",
+  "properties": {
+    "name": {"type": "string"},
+    "age": {"type": "integer"},
+    "email": {"type": "string"}
+  }
+}`}</pre>
+                                        </div>
+                                        
+                                        {/* Array schema example */}
+                                        <div onClick={() => setSchemaTemplate({
+                                          type: "array",
+                                          items: {
+                                            type: "object",
+                                            properties: {
+                                              id: { type: "integer" },
+                                              title: { type: "string" },
+                                              completed: { type: "boolean"}
+                                            }
+                                          }
+                                         
+                                        })} 
+                                        className="cursor-pointer text-xs text-white bg-purple-900/20 p-3 rounded-lg border border-purple-800/40 hover:bg-purple-800/30 transition-all hover:scale-[1.02]">
+                                          <p className="font-medium mb-2 text-purple-200">📋 Task List</p>
+                                          <pre className="text-purple-100 text-xs overflow-x-auto">{`{
+  "type": "array",
+  "items": {
+    "type": "object",
+    "properties": {
+      "id": {"type": "integer"},
+      "title": {"type": "string"},
+      "completed": {"type": "boolean"}
+    }
+  }
+}`}</pre>
+                                        </div>
+
+                                        {/* Choice/enum schema */}
+                                        <div onClick={() => setSchemaTemplate({
+                                          type: "object",
+                                          properties: {
+                                            category: { 
+                                              type: "string", 
+                                              enum: ["technology", "health", "education", "sports"]
+                                              
+                                            },
+                                            confidence: { 
+                                              type: "number"
+                                              
+                                            },
+                                            tags: {
+                                              type: "array",
+                                              items: { type: "string" }
+                                            }
+                                          }
+                                          
+                                        })} 
+                                        className="cursor-pointer text-xs text-white bg-purple-900/20 p-3 rounded-lg border border-purple-800/40 hover:bg-purple-800/30 transition-all hover:scale-[1.02]">
+                                          <p className="font-medium mb-2 text-purple-200">🏷️ Categorization</p>
+                                          <pre className="text-purple-100 text-xs overflow-x-auto">{`{
+  "type": "object",
+  "properties": {
+    "category": {
+      "type": "string",
+      "enum": ["technology", "health"]
+    },
+    "confidence": {"type": "number"}
+  }
+}`}</pre>
+                                        </div>
+
+                                        {/* Analysis result schema */}
+                                        <div onClick={() => setSchemaTemplate({
+                                          type: "object",
+                                          properties: {
+                                            summary: { type: "string" },
+                                            sentiment: { 
+                                              type: "string", 
+                                              enum: ["positive", "negative", "neutral"]
+                                            },
+                                            keywords: {
+                                              type: "array",
+                                              items: { type: "string" }
+                                            },
+                                            score: { 
+                                              type: "number" 
+                                             
+                                            }
+                                          }
+                                          
+                                        })} 
+                                        className="cursor-pointer text-xs text-white bg-purple-900/20 p-3 rounded-lg border border-purple-800/40 hover:bg-purple-800/30 transition-all hover:scale-[1.02]">
+                                          <p className="font-medium mb-2 text-purple-200">🔍 Analysis Result</p>
+                                          <pre className="text-purple-100 text-xs overflow-x-auto">{`{
+  "type": "object",
+  "properties": {
+    "summary": {"type": "string"},
+    "sentiment": {
+      "type": "string",
+      "enum": ["positive", "negative"]
+    },
+    "score": {"type": "number"}
+  }
+}`}</pre>
+                                        </div>
+                                      </div>
+                                      
+                                     
+                                    </div>
+                                    
+                                    {/* JSON Schema Guide */}
+                                    <div className="bg-black/20 border border-purple-900/30 rounded-lg p-4">
+                                      <p className="text-sm font-medium text-purple-300 mb-2">📖 JSON Schema Guide:</p>
+                                      <div className="text-xs text-gray-300 space-y-1">
+                                        <p><code className="bg-purple-900/20 px-1 rounded">type</code>: "string", "number", "integer", "boolean", "array", "object"</p>
+                                        <p><code className="bg-purple-900/20 px-1 rounded">properties</code>: Define object properties</p>
+                                        <p><code className="bg-purple-900/20 px-1 rounded">required</code>: Specify required fields</p>
+                                        <p><code className="bg-purple-900/20 px-1 rounded">enum</code>: Limit valid values</p>
+                                        
+                                      </div>
+                                      
+                                      {/* Gemini-specific warning */}
+                                      {newAgentData.agentType === "gemini" && (
+                                        <div className="mt-3 p-3 bg-amber-900/20 border border-amber-700/40 rounded-lg">
+                                          <div className="flex items-start gap-2">
+                                            <AlertCircle className="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" />
+                                            <div className="text-xs text-amber-200">
+                                              <p className="font-medium mb-1">Gemini API Schema Limitations:</p>
+                                              <p>• Only <code className="bg-amber-900/30 px-1 rounded">enum</code> and <code className="bg-amber-900/30 px-1 rounded">date-time</code> formats are supported for strings</p>
+                                              <p>• Unsupported formats like <code className="bg-amber-900/30 px-1 rounded">email</code>, <code className="bg-amber-900/30 px-1 rounded">uri</code>, <code className="bg-amber-900/30 px-1 rounded">uuid</code> will be automatically removed</p>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
                                 </div>
                               )}
 
@@ -3595,18 +3943,22 @@ export default function ServiceWorkflowBuilder() {
                                     Enter possible enum values separated by commas. Example: yes, no, maybe
                                   </p>
                                   {enumValues && !jsonSchemaError && (
-                                    <div className="mt-2 p-2 bg-purple-900/20 rounded border border-purple-800/30">
-                                      <p className="text-xs text-purple-300 mb-1">Preview:</p>
-                                      <div className="flex flex-wrap gap-1">
+                                    <div className="mt-2 p-3 bg-purple-900/20 rounded border border-purple-800/30">
+                                      <p className="text-xs text-purple-300 mb-2 font-medium">Preview Enum Values:</p>
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                                         {enumValues.split(',').map((value, index) => {
                                           const trimmed = value.trim();
                                           return trimmed ? (
-                                            <Badge key={index} variant="outline" className="text-xs text-purple-200 border-purple-600">
-                                              {trimmed}
-                                            </Badge>
+                                            <div key={index} className="flex items-center space-x-2 p-2 bg-black/30 rounded border border-purple-700/40">
+                                              <div className="w-2 h-2 bg-purple-400 rounded-full"></div>
+                                              <span className="text-sm text-purple-100 font-mono">{trimmed}</span>
+                                            </div>
                                           ) : null;
                                         })}
                                       </div>
+                                      <p className="text-xs text-gray-400 mt-2">
+                                        {enumValues.split(',').filter(v => v.trim()).length} enum value(s) will be available
+                                      </p>
                                     </div>
                                   )}
                                 </div>
