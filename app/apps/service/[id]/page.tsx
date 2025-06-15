@@ -2291,6 +2291,21 @@ export default function ServicePage() {
       return orderedNodes
     }
     const orderedNodes = getOrderedNodes()
+    
+    // Calculate dynamic width based on number of agents
+    const getContainerClasses = () => {
+      const nodeCount = orderedNodes.length
+      if (nodeCount === 0) return "w-full"
+      
+      // Return responsive width classes based on agent count - optimized for shorter arrows
+      if (nodeCount === 1) return "w-fit min-w-[180px] sm:min-w-[220px] lg:min-w-[280px] mx-auto"
+      if (nodeCount === 2) return "w-fit min-w-[380px] sm:min-w-[460px] lg:min-w-[580px] mx-auto"
+      if (nodeCount === 3) return "w-fit min-w-[580px] sm:min-w-[700px] lg:min-w-[880px] mx-auto"
+      if (nodeCount === 4) return "w-fit min-w-[780px] sm:min-w-[940px] lg:min-w-[1180px] mx-auto"
+      
+      // For 5 or more agents, allow full width with scroll
+      return "w-full min-w-fit"
+    }
 
     const getAgentColor = (type: string) => {
       type = type.toLowerCase()
@@ -2304,11 +2319,9 @@ export default function ServicePage() {
     }
 
     return (
-      <div className="relative bg-black/20 border border-purple-900/20 backdrop-blur-sm rounded-xl p-4 lg:p-6">
-        <div className="absolute left-0 right-0 top-1/2 h-[2px] -translate-y-1/2 bg-gradient-to-r from-purple-500/10 via-indigo-500/30 to-purple-500/10 z-0"></div>
-
-        <div className="overflow-x-auto">
-          <div className="flex items-stretch gap-4 lg:gap-8 min-w-fit py-4">
+      <div className={`relative bg-black/20 border border-purple-900/20 backdrop-blur-sm rounded-xl p-2 sm:p-4 lg:p-6 ${getContainerClasses()}`}>
+        <div className="w-full overflow-visible">
+          <div className="flex items-stretch gap-2 sm:gap-3 lg:gap-4 py-4 justify-center">
             {orderedNodes.map((node, idx) => {
               const description = node.agent_description || ""
               const isLongDescription = description.length > 100
@@ -2317,14 +2330,14 @@ export default function ServicePage() {
               const showArrow = idx < orderedNodes.length - 1
 
               return (
-                <div key={node.id} className="relative flex flex-col items-center group">
+                <div key={node.id} className="relative flex flex-col items-center group min-w-0 flex-shrink-0">
                   <div
                     className={`
                       transition-all duration-300 bg-gradient-to-br from-zinc-900 to-zinc-950 
                       border-2 border-purple-900/30 rounded-xl shadow-[0_4px_20px_rgba(107,70,193,0.2)]
-                      px-3 lg:px-4 py-3 lg:py-4 w-48 lg:w-56 z-10 hover:scale-105 hover:border-purple-500/60 
+                      px-2 sm:px-3 lg:px-4 py-2 sm:py-3 lg:py-4 w-40 sm:w-48 lg:w-56 z-10 hover:scale-105 hover:border-purple-500/60 
                       focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:ring-offset-2 focus:ring-offset-black
-                      cursor-pointer group/card origin-center
+                      cursor-pointer group/card origin-center flex-shrink-0
                       ${agentColor}
                     `}
                     tabIndex={0}
@@ -2338,61 +2351,61 @@ export default function ServicePage() {
                       }
                     }}
                   >
-                    <div className="absolute -top-2 lg:-top-3 bg-gradient-to-br from-purple-600 to-indigo-700 h-5 w-5 lg:h-6 lg:w-6 rounded-full flex items-center justify-center shadow-lg shadow-purple-900/20 z-100">
-                      <span className="text-xs font-bold text-white">{idx + 1}</span>
+                    <div className="absolute -top-1 sm:-top-2 lg:-top-3 bg-gradient-to-br from-purple-600 to-indigo-700 h-4 w-4 sm:h-5 sm:w-5 lg:h-6 lg:w-6 rounded-full flex items-center justify-center shadow-lg shadow-purple-900/20 z-100">
+                      <span className="text-[10px] sm:text-xs font-bold text-white">{idx + 1}</span>
                     </div>
 
-                    <div className="flex items-center gap-2 mb-2 lg:mb-3">
+                    <div className="flex items-center gap-1 sm:gap-2 mb-1 sm:mb-2 lg:mb-3">
                       <div
-                        className={`h-6 w-6 lg:h-7 lg:w-7 rounded-full bg-gradient-to-br from-purple-600 to-indigo-700 
+                        className={`h-5 w-5 sm:h-6 sm:w-6 lg:h-7 lg:w-7 rounded-full bg-gradient-to-br from-purple-600 to-indigo-700 
                         flex items-center justify-center shadow-inner text-xs text-white font-bold
                         transition-all group-hover/card:scale-110 group-hover/card:shadow-purple-500/30`}
                       >
                         {(() => {
                           const type = node.agent_type.toLowerCase()
                           if (type.includes("gemini") && type.includes("text2image")) {
-                            return <LucideBrush className="w-4 h-4" />
+                            return <LucideBrush className="w-3 h-3 sm:w-4 sm:h-4" />
                           } else if (type.includes("gemini")) {
-                            return <LucideBot className="w-4 h-4" />
+                            return <LucideBot className="w-3 h-3 sm:w-4 sm:h-4" />
                           } else if (type.includes("openai")) {
-                            return <LucideBot className="w-4 h-4" />
+                            return <LucideBot className="w-3 h-3 sm:w-4 sm:h-4" />
                           } else if (type.includes("edge_tts") || type.includes("bark_tts")) {
-                            return <LucideVolume2 className="w-4 h-4" />
+                            return <LucideVolume2 className="w-3 h-3 sm:w-4 sm:h-4" />
                           } else if (type.includes("transcribe")) {
-                            return <LucideMic className="w-4 h-4" />
+                            return <LucideMic className="w-3 h-3 sm:w-4 sm:h-4" />
                           } else if (type.includes("text2image") || type.includes("dalle")) {
-                            return <LucideImage className="w-4 h-4" />
+                            return <LucideImage className="w-3 h-3 sm:w-4 sm:h-4" />
                           } else if (type.includes("internet_research")) {
-                            return <LucideSearch className="w-4 h-4" />
+                            return <LucideSearch className="w-3 h-3 sm:w-4 sm:h-4" />
                           } else if (type.includes("document_parser")) {
-                            return <FileText className="w-4 h-4" />
+                            return <FileText className="w-3 h-3 sm:w-4 sm:h-4" />
                           } else if (type.includes("custom_endpoint")) {
-                            return <LucidePlug className="w-4 h-4" />
+                            return <LucidePlug className="w-3 h-3 sm:w-4 sm:h-4" />
                           } else if (type.includes("audio") || type.includes("text2speech")) {
-                            return <LucideMusic className="w-4 h-4" />
+                            return <LucideMusic className="w-3 h-3 sm:w-4 sm:h-4" />
                           } else if (type.includes("video")) {
-                            return <LucideClapperboard className="w-4 h-4" />
+                            return <LucideClapperboard className="w-3 h-3 sm:w-4 sm:h-4" />
                           } else {
-                            return <LucideSparkles className="w-4 h-4" />
+                            return <LucideSparkles className="w-3 h-3 sm:w-4 sm:h-4" />
                           }
                         })()}
                       </div>
                       <h3
-                        className="font-semibold text-white text-sm lg:text-base truncate flex-1"
+                        className="font-semibold text-white text-xs sm:text-sm lg:text-base truncate flex-1"
                         title={node.agent_name}
                       >
                         {node.agent_name}
                       </h3>
                     </div>
 
-                    <div className="text-gray-300 text-xs mt-1">
+                    <div className="text-gray-300 text-[10px] sm:text-xs mt-1">
                       {isLongDescription ? (
                         <>
                           <div
                             className={`overflow-hidden transition-all duration-300 ease-in-out
-                            ${isExpanded ? "max-h-32 lg:max-h-48" : "max-h-10 lg:max-h-12"}`}
+                            ${isExpanded ? "max-h-24 sm:max-h-32 lg:max-h-48" : "max-h-8 sm:max-h-10 lg:max-h-12"}`}
                           >
-                            <p className={`leading-relaxed text-xs ${isExpanded ? "" : "line-clamp-2"}`}>
+                            <p className={`leading-relaxed text-[10px] sm:text-xs ${isExpanded ? "" : "line-clamp-2"}`}>
                               {description}
                             </p>
                           </div>
@@ -2401,31 +2414,31 @@ export default function ServicePage() {
                               e.stopPropagation()
                               setExpandedDescriptions((prev) => ({ ...prev, [node.id]: !prev[node.id] }))
                             }}
-                            className="text-purple-400 text-xs mt-1 hover:text-purple-300 focus:outline-none focus:text-purple-200 transition-colors"
+                            className="text-purple-400 text-[10px] sm:text-xs mt-1 hover:text-purple-300 focus:outline-none focus:text-purple-200 transition-colors"
                             aria-label={isExpanded ? "Show less" : "Show more"}
                           >
                             {isExpanded ? "Show less ↑" : "Show more ↓"}
                           </button>
                         </>
                       ) : (
-                        <p className="leading-relaxed text-xs">{description}</p>
+                        <p className="leading-relaxed text-[10px] sm:text-xs">{description}</p>
                       )}
                     </div>
 
-                    <div className="mt-3 lg:mt-4 flex flex-wrap gap-1 lg:gap-2">
-                      <span className="text-xs bg-purple-900/40 text-purple-300 px-1.5 lg:px-2 py-0.5 lg:py-1 rounded-full font-medium border border-purple-800/30">
+                    <div className="mt-2 sm:mt-3 lg:mt-4 flex flex-wrap gap-1 lg:gap-2">
+                      <span className="text-[10px] sm:text-xs bg-purple-900/40 text-purple-300 px-1 sm:px-1.5 lg:px-2 py-0.5 lg:py-1 rounded-full font-medium border border-purple-800/30">
                         {node.agent_type}
                       </span>
                       {node.agent_config?.model && (
-                        <span className="text-xs bg-indigo-900/40 text-indigo-300 px-1.5 lg:px-2 py-0.5 lg:py-1 rounded-full font-medium border border-indigo-800/30">
+                        <span className="text-[10px] sm:text-xs bg-indigo-900/40 text-indigo-300 px-1 sm:px-1.5 lg:px-2 py-0.5 lg:py-1 rounded-full font-medium border border-indigo-800/30">
                           {node.agent_config.model}
                         </span>
                       )}
                       {doesAgentTypeRequireApiKey(node.agent_type?.toLowerCase() || "") && (
-                        <span className="text-xs bg-amber-900/40 text-amber-300 px-1.5 lg:px-2 py-0.5 lg:py-1 rounded-full font-medium flex items-center gap-1 border border-amber-800/30">
+                        <span className="text-[10px] sm:text-xs bg-amber-900/40 text-amber-300 px-1 sm:px-1.5 lg:px-2 py-0.5 lg:py-1 rounded-full font-medium flex items-center gap-1 border border-amber-800/30">
                           <svg
                             xmlns="http://www.w3.org/2000/svg"
-                            className="h-2.5 w-2.5 lg:h-3 lg:w-3"
+                            className="h-2 w-2 sm:h-2.5 sm:w-2.5 lg:h-3 lg:w-3"
                             fill="none"
                             viewBox="0 0 24 24"
                             stroke="currentColor"
@@ -2437,31 +2450,29 @@ export default function ServicePage() {
                               d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1721 9z"
                             />
                           </svg>
-                          <span className="hidden lg:inline">API Key</span>
-                          <span className="lg:hidden">Key</span>
+                          <span className="hidden sm:inline lg:inline">API Key</span>
+                          <span className="sm:hidden lg:hidden">Key</span>
                         </span>
                       )}
                     </div>
                   </div>
 
                   {showArrow && (
-                    <div className="absolute -right-4 lg:-right-6 top-1/2 transform translate-y-1.5 translate-x-3 lg:translate-x-5 z-20">
+                    <div className="absolute -right-1 sm:-right-2 lg:-right-3 top-1/2 transform -translate-y-1/2 translate-x-1 z-20">
                       <div className="flex items-center justify-center">
                         <div className="relative">
-                          <div className="h-[2px] lg:h-[3px] w-8 lg:w-12 bg-gradient-to-r from-purple-500 to-indigo-500 rounded-full"></div>
+                          <div className="h-[2px] lg:h-[3px] w-3 sm:w-4 lg:w-6 bg-gradient-to-r from-purple-500 to-indigo-500 rounded-full"></div>
 
                           <div
-                            className="absolute -right-1 top-1/2 transform -translate-y-1/2 w-0 h-0 
-                                        border-t-[4px] lg:border-t-[5px] border-t-transparent 
-                                        border-l-[6px] lg:border-l-[8px] border-l-indigo-500
-                                        border-b-[4px] lg:border-b-[5px] border-b-transparent"
+                            className="absolute -right-0.5 top-1/2 transform -translate-y-1/2 w-0 h-0 
+                                        border-t-[2px] sm:border-t-[3px] lg:border-t-[4px] border-t-transparent 
+                                        border-l-[3px] sm:border-l-[4px] lg:border-l-[6px] border-l-indigo-500
+                                        border-b-[2px] sm:border-b-[3px] lg:border-b-[4px] border-b-transparent"
                           ></div>
-
-                          <div className="absolute inset-0 -z-10 bg-purple-500/30 filter blur-sm rounded-full"></div>
 
                           <div
                             className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2
-                                        h-2 w-2 lg:h-2.5 lg:w-2.5 rounded-full bg-purple-300/80 animate-pulse"
+                                        h-1 w-1 sm:h-1.5 sm:w-1.5 lg:h-2 lg:w-2 rounded-full bg-purple-300/80 animate-pulse"
                           ></div>
                         </div>
                       </div>
@@ -3526,7 +3537,7 @@ export default function ServicePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-purple-950/30 to-slate-950 relative">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-purple-950/30 to-slate-950 relative overflow-x-hidden">
       {/* Background patterns */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(120,119,198,0.1),transparent_50%)]" />
       <div className="absolute inset-0 bg-[linear-gradient(45deg,transparent_25%,rgba(120,119,198,0.02)_50%,transparent_75%)]" />
@@ -3542,35 +3553,38 @@ export default function ServicePage() {
 
       {/* Fixed header with service info and controls - Now at top since no navbar */}
       <div className="fixed top-0 left-0 right-0 z-40 bg-black/20 backdrop-blur-md border-b border-purple-900/20">
-        <div className="px-4 py-3">
+        <div className="px-3 sm:px-4 py-2 sm:py-3">
           <div className="flex items-center justify-between max-w-7xl mx-auto">
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2 sm:space-x-4 min-w-0">
               <Button
                 variant="ghost"
                 size="sm"
-                className="text-gray-400 hover:text-white hover:bg-purple-600/20"
+                className="text-gray-400 hover:text-white hover:bg-purple-600/20 flex-shrink-0 p-1 sm:p-2"
                 onClick={() => router.push("/apps")}
               >
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back
-              </Button>              {/* Show service card when chat is active or service is chat-eligible */}
+                <ArrowLeft className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                <span className="hidden sm:inline">Back</span>
+              </Button>
+
+              {/* Show service card when chat is active or service is chat-eligible */}
               {(chatHistory.length > 0 || checkIfChatModeEligible()) && (
-                <div className="flex items-center space-x-3 animate-in slide-in-from-left duration-500">
+                <div className="flex items-center space-x-2 sm:space-x-3 animate-in slide-in-from-left duration-500 min-w-0">
                   <div
-                    className={`w-8 h-8 ${service ? getServiceColor(service.input_type, service.output_type) : 'bg-purple-600'} rounded-lg flex items-center justify-center shadow-lg`}
+                    className={`w-6 h-6 sm:w-8 sm:h-8 ${service ? getServiceColor(service.input_type, service.output_type) : 'bg-purple-600'} rounded-lg flex items-center justify-center shadow-lg flex-shrink-0`}
                   >
-                    {getServiceIcon("h-4 w-4 text-white")}
+                    {getServiceIcon("h-3 w-3 sm:h-4 sm:w-4 text-white")}
                   </div>
-                  <div>
-                    <h1 className="text-lg font-bold text-white">{service?.name || "Service"}</h1>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs bg-purple-800/40 text-purple-200 px-2 py-1 rounded-full">
+                  <div className="min-w-0">
+                    <h1 className="text-sm sm:text-lg font-bold text-white truncate">{service?.name || "Service"}</h1>
+                    <div className="flex items-center gap-1 sm:gap-2">
+                      <span className="text-[10px] sm:text-xs bg-purple-800/40 text-purple-200 px-1 sm:px-2 py-0.5 sm:py-1 rounded-full">
                         {service?.input_type}
                       </span>
-                      <ArrowRightIcon className="h-4 w-4 text-purple-400 animate-pulse" />
-                      <span className="text-xs bg-indigo-800/40 text-indigo-200 px-2 py-1 rounded-full">
+                      <ArrowRightIcon className="h-2 w-2 sm:h-4 sm:w-4 text-purple-400 animate-pulse" />
+                      <span className="text-[10px] sm:text-xs bg-indigo-800/40 text-indigo-200 px-1 sm:px-2 py-0.5 sm:py-1 rounded-full">
                         {service?.output_type}
-                      </span>                    </div>
+                      </span>
+                    </div>
                   </div>
                 </div>
               )}
@@ -3580,20 +3594,20 @@ export default function ServicePage() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="text-gray-400 hover:text-white hover:bg-purple-600/20"
+                  className="text-gray-400 hover:text-white hover:bg-purple-600/20 flex-shrink-0 p-1 sm:p-2"
                   onClick={() => setChatHistorySidebar(true)}
                 >
-                  <MessageSquare className="h-4 w-4 mr-2" />
-                  History
+                  <MessageSquare className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                  <span className="hidden sm:inline">History</span>
                 </Button>
               )}
             </div>
 
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-1 sm:space-x-2 flex-shrink-0">
               {/* API Key Indicator */}
               {getAgentsRequiringApiKey().length > 0 && (
                 <div className="flex items-center space-x-1 text-amber-400">
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="h-3 w-3 sm:h-4 sm:w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
                       strokeLinecap="round"
                       strokeLinejoin="round"
@@ -3609,10 +3623,10 @@ export default function ServicePage() {
                 variant="ghost"
                 size="sm"
                 onClick={() => setSidebarOpen(!sidebarOpen)}
-                className="text-purple-400 hover:text-white hover:bg-purple-600/20"
+                className="text-purple-400 hover:text-white hover:bg-purple-600/20 p-1 sm:p-2"
               >
                 <div className="flex items-center space-x-1">
-                  {sidebarOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+                  {sidebarOpen ? <X className="h-3 w-3 sm:h-4 sm:w-4" /> : <Menu className="h-3 w-3 sm:h-4 sm:w-4" />}
                   <span className="text-xs hidden sm:inline">{sidebarOpen ? "Close" : "Settings"}</span>
                 </div>
               </Button>
@@ -3622,10 +3636,11 @@ export default function ServicePage() {
       </div>
 
       <main
-        className={`pt-16 min-h-screen flex transition-all duration-500 ${codePanelOpen ? "mr-96 lg:mr-[500px]" : ""}`}
+        className={`pt-16 min-h-screen flex transition-all duration-500 overflow-x-hidden ${codePanelOpen ? "mr-96 lg:mr-[500px]" : ""}`}
         onClick={handleMainContentClick}
       >
-        {/* Main Content Area */}        <div className={`flex-1 flex flex-col transition-all duration-300 ${sidebarOpen ? "sm:mr-80 xl:mr-96" : ""}`}>
+        {/* Main Content Area */}
+        <div className={`flex-1 flex flex-col transition-all duration-300 max-w-full ${sidebarOpen ? "sm:mr-80 xl:mr-96" : ""}`}>
           {/* Conditional Layout: Centered Input or Chat Interface */}
           {chatHistory.length === 0 && !checkIfChatModeEligible() ? (
             /* Initial State - Centered Input */
@@ -3748,22 +3763,22 @@ export default function ServicePage() {
             </div>
           ) : (
             /* Chat Mode */
-            <div className="flex-1 p-4 lg:p-6 pt-2 lg:pt-4">
+            <div className="flex-1 p-3 sm:p-4 lg:p-6 pt-2 lg:pt-4">
               <div className="bg-black/40 backdrop-blur-sm rounded-2xl border border-purple-900/30 flex flex-col h-[calc(100vh-80px)]">
                 {/* Chat Messages Area */}
-                <div className="flex-1 overflow-y-auto p-6 scroll-smooth" ref={chatMessagesRef}>
+                <div className="flex-1 overflow-y-auto p-3 sm:p-6 scroll-smooth prevent-horizontal-scroll" ref={chatMessagesRef}>
                   <div className="max-w-4xl mx-auto">
                     {/* Chat Messages */}
-                    <div className="space-y-4">
+                    <div className="space-y-3 sm:space-y-4">
                       {/* Bot welcome message */}
-                      <div className="flex items-start space-x-3">
+                      <div className="flex items-start space-x-2 sm:space-x-3">
                         <div
-                          className={`w-8 h-8 ${service ? getServiceColor(service.input_type, service.output_type) : 'bg-purple-600'} rounded-full flex items-center justify-center flex-shrink-0 mt-1`}
+                          className={`w-6 h-6 sm:w-8 sm:h-8 ${service ? getServiceColor(service.input_type, service.output_type) : 'bg-purple-600'} rounded-full flex items-center justify-center flex-shrink-0 mt-1`}
                         >
-                          {getServiceIcon("h-4 w-4 text-white")}
+                          {getServiceIcon("h-3 w-3 sm:h-4 sm:w-4 text-white")}
                         </div>
-                        <div className="bg-zinc-800/80 backdrop-blur-sm rounded-2xl rounded-tl-sm p-4 max-w-md">
-                          <p className="text-gray-200 text-sm">
+                        <div className="bg-zinc-800/80 backdrop-blur-sm rounded-2xl rounded-tl-sm p-3 sm:p-4 max-w-xs sm:max-w-md">
+                          <p className="text-gray-200 text-xs sm:text-sm">
                             Hello! I'm ready to help you with {service?.input_type} processing.
                             {service?.output_type && ` I'll provide ${service.output_type} output.`}
                           </p>
@@ -3775,24 +3790,24 @@ export default function ServicePage() {
                         <div key={message.id}>
                           {message.type === "user" ? (
                             /* User message */
-                            <div className="flex items-start space-x-3 justify-end">
+                            <div className="flex items-start space-x-2 sm:space-x-3 justify-end">
                               <div
-                                className={`${service ? getServiceColor(service.input_type, service.output_type) : 'bg-purple-600'} rounded-2xl rounded-tr-sm p-4 max-w-md`}
+                                className={`${service ? getServiceColor(service.input_type, service.output_type) : 'bg-purple-600'} rounded-2xl rounded-tr-sm p-3 sm:p-4 max-w-xs sm:max-w-md`}
                               >
-                                <p className="text-white text-sm break-words">
+                                <p className="text-white text-xs sm:text-sm break-words">
                                   {message.file ? `📎 ${message.file.name}` : message.content}
                                 </p>
                                 {message.content && message.file && (
                                   <p className="text-purple-100 text-xs mt-2">{message.content}</p>
                                 )}
                               </div>
-                              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-600 to-purple-800 flex items-center justify-center flex-shrink-0 mt-1 border border-purple-500/30 shadow-lg">
-                                <span className="text-xs font-bold text-white">{userData.initials || "U"}</span>
+                              <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-gradient-to-br from-purple-600 to-purple-800 flex items-center justify-center flex-shrink-0 mt-1 border border-purple-500/30 shadow-lg">
+                                <span className="text-[10px] sm:text-xs font-bold text-white">{userData.initials || "U"}</span>
                               </div>
                             </div>
                           ) : (
                             /* Assistant message */
-                            <div className="flex items-start space-x-3">
+                            <div className="flex items-start space-x-2 sm:space-x-3">
                               <div
                                 className={`w-8 h-8 ${service ? getServiceColor(service.input_type, service.output_type) : 'bg-purple-600'} rounded-full flex items-center justify-center flex-shrink-0 mt-1`}
                               >
@@ -3911,8 +3926,8 @@ export default function ServicePage() {
                       
 
                       {/* Chat Input Row */}
-                      <div className="flex items-end space-x-3">
-                        <div className="flex-1">{renderChatInput()}</div>
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-end space-y-2 sm:space-y-0 sm:space-x-3">
+                        <div className="flex-1 min-w-0">{renderChatInput()}</div>
 
                         {/* Send Button */}
                         <Button
@@ -3925,7 +3940,7 @@ export default function ServicePage() {
                                 ? !uploadedFile
                                 : !areAllRequiredApiKeysSelected || !userInput?.trim())
                           }
-                          className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold p-3 rounded-2xl shadow-lg transition-all flex items-center justify-center min-w-[48px] h-[48px]"
+                          className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold p-3 rounded-2xl shadow-lg transition-all flex items-center justify-center w-full sm:w-auto sm:min-w-[48px] h-[48px]"
                         >
                           {isLoading ? (
                             <Loader2 className="h-5 w-5 animate-spin" />
@@ -3942,13 +3957,11 @@ export default function ServicePage() {
           )}
 
           {/* Workflow Visualization - Always visible at bottom */}
-          <div className={`p-4 lg:p-6 pt-0 transition-all duration-300 ${sidebarOpen ? "hidden sm:block" : ""}`}>
-            <div className="bg-black/30 backdrop-blur-sm rounded-xl border border-purple-900/20 p-3 lg:p-4">
-              <h3 className="text-lg font-semibold text-white mb-3 text-center">Workflow</h3>
-              <div className="overflow-x-auto">
-                <div
-                  className={`flex justify-center min-w-fit origin-center transition-all duration-300 ${sidebarOpen ? "scale-75" : "scale-75 lg:scale-90"}`}
-                >
+          <div className={`p-3 sm:p-4 lg:p-6 pt-0 transition-all duration-300 w-full ${sidebarOpen ? "hidden sm:block" : ""}`}>
+            <div className="bg-black/30 backdrop-blur-sm rounded-xl border border-purple-900/20 p-2 sm:p-3 lg:p-4 w-full">
+              <h3 className="text-base sm:text-lg font-semibold text-white mb-2 sm:mb-3 text-center">Workflow</h3>
+              <div className="overflow-x-auto overflow-y-hidden w-full scrollbar-thin scrollbar-thumb-purple-600/40 scrollbar-track-transparent">
+                <div className="flex justify-center w-fit mx-auto px-1 sm:px-2">
                   {renderWorkflow()}
                 </div>
               </div>
@@ -3960,22 +3973,22 @@ export default function ServicePage() {
         <div
           className={`fixed top-16 right-0 h-[calc(100vh-64px)] ${
             sidebarOpen ? "w-full sm:w-80 xl:w-96" : "w-0"
-          } border-l border-purple-900/30 transition-all duration-300 ease-in-out overflow-hidden bg-black/40 backdrop-blur-md z-50 sm:z-30`}
+          } border-l border-purple-900/30 transition-all duration-300 ease-in-out overflow-hidden bg-black/40 backdrop-blur-md z-50 sm:z-30 prevent-horizontal-scroll`}
           onClick={handleSidebarClick}
         >
           {sidebarOpen && (
-            <div className="h-full overflow-y-auto p-6 space-y-8">
+            <div className="h-full overflow-y-auto p-3 sm:p-6 space-y-4 sm:space-y-8">
               {/* RAG Documents Section - Only for RAG services */}
               {checkIfRAGDocumentService() && (
-                <div className="bg-gradient-to-b from-purple-950/20 to-transparent rounded-xl p-6 border border-purple-900/30">
-                  <div className="flex items-center mb-6">
-                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center mr-3 shadow-lg">
-                      <FileText className="w-5 h-5 text-white" />
+                <div className="bg-gradient-to-b from-purple-950/20 to-transparent rounded-xl p-3 sm:p-6 border border-purple-900/30">
+                  <div className="flex items-center mb-4 sm:mb-6">
+                    <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-lg bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center mr-2 sm:mr-3 shadow-lg">
+                      <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                     </div>
-                    <h2 className="text-xl font-bold text-white">Knowledge Base</h2>
+                    <h2 className="text-lg sm:text-xl font-bold text-white">Knowledge Base</h2>
                   </div>
 
-                  <div className="text-gray-400 text-sm mb-6">Documents available for queries</div>
+                  <div className="text-gray-400 text-xs sm:text-sm mb-4 sm:mb-6">Documents available for queries</div>
 
                   {/* Document Collection */}
                   {documentCollection.isLoading ? (
