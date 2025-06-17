@@ -1562,7 +1562,15 @@ export default function ServicePage() {
 
       setError(err.message || "An unexpected error occurred while processing your request")
     } finally {
-      setIsLoading(false)    }
+      setIsLoading(false)
+      
+      // Reset document processing state in case it's still active
+      setDocumentProcessingState({
+        isProcessing: false,
+        stage: "complete", 
+        message: "",
+      })
+    }
   }
 
   const performUnifiedFileUpload = async (inputText: string, file: File | null, conversation?: any[]) => {
@@ -1629,6 +1637,14 @@ export default function ServicePage() {
       }
 
       const data = await response.json()
+      
+      // Reset processing state when RAG operation completes
+      setDocumentProcessingState({
+        isProcessing: false,
+        stage: "complete",
+        message: "",
+      })
+      
       return data
     }
 
@@ -1724,6 +1740,14 @@ export default function ServicePage() {
       }
 
       const processData = await processResponse.json()
+      
+      // Reset processing state when file processing completes
+      setDocumentProcessingState({
+        isProcessing: false,
+        stage: "complete",
+        message: "",
+      })
+      
       return processData
     }
 
@@ -2018,6 +2042,13 @@ export default function ServicePage() {
       const userFriendlyError = parseApiError(processData.error, "document processing")
       throw new Error(userFriendlyError)
     }
+    
+    // Reset processing state when document processing completes
+    setDocumentProcessingState({
+      isProcessing: false,
+      stage: "complete",
+      message: "",
+    })
     
     return processData
   }
