@@ -73,7 +73,7 @@ export function NavBar({ hideOnRoutes = [] }: NavBarProps) {
               <Link href="/" className="flex items-center group">
                 <div className="relative">
                 <div className="w-10 h-10 rounded-2xl  flex items-center justify-center shadow-sm cursor-pointer" onClick={() => router.push("/")}>
-                    <img src="../logo.png" alt="Logo" className="w-full h-full object-contain" />
+                    <img src="/logo.png" alt="Logo" className="w-full h-full object-contain" />
                     </div>
                   <div className="absolute inset-0 bg-gradient-to-br from-purple-600 to-indigo-600 rounded-2xl blur-md opacity-50 -z-10" />
                 </div>
